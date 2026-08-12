@@ -1,4 +1,4 @@
-package com.tnf.reader.catalogue.entity;
+package com.tf.reader.catalogue.entity;
 
 import java.time.Instant;
 
@@ -8,7 +8,7 @@ import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.index.TextIndexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import com.tnf.reader.common.model.RecordStatus;
+import com.tf.reader.common.model.RecordStatus;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

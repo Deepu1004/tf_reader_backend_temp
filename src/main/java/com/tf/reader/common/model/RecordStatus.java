@@ -1,4 +1,4 @@
-package com.tnf.reader.common.model;
+package com.tf.reader.common.model;
 
 public enum RecordStatus {
 

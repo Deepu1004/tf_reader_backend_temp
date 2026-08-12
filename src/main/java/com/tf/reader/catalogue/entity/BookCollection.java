@@ -1,4 +1,4 @@
-package com.tnf.reader.catalogue.entity;
+package com.tf.reader.catalogue.entity;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;

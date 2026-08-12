@@ -1,4 +1,4 @@
-package com.tnf.reader.catalogue.entity;
+package com.tf.reader.catalogue.entity;
 
 import java.time.Instant;
 
@@ -7,9 +7,8 @@ import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import com.tnf.reader.common.model.RecordStatus;
+import com.tf.reader.common.model.RecordStatus;
 
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -19,7 +18,6 @@ import lombok.Setter;
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
 public class Publisher {
 
 	@Id
@@ -34,5 +32,25 @@ public class Publisher {
 	private RecordStatus status;
 	private Instant createdAt;
 	private Instant updatedAt;
+
+	public Publisher(String id, String code, String name, String description, String logoUrl,
+			RecordStatus status, Instant createdAt, Instant updatedAt) {
+		this.id = id;
+		this.code = normalize(code);
+		this.name = name;
+		this.description = description;
+		this.logoUrl = logoUrl;
+		this.status = status;
+		this.createdAt = createdAt;
+		this.updatedAt = updatedAt;
+	}
+
+	public void setCode(String code) {
+		this.code = normalize(code);
+	}
+
+	private static String normalize(String code) {
+		return code == null ? null : code.toUpperCase();
+	}
 
 }

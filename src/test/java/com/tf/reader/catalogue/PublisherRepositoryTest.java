@@ -1,4 +1,4 @@
-package com.tnf.reader.catalogue;
+package com.tf.reader.catalogue;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -10,10 +10,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DuplicateKeyException;
 
-import com.tnf.reader.catalogue.entity.Publisher;
-import com.tnf.reader.catalogue.repository.PublisherRepository;
-import com.tnf.reader.common.model.RecordStatus;
-import com.tnf.reader.TestcontainersConfiguration;
+import com.tf.reader.catalogue.entity.Publisher;
+import com.tf.reader.catalogue.repository.PublisherRepository;
+import com.tf.reader.common.model.RecordStatus;
+import com.tf.reader.TestcontainersConfiguration;
 
 import org.springframework.beans.factory.annotation.Autowired;
 

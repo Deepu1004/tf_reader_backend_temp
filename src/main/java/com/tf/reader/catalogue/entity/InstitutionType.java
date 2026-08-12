@@ -1,4 +1,4 @@
-package com.tnf.reader.catalogue.entity;
+package com.tf.reader.catalogue.entity;
 
 public enum InstitutionType {
 

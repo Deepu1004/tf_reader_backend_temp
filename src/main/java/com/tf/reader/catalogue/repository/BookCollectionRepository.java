@@ -1,10 +1,10 @@
-package com.tnf.reader.catalogue.repository;
+package com.tf.reader.catalogue.repository;
 
 import java.util.Optional;
 
 import org.springframework.data.mongodb.repository.MongoRepository;
 
-import com.tnf.reader.catalogue.entity.BookCollection;
+import com.tf.reader.catalogue.entity.BookCollection;
 
 public interface BookCollectionRepository extends MongoRepository<BookCollection, String> {
 

@@ -1,13 +1,13 @@
-package com.tnf.reader;
+package com.tf.reader;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class TnfReaderApplication {
+public class ReaderApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(TnfReaderApplication.class, args);
+		SpringApplication.run(ReaderApplication.class, args);
 	}
 
 }
