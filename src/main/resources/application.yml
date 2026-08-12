@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: reader
+  data:
+    mongodb:
+      auto-index-creation: true
