@@ -1,0 +1,615 @@
+{
+  "_readme": [
+    "Task 8, Week 1. The fixed development dataset. Owner: Person C.",
+    "",
+    "This file is the source of truth for development ids. Do not invent your own ids in a test;",
+    "use these. Twenty-three documents across seven collections: 2 publishers, 2 collections,",
+    "3 institutions, 8 books, 2 entitlements, 3 admin users, 3 feed settings.",
+    "",
+    "Field names mirror Person B's @Document classes as delivered in ACADEMIC.docx (13 Aug 2026),",
+    "because DemoDataSeeder binds this file to them. If a name here does not match a field there,",
+    "Jackson binds null and the seed silently writes an incomplete document, so the integration test",
+    "reads documents back and asserts values, not just counts.",
+    "",
+    "DETERMINISM. Every value in this file is a literal. No timestamps are generated at load time,",
+    "no ids are random and the BCrypt hashes are pre-computed, so two developers who run this get",
+    "byte-identical databases. That is the whole point of Task 8. Do not replace anything here with",
+    "a generated value.",
+    "",
+    "NO FILES ARE ATTACHED. Every storageKey and indexKey is a 'seed/' prefixed placeholder and no",
+    "object exists behind it. Real content arrives with ingest in week 4. wrappedBek values are not",
+    "keys and unwrap to nothing.",
+    "",
+    "The four canonical books (item_42, item_env, item_ab6, item_stat) carry the ids, titles and",
+    "byte lengths frozen by the day 1 OPDS fixtures. team1 has already built against them.",
+    "Changing a byte length here breaks a published contract; DemoDataSeederTest asserts they still",
+    "agree with day1/contracts/canonical-items.json."
+  ],
+
+  "_notes": {
+    "cipherLength": "12 (nonce) + sizeBytes + 16 (GCM tag). Null here means the asset is not encrypted, so the number does not exist. B's Asset.cipherLength is a primitive long and cannot hold null, so DemoDataSeeder maps null to 0. The null is kept in this file because 'not applicable' and 'zero bytes of ciphertext' are different facts and the validator checks the first one.",
+    "indexTerms": "Same treatment. Null means there is no search index at all; B's field is a primitive int, so the mapping writes 0.",
+    "storageKeys": "storageKey, indexKey and wrappedBek sit on the ITEM, not on each asset. That is B's shape, and it differs from handbook section 06, which puts them inside assets[]. Consequence: a multi-format item cannot have a per-format storage key, so item_dual carries one key for two assets. Raised with B; see DAY4_TASK8_RUNBOOK.md section 3.",
+    "sizeBytes": "The entity field name. The OPDS wire calls the same number originalLength.",
+    "isbn": "item_42 uses 9780367211745, the ISBN frozen by the day 1 fixtures. Handbook section 06 illustrates the same book with 9780429288159, a different edition of it. The frozen fixture wins because team1 built against it.",
+    "entitlementVersion": "No entitlement seeds a version. B declared 'private long version' with NO @Version annotation, so Spring Data optimistic locking is not active and the field is an ordinary number; the mapping writes 0. If B adds @Version later, 0 is still the only safe value: Spring reads a non-null version as 'this document already exists' and the first insert would fail with OptimisticLockingFailureException.",
+    "adminStatus": "AdminUser.status is AdminStatus (ACTIVE, SUSPENDED, DISABLED), a separate enum from RecordStatus. All three seeded admins are ACTIVE, which is valid in both, but the mapping must use AdminStatus.",
+    "adminPassword": "All three hashes are BCrypt strength 10 over the development password 'wokay-local-dev'. This is a documented development credential, not a secret. It is written down so nobody has to paste it into chat. The three hashes differ because BCrypt is salted; all three verify the same password.",
+    "institutionType": "ACADEMIC, not UNIVERSITY. Handbook section 06 writes 'type': 'UNIVERSITY', but B's InstitutionType has seven values and UNIVERSITY is not among them: ACADEMIC, PUBLIC, SCHOOL, SPECIAL, GOVERNMENT, RESEARCH, CORPORATE. InstitutionType.valueOf('UNIVERSITY') would throw.",
+    "feedSettings": "Seeded, one per institution, because B's FeedSettings landed and week 2's shelf feeds need it. Task 8's plan names five sets and does not include this one or 'collections'; both are declared additions. B's FeedSettingsPersistenceGuard rejects anything that is not exactly three shelves, so every row here has three, and an empty itemIds means a hidden shelf rather than an absent one.",
+    "auditLogs": "Deliberately NOT seeded, although AuditLog and AuditLogRepository exist. An audit log records what actually happened; inventing entries would put fiction into the one collection whose value is that it is true. It also carries a 90-day TTL on 'at', so seeded rows would vanish and look like data loss. The admin console fills it as soon as anyone edits anything."
+  },
+
+  "publishers": [
+    {
+      "_id": "pub_rtlg",
+      "code": "RTLG",
+      "name": "Routledge",
+      "description": "Academic publishing in the humanities, social sciences, and law.",
+      "logoUrl": "https://cdn.tf.example/logos/rtlg.png",
+      "status": "ACTIVE",
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "pub_crc",
+      "code": "CRCP",
+      "name": "CRC Press",
+      "description": "Science, technology, engineering and medical publishing.",
+      "logoUrl": "https://cdn.tf.example/logos/crcp.png",
+      "status": "ACTIVE",
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    }
+  ],
+
+  "collections": [
+    {
+      "_id": "col_law2024",
+      "publisherId": "pub_rtlg",
+      "code": "LAW2024",
+      "name": "Law and Technology 2024",
+      "description": "Routledge law and technology titles for the 2024 academic year."
+    },
+    {
+      "_id": "col_env2024",
+      "publisherId": "pub_crc",
+      "code": "ENV2024",
+      "name": "Environment and Policy 2024",
+      "description": "CRC Press environment, policy and open science titles for 2024."
+    }
+  ],
+
+  "institutions": [
+    {
+      "_id": "inst_7f3",
+      "code": "imperial",
+      "name": "Imperial College London",
+      "type": "ACADEMIC",
+      "country": "UK",
+      "city": "London",
+      "branding": {
+        "logoUrl": "https://cdn.tf.example/logos/imperial.png",
+        "primaryColor": "#003E74"
+      },
+      "signIn": {
+        "method": "SAML",
+        "idpHint": "imperial-saml-mock"
+      },
+      "status": "ACTIVE",
+      "catalogueVersion": 1,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "inst_ucl",
+      "code": "ucl",
+      "name": "University College London",
+      "type": "ACADEMIC",
+      "country": "UK",
+      "city": "London",
+      "branding": {
+        "logoUrl": "https://cdn.tf.example/logos/ucl.png",
+        "primaryColor": "#500778"
+      },
+      "signIn": {
+        "method": "SAML",
+        "idpHint": "ucl-saml-mock"
+      },
+      "status": "ACTIVE",
+      "catalogueVersion": 1,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "inst_leeds",
+      "code": "leeds",
+      "name": "University of Leeds",
+      "type": "ACADEMIC",
+      "country": "UK",
+      "city": "Leeds",
+      "branding": {
+        "logoUrl": "https://cdn.tf.example/logos/leeds.png",
+        "primaryColor": "#4A7729"
+      },
+      "signIn": {
+        "method": "SAML",
+        "idpHint": "leeds-saml-mock"
+      },
+      "status": "SUSPENDED",
+      "catalogueVersion": 1,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    }
+  ],
+
+  "catalogueItems": [
+    {
+      "_seedWhy": "Canonical. ELITE, so copies.total 2 and canPersist false. Reached through the COLLECTION grant, which must beat the PUBLISHER grant on the same book.",
+      "_id": "item_42",
+      "publisherId": "pub_rtlg",
+      "collectionIds": ["col_law2024"],
+      "title": "Rights for Robots",
+      "subtitle": "Artificial Intelligence, Animal and Environmental Law",
+      "authors": ["Joshua C. Gellers"],
+      "editors": [],
+      "narrators": [],
+      "isbn": "9780367211745",
+      "language": "en",
+      "description": "A study of how legal personhood might extend to artificial intelligence.",
+      "subjects": ["Law", "Technology"],
+      "publishedAt": "2020-01-01",
+      "coverUrl": "https://cdn.tf.example/covers/item_42.jpg",
+      "contentType": "PDF",
+      "accessTier": "ELITE",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "sizeBytes": 6373752,
+          "cipherLength": 6373780,
+          "encrypted": true,
+          "hasSearchIndex": true,
+          "indexTerms": 18442,
+          "indexSkipReason": null,
+          "keyId": "master-v1"
+        }
+      ],
+      "storageKey": "seed/pub_rtlg/item_42.pdf.enc",
+      "indexKey": "seed/pub_rtlg/item_42.index.json.enc",
+      "wrappedBek": "seed-placeholder-not-a-real-key",
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_seedWhy": "Canonical. In no collection, so it is reachable only through the PUBLISHER grant. That is what makes CONCURRENT and UNLIMITED appear side by side in one institution's feed, as the frozen day 1 fixtures show.",
+      "_id": "item_env",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "title": "Environmental Policy and Air Pollution in China",
+      "subtitle": "Governance and Strategy",
+      "authors": ["Yuan Xu"],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": "en",
+      "description": "Air quality governance and the policy instruments behind it.",
+      "subjects": ["Environment", "Public Policy"],
+      "publishedAt": "2020-07-01",
+      "coverUrl": "https://cdn.tf.example/covers/item_env.jpg",
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "sizeBytes": 3596255,
+          "cipherLength": 3596283,
+          "encrypted": true,
+          "hasSearchIndex": true,
+          "indexTerms": 11840,
+          "indexSkipReason": null,
+          "keyId": "master-v1"
+        }
+      ],
+      "storageKey": "seed/pub_rtlg/item_env.pdf.enc",
+      "indexKey": "seed/pub_rtlg/item_env.index.json.enc",
+      "wrappedBek": "seed-placeholder-not-a-real-key",
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_seedWhy": "Canonical. Open access, so it appears for every institution including one with zero entitlements. Plaintext: no encryption, no wrapped key. Also the only edited volume, so editors is populated and authors is empty.",
+      "_id": "item_ab6",
+      "publisherId": "pub_crc",
+      "collectionIds": ["col_env2024"],
+      "title": "Ethnographies of Waiting",
+      "subtitle": "Doubt, Hope and Uncertainty",
+      "authors": [],
+      "editors": ["Manpreet K. Janeja", "Andreas Bandak"],
+      "narrators": [],
+      "isbn": null,
+      "language": "en",
+      "description": "Essays on waiting as a social and political condition.",
+      "subjects": ["Anthropology", "Sociology"],
+      "publishedAt": "2018-01-25",
+      "coverUrl": "https://cdn.tf.example/covers/item_ab6.jpg",
+      "contentType": "EPUB",
+      "accessTier": "OPEN_ACCESS",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "EPUB",
+          "mimeType": "application/epub+zip",
+          "sizeBytes": 2170646,
+          "cipherLength": null,
+          "encrypted": false,
+          "hasSearchIndex": true,
+          "indexTerms": 7204,
+          "indexSkipReason": null,
+          "keyId": null
+        }
+      ],
+      "storageKey": "seed/pub_crc/item_ab6.epub",
+      "indexKey": "seed/pub_crc/item_ab6.index.json",
+      "wrappedBek": null,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_seedWhy": "Canonical, and the most misread row in the project. A PAID tier with NO encryption, because audio is never encrypted at any tier: whole-file encryption cannot seek and scrubbing is required behaviour. hasSearchIndex is false, so there is no index to fetch.",
+      "_id": "item_stat",
+      "publisherId": "pub_crc",
+      "collectionIds": ["col_env2024"],
+      "title": "An Introduction to Statistics",
+      "subtitle": null,
+      "authors": ["Anne-Marie Fitzgerald"],
+      "editors": [],
+      "narrators": ["Sarah Lund"],
+      "isbn": null,
+      "language": "en",
+      "description": "An introductory statistics course, read aloud.",
+      "subjects": ["Statistics", "Mathematics"],
+      "publishedAt": "2019-03-14",
+      "coverUrl": "https://cdn.tf.example/covers/item_stat.jpg",
+      "contentType": "AUDIO",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "AUDIO",
+          "mimeType": "audio/mpeg",
+          "sizeBytes": 18440112,
+          "cipherLength": null,
+          "encrypted": false,
+          "hasSearchIndex": false,
+          "indexTerms": null,
+          "indexSkipReason": "AudioNotIndexable",
+          "keyId": null
+        }
+      ],
+      "storageKey": "seed/pub_crc/item_stat.mp3",
+      "indexKey": null,
+      "wrappedBek": null,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_seedWhy": "Two assets on one item, PDF and EPUB. Exercises multi-format acquisition, which the assets array allows and which nothing else in the seed covers. In no collection, so it is reached through the PUBLISHER grant.",
+      "_id": "item_dual",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "title": "Research Methods in Practice",
+      "subtitle": "Strategies for Description and Causation",
+      "authors": ["Dahlia K. Remler", "Gregg G. Van Ryzin"],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": "en",
+      "description": "A practical guide to research design across the social sciences.",
+      "subjects": ["Research Methods", "Social Science"],
+      "publishedAt": "2021-05-10",
+      "coverUrl": "https://cdn.tf.example/covers/item_dual.jpg",
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "sizeBytes": 4210880,
+          "cipherLength": 4210908,
+          "encrypted": true,
+          "hasSearchIndex": true,
+          "indexTerms": 15310,
+          "indexSkipReason": null,
+          "keyId": "master-v1"
+        },
+        {
+          "format": "EPUB",
+          "mimeType": "application/epub+zip",
+          "sizeBytes": 1988402,
+          "cipherLength": 1988430,
+          "encrypted": true,
+          "hasSearchIndex": true,
+          "indexTerms": 15310,
+          "indexSkipReason": null,
+          "keyId": "master-v1"
+        }
+      ],
+      "storageKey": "seed/pub_rtlg/item_dual.pdf.enc",
+      "indexKey": "seed/pub_rtlg/item_dual.index.json.enc",
+      "wrappedBek": "seed-placeholder-not-a-real-key",
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_seedWhy": "Open access with NO cover art. coverUrl is null, not an empty string, so the 'images must be absent, not empty' OPDS case has real data behind it rather than only a hand-written fixture.",
+      "_id": "item_oa9",
+      "publisherId": "pub_crc",
+      "collectionIds": ["col_env2024"],
+      "title": "Open Data for Cities",
+      "subtitle": null,
+      "authors": ["Marta Poblet"],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": "en",
+      "description": "Municipal open data programmes and what they changed.",
+      "subjects": ["Urban Studies", "Open Data"],
+      "publishedAt": "2022-02-15",
+      "coverUrl": null,
+      "contentType": "PDF",
+      "accessTier": "OPEN_ACCESS",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "sizeBytes": 1204880,
+          "cipherLength": null,
+          "encrypted": false,
+          "hasSearchIndex": true,
+          "indexTerms": 4118,
+          "indexSkipReason": null,
+          "keyId": null
+        }
+      ],
+      "storageKey": "seed/pub_crc/item_oa9.pdf",
+      "indexKey": "seed/pub_crc/item_oa9.index.json",
+      "wrappedBek": null,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_seedWhy": "NOT READY. Editorially published but the file is still queued, which is the half-ready state the two-field design exists to represent. It is inside the granted collection, so it proves the exclusion is contentState and not entitlement. Must never appear in a feed.",
+      "_id": "item_q7",
+      "publisherId": "pub_rtlg",
+      "collectionIds": ["col_law2024"],
+      "title": "Climate Finance and Policy",
+      "subtitle": null,
+      "authors": ["Elena Marchetti"],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": "en",
+      "description": "Instruments for financing the transition.",
+      "subjects": ["Finance", "Climate"],
+      "publishedAt": "2023-09-01",
+      "coverUrl": "https://cdn.tf.example/covers/item_q7.jpg",
+      "contentType": "EPUB",
+      "accessTier": "ELITE",
+      "status": "PUBLISHED",
+      "contentState": "QUEUED",
+      "contentError": null,
+      "assets": [],
+      "storageKey": null,
+      "indexKey": null,
+      "wrappedBek": null,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_seedWhy": "Ingest FAILED, with a real error string. Never in a feed, but it must be visible on the admin ingest-status screen, which is the only row in the seed that gives that screen anything to show.",
+      "_id": "item_f3",
+      "publisherId": "pub_crc",
+      "collectionIds": ["col_env2024"],
+      "title": "Machine Learning for Chemists",
+      "subtitle": null,
+      "authors": ["Alan T. Weiss"],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": "en",
+      "description": "Applied machine learning for computational chemistry.",
+      "subjects": ["Chemistry", "Machine Learning"],
+      "publishedAt": "2024-01-20",
+      "coverUrl": "https://cdn.tf.example/covers/item_f3.jpg",
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "FAILED",
+      "contentError": "TextExtractor: no extractable text layer, the PDF is a scan",
+      "assets": [],
+      "storageKey": null,
+      "indexKey": null,
+      "wrappedBek": null,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    }
+  ],
+
+  "entitlements": [
+    {
+      "_seedWhy": "COLLECTION scope, CONCURRENT. Covers item_42 and item_q7. The narrower scope, so it must beat the publisher grant below on item_42. Deciding this pair is OQ-5; this is the fixture-faithful option. To switch to the playbook option, move this row's institutionId to inst_ucl and change scope to PUBLISHER pub_crc.",
+      "_id": "ent_imp1",
+      "institutionId": "inst_7f3",
+      "scopeType": "COLLECTION",
+      "scopeId": "col_law2024",
+      "copies": 2,
+      "loanPeriodDays": 14,
+      "validFrom": "2026-08-01",
+      "validTo": "2026-12-31",
+      "status": "ACTIVE",
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_seedWhy": "PUBLISHER scope, UNLIMITED (copies null). Covers every Routledge book, so item_env and item_dual resolve UNLIMITED while item_42 stays CONCURRENT under the narrower grant above. That is scope precedence, testable straight from the seed. validTo is null, open ended, so the seed carries one of each.",
+      "_id": "ent_imp2",
+      "institutionId": "inst_7f3",
+      "scopeType": "PUBLISHER",
+      "scopeId": "pub_rtlg",
+      "copies": null,
+      "loanPeriodDays": 14,
+      "validFrom": "2026-08-01",
+      "validTo": null,
+      "status": "ACTIVE",
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    }
+  ],
+
+  "adminUsers": [
+    {
+      "_seedWhy": "The account everyone logs into the console with.",
+      "_id": "adm_01",
+      "email": "ops@tandf.example",
+      "name": "Catalogue Ops",
+      "passwordHash": "$2a$10$cPuPOFwBY4316JIJD/rCfeSmgjZ4tYUG/M5IC8U544ZaekPd7zDbe",
+      "role": "SUPER_ADMIN",
+      "publisherId": null,
+      "institutionId": null,
+      "status": "ACTIVE",
+      "lastLoginAt": null
+    },
+    {
+      "_seedWhy": "Scoped to Routledge. Proves publisherAdminListSeesOnlyOwnRows against a database that really does contain CRC Press rows.",
+      "_id": "adm_02",
+      "email": "rtlg.admin@tandf.example",
+      "name": "Routledge Admin",
+      "passwordHash": "$2a$10$BPKSvi5.dyyKD42RVcF0HucXO26qjEuEc4ES4a6DCY3ULjexjZ60a",
+      "role": "PUBLISHER_ADMIN",
+      "publisherId": "pub_rtlg",
+      "institutionId": null,
+      "status": "ACTIVE",
+      "lastLoginAt": null
+    },
+    {
+      "_seedWhy": "Scoped to Imperial. The institution-scoped case that week 2's feed settings permissions need.",
+      "_id": "adm_03",
+      "email": "imperial.admin@tandf.example",
+      "name": "Imperial Library Admin",
+      "passwordHash": "$2a$10$1dHIVEpLCkKMCJiYUf0Fz.EjTYVHFvbXTPsS5kE2HL1MyRzZMaG56",
+      "role": "INSTITUTION_ADMIN",
+      "publisherId": null,
+      "institutionId": "inst_7f3",
+      "status": "ACTIVE",
+      "lastLoginAt": null
+    }
+  ],
+
+  "feedSettings": [
+    {
+      "_seedWhy": "The fully curated case. Three shelves, all populated, and every listed book is one Imperial can actually reach: item_42 through the collection grant, item_env and item_dual through the publisher grant, item_ab6 and item_oa9 because open access needs no grant. itemIds order is display order and the feed must preserve it exactly.",
+      "_id": "fs_inst_7f3",
+      "institutionId": "inst_7f3",
+      "feedTitle": "Imperial College Library",
+      "pageSize": 20,
+      "defaultSort": "publishedAt.desc",
+      "shelves": [
+        {
+          "id": "shelf_1",
+          "title": "New this month",
+          "order": 1,
+          "itemIds": ["item_42", "item_env", "item_dual"]
+        },
+        {
+          "id": "shelf_2",
+          "title": "Law essentials",
+          "order": 2,
+          "itemIds": ["item_42"]
+        },
+        {
+          "id": "shelf_3",
+          "title": "Open access picks",
+          "order": 3,
+          "itemIds": ["item_ab6", "item_oa9"]
+        }
+      ],
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_seedWhy": "The zero-entitlement case. UCL bought nothing, so only open access can appear, and two of the three shelves are empty. An empty itemIds is a hidden shelf, which is the OPDS 'empty shelf is omitted, not emitted as an empty array' case with real data behind it.",
+      "_id": "fs_inst_ucl",
+      "institutionId": "inst_ucl",
+      "feedTitle": "UCL Library",
+      "pageSize": 20,
+      "defaultSort": "publishedAt.desc",
+      "shelves": [
+        {
+          "id": "shelf_1",
+          "title": "New this month",
+          "order": 1,
+          "itemIds": ["item_ab6", "item_oa9"]
+        },
+        {
+          "id": "shelf_2",
+          "title": "Reading lists",
+          "order": 2,
+          "itemIds": []
+        },
+        {
+          "id": "shelf_3",
+          "title": "Audio picks",
+          "order": 3,
+          "itemIds": []
+        }
+      ],
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_seedWhy": "Leeds is SUSPENDED, so no feed is ever served for it. The record exists anyway to keep feedSettings 1:1 with institutions and to exercise the unique index on institutionId. All three shelves are empty, which is the honest content for a customer whose account is paused.",
+      "_id": "fs_inst_leeds",
+      "institutionId": "inst_leeds",
+      "feedTitle": "University of Leeds Library",
+      "pageSize": 20,
+      "defaultSort": "publishedAt.desc",
+      "shelves": [
+        {
+          "id": "shelf_1",
+          "title": "New this month",
+          "order": 1,
+          "itemIds": []
+        },
+        {
+          "id": "shelf_2",
+          "title": "Reading lists",
+          "order": 2,
+          "itemIds": []
+        },
+        {
+          "id": "shelf_3",
+          "title": "Audio picks",
+          "order": 3,
+          "itemIds": []
+        }
+      ],
+      "updatedAt": "2026-08-10T09:00:00Z"
+    }
+  ]
+}
