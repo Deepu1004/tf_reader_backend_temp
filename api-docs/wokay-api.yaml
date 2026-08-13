@@ -1035,13 +1035,14 @@ paths:
       description: |
         Marks the refresh token revoked so it can never be exchanged again.
 
-        **It does not kill the access token.** Nothing can: the access token is
-        self-verifying and carries no server lookup, which is the whole reason feeds are
-        fast. It keeps working until it expires, at most 15 minutes later. Say this at
-        the showcase rather than implying sessions are torn down instantly.
+        **It kills the access token too.** Every admin request re-checks its session
+        against `adminSessions`, so once this call sets `revokedAt` the access token fails
+        on its next use. There is no residual window.
 
-        So the console must also **drop the access token on its own side**. The endpoint
-        stops tomorrow's session, the client stops this one.
+        The console should still drop its own copy, to avoid one guaranteed `401`.
+
+        This applies to **admin tokens only**. App tokens on `/opds/v1/**` and
+        `/api/v1/**` carry no server lookup, which is what keeps feed rendering fast.
 
         Always `204`, even for a token that never existed, so nobody can probe which
         ones are live.
@@ -1956,6 +1957,8 @@ components:
       description: >-
         Issued by us at `/api/admin/v1/auth/login`. Carries `aud` of `tf-admin`.
         Accepted on `/api/admin/v1/**` only.
+        Bound to a live `adminSessions` row and rejected once that row is revoked or
+        expired.
 
   parameters:
     Page:
@@ -2992,9 +2995,10 @@ components:
       type: object
       description: >-
         Two tokens with different jobs. The access token is a signed JWT that every
-        request carries and no server ever looks up. The refresh token is an opaque
-        random string that exists **only** in the `adminSessions` collection, stored
-        hashed, and is sent to `/auth/refresh` and `/auth/logout` and nowhere else.
+        request carries and whose session is re-checked on each admin request, so logout
+        takes effect immediately. The refresh token is an opaque random string that exists
+        **only** in the `adminSessions` collection, stored hashed, and is sent to
+        `/auth/refresh` and `/auth/logout` and nowhere else.
       required: [accessToken, expiresIn, refreshToken, refreshExpiresIn]
       properties:
         accessToken:
@@ -3003,7 +3007,9 @@ components:
             JWT, `aud` of `tf-admin`. Send it as the `Authorization` bearer header.
         expiresIn:
           type: integer
-          description: Seconds. Short on purpose, because nothing can revoke it early.
+          description: >-
+            Seconds. Short on purpose, as defence in depth; logout also revokes it
+            immediately.
           example: 900
         refreshToken:
           type: string
@@ -3072,7 +3078,8 @@ components:
           format: date-time
           description: >-
             Set by `/auth/refresh` when the token is rotated, and by `/auth/logout`. Null
-            while the session is live. A row with this set can never be exchanged again.
+            while the session is live. A row with this set can never be exchanged again
+            and any access token carrying this session id is rejected from that moment.
 
     AdminUser:
       type: object
