@@ -1,5 +1,33 @@
 package com.tf.reader.common.error;
 
-// Stable machine-readable error codes returned to clients.
+import org.springframework.http.HttpStatus;
+
+import lombok.Getter;
+
+@Getter
 public enum ErrorCode {
+
+	VALIDATION_FAILED(HttpStatus.BAD_REQUEST),
+	INVALID_DEVICE_PUBLIC_KEY(HttpStatus.BAD_REQUEST),
+	TOO_MANY_IDS(HttpStatus.BAD_REQUEST),
+	UNAUTHENTICATED(HttpStatus.UNAUTHORIZED),
+	TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED),
+	FORBIDDEN_SCOPE(HttpStatus.FORBIDDEN),
+	FORBIDDEN_INSTITUTION_MISMATCH(HttpStatus.FORBIDDEN),
+	NO_ENTITLEMENT(HttpStatus.FORBIDDEN),
+	ENTITLEMENT_EXPIRED(HttpStatus.FORBIDDEN),
+	ENTITLEMENT_SUSPENDED(HttpStatus.FORBIDDEN),
+	INSTITUTION_INACTIVE(HttpStatus.FORBIDDEN),
+	DOWNLOAD_NOT_PERMITTED(HttpStatus.FORBIDDEN),
+	NOT_FOUND(HttpStatus.NOT_FOUND),
+	CODE_TAKEN(HttpStatus.CONFLICT),
+	CONTENT_NOT_READY(HttpStatus.CONFLICT),
+	STALE_VERSION(HttpStatus.CONFLICT);
+
+	private final HttpStatus status;
+
+	ErrorCode(HttpStatus status) {
+		this.status = status;
+	}
+
 }
