@@ -13,13 +13,8 @@ import com.tf.reader.admin.entity.AdminRole;
 import com.tf.reader.common.security.TokenClaims;
 
 /**
- * Maps the {@code role} claim onto a single Spring Security authority, {@code ROLE_<AdminRole>}.
- *
- * <p>Role and scope stay separate: only the role becomes an authority. Scope is evaluated per
- * target by {@link AdminScopeAuthorizer}, which avoids one authority per publisher or institution.
- *
- * <p>The claim is already constrained to a valid {@link AdminRole} by the decoder's validator
- * chain, so an unparseable role never reaches this converter.
+ * Maps the {@code role} claim onto a single authority, {@code ROLE_<AdminRole>}. Only the role becomes
+ * an authority; scope is evaluated per target by {@link AdminScopeAuthorizer}.
  */
 public final class AdminJwtAuthenticationConverter implements Converter<Jwt, AbstractAuthenticationToken> {
 

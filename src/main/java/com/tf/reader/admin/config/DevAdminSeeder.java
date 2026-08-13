@@ -16,11 +16,8 @@ import com.tf.reader.admin.entity.AdminUser;
 import com.tf.reader.admin.repository.AdminUserRepository;
 
 /**
- * Creates one admin per role for local development.
- *
- * <p>Gated twice: the dev profile, and {@code tf.admin.seed.enabled}, which is only ever set in
- * {@code application-dev.yml}. Uses the existing {@link AdminUser} document, and skips any admin
- * whose email is already present, so repeated startups do not duplicate or overwrite anything.
+ * Creates one admin per role for local development. Gated twice, on the dev profile and on
+ * {@code tf.admin.seed.enabled}, and skips emails already present so restarts do not duplicate.
  */
 @Component
 @Profile("dev")

@@ -17,10 +17,7 @@ import com.tf.reader.common.security.JwtProperties;
 import com.tf.reader.common.security.TokenAudience;
 import com.tf.reader.common.security.TokenClaims;
 
-/**
- * Mints admin JWTs. Nothing here reads or writes session state, and nothing here validates tokens;
- * validation lives entirely in the decoders.
- */
+/** Mints admin JWTs. Reads no session state and validates nothing; validation lives in the decoders. */
 @Service
 public class AdminTokenService {
 
@@ -34,20 +31,10 @@ public class AdminTokenService {
 		this.clock = jwtClock;
 	}
 
-	/**
-	 * @param value     the encoded JWT
-	 * @param jti       its unique identifier
-	 * @param expiresAt its expiry
-	 */
 	public record MintedToken(String value, String jti, Instant expiresAt) {
 	}
 
-	/**
-	 * Access token for the given admin and session.
-	 *
-	 * <p>Scope claims are written only when the admin actually carries that scope. An absent claim
-	 * means "no scope", never "all scopes".
-	 */
+	/** Scope claims are written only when the admin carries that scope; absent means no scope. */
 	public MintedToken mintAccessToken(AdminUser adminUser, String sessionId) {
 		Instant issuedAt = this.clock.instant();
 		Instant expiresAt = issuedAt.plus(this.jwtProperties.accessTokenTtl());
@@ -74,36 +61,17 @@ public class AdminTokenService {
 		return new MintedToken(encode(claims.build()), jti, expiresAt);
 	}
 
-	/**
-	 * Refresh token for the given session.
-	 *
-	 * <p>Carries no role or scope: it authorizes nothing by itself and is only ever exchanged, so
-	 * the admin's current role and scope are re-read from the database on every refresh.
-	 */
-	public MintedToken mintRefreshToken(String adminUserId, String sessionId, Instant expiresAt) {
-		Instant issuedAt = this.clock.instant();
-		String jti = newId();
-
-		JwtClaimsSet claims = JwtClaimsSet.builder()
-				.issuer(this.jwtProperties.issuer())
-				.subject(adminUserId)
-				.audience(List.of(TokenAudience.REFRESH))
-				.issuedAt(issuedAt)
-				.expiresAt(expiresAt)
-				.id(jti)
-				.claim(TokenClaims.TOKEN_USE, TokenClaims.USE_REFRESH)
-				.claim(TokenClaims.SESSION_ID, sessionId)
-				.build();
-
-		return new MintedToken(encode(claims), jti, expiresAt);
-	}
-
 	public Instant refreshTokenExpiryFromNow() {
 		return this.clock.instant().plus(this.jwtProperties.refreshTokenTtl());
 	}
 
 	public long accessTokenTtlSeconds() {
 		return this.jwtProperties.accessTokenTtl().toSeconds();
+	}
+
+	/** The full session lifetime, which is what a freshly opened session has left. */
+	public long refreshTokenTtlSeconds() {
+		return this.jwtProperties.refreshTokenTtl().toSeconds();
 	}
 
 	public String newSessionId() {

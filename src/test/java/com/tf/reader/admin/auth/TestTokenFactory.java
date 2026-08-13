@@ -32,6 +32,15 @@ final class TestTokenFactory {
 	/** A well-formed key that is simply not the application's key. */
 	private static final String FOREIGN_SECRET = "a-completely-different-key-used-only-by-tests-98765";
 
+	/**
+	 * The audience refresh tokens used to carry before they became opaque. Nothing issues it now, so a
+	 * JWT claiming it must authenticate nothing at all.
+	 */
+	static final String RETIRED_REFRESH_AUDIENCE = "tf-refresh";
+
+	/** The {@code token_use} value that went with it. */
+	static final String RETIRED_REFRESH_TOKEN_USE = "refresh";
+
 	private final JwtEncoder applicationEncoder;
 	private final JwtEncoder foreignEncoder;
 	private final String issuer;
@@ -55,8 +64,9 @@ final class TestTokenFactory {
 		return baseClaims(subject, TokenAudience.APP, TokenClaims.USE_ACCESS);
 	}
 
-	JwtClaimsSet.Builder refreshClaims(String adminUserId, String sessionId) {
-		return baseClaims(adminUserId, TokenAudience.REFRESH, TokenClaims.USE_REFRESH)
+	/** A JWT shaped like the refresh tokens this service no longer issues. */
+	JwtClaimsSet.Builder retiredRefreshClaims(String adminUserId, String sessionId) {
+		return baseClaims(adminUserId, RETIRED_REFRESH_AUDIENCE, RETIRED_REFRESH_TOKEN_USE)
 				.claim(TokenClaims.SESSION_ID, sessionId);
 	}
 

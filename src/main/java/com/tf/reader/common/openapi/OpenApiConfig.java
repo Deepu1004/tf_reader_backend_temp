@@ -10,17 +10,15 @@ import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 
 /**
- * API documentation, restricted to the dev profile.
- *
- * <p>Two independent switches keep it off elsewhere: springdoc is disabled by configuration in
- * {@code application.yml}, and the filter chain that exposes its paths only exists under the dev
- * profile. Nothing here relaxes security for the documented endpoints themselves.
+ * API documentation, restricted to the dev profile by two independent switches: springdoc is
+ * disabled in {@code application.yml}, and the filter chain exposing its paths is dev-only.
  */
 @Configuration(proxyBeanMethods = false)
 @Profile("dev")
 public class OpenApiConfig {
 
-	static final String ADMIN_BEARER_SCHEME = "adminBearerAuth";
+	/** The name the published API contract gives this scheme. */
+	static final String ADMIN_BEARER_SCHEME = "adminToken";
 
 	@Bean
 	OpenAPI readerOpenApi() {
@@ -28,9 +26,9 @@ public class OpenApiConfig {
 				.info(new Info()
 						.title("T&F Reader admin API")
 						.version("v1")
-						.description("Admin authentication and RBAC. Access tokens carry aud=tf-admin; "
-								+ "refresh tokens carry aud=tf-refresh and are accepted only by the refresh "
-								+ "endpoint."))
+						.description("Admin authentication and RBAC. Access tokens are JWTs carrying "
+								+ "aud=tf-admin; refresh tokens are opaque and are accepted only in the body of "
+								+ "the refresh and logout endpoints, never as a bearer token."))
 				.components(new Components().addSecuritySchemes(ADMIN_BEARER_SCHEME,
 						new SecurityScheme()
 								.type(SecurityScheme.Type.HTTP)

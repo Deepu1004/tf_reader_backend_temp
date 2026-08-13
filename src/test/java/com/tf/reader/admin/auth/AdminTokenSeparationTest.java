@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.test.web.servlet.MvcResult;
 
-import com.tf.reader.admin.dto.TokenResponse;
+import com.tf.reader.admin.dto.AdminLoginResponse;
 import com.tf.reader.admin.entity.AdminRole;
 import com.tf.reader.admin.entity.AdminStatus;
 import com.tf.reader.admin.entity.AdminUser;
@@ -38,25 +38,49 @@ class AdminTokenSeparationTest extends AbstractAdminAuthIntegrationTest {
 	@Test
 	void rejectsAnAdminTokenOnTheAppApi() throws Exception {
 		AdminUser admin = saveAdmin("cross@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
-		TokenResponse tokens = loginSuccessfully("cross@tandf.example");
+		AdminLoginResponse tokens = loginSuccessfully("cross@tandf.example");
 
 		assertThat(callApp(tokens.accessToken())).isEqualTo(401);
 		assertThat(admin.getId()).isNotBlank();
 	}
 
+	/**
+	 * A refresh token authorizes nothing. It is opaque, so it is not even a candidate bearer token: the
+	 * admin decoder cannot parse it at all.
+	 */
 	@Test
 	void rejectsARefreshTokenOnTheAdminApi() throws Exception {
 		saveAdmin("refuse@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
-		TokenResponse tokens = loginSuccessfully("refuse@tandf.example");
+		AdminLoginResponse tokens = loginSuccessfully("refuse@tandf.example");
 
 		assertThat(callMe(tokens.refreshToken()).getResponse().getStatus()).isEqualTo(401);
-		assertThat(callLogout(tokens.refreshToken()).getResponse().getStatus()).isEqualTo(401);
+		assertThat(callApp(tokens.refreshToken())).isEqualTo(401);
+
+		// Presenting it as a bearer token must not revoke or otherwise disturb its session either.
+		assertThat(onlySession().getRevokedAt()).isNull();
+	}
+
+	/**
+	 * The audience refresh tokens used to carry is no longer issued or accepted anywhere, so a JWT
+	 * claiming it is just a foreign token.
+	 */
+	@Test
+	void rejectsAJwtClaimingTheRetiredRefreshAudience() throws Exception {
+		AdminUser admin = saveAdmin("retired@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
+		String sessionId = openSessionFor(admin);
+
+		String retired = this.tokens
+				.sign(this.tokens.retiredRefreshClaims(admin.getId(), sessionId).build());
+
+		assertThat(callMe(retired).getResponse().getStatus()).isEqualTo(401);
+		assertThat(callApp(retired)).isEqualTo(401);
+		assertThat(callRefresh(retired).getResponse().getStatus()).isEqualTo(401);
 	}
 
 	@Test
 	void rejectsAnAccessTokenAtTheRefreshEndpoint() throws Exception {
 		saveAdmin("noswap@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
-		TokenResponse tokens = loginSuccessfully("noswap@tandf.example");
+		AdminLoginResponse tokens = loginSuccessfully("noswap@tandf.example");
 
 		// An access token can never be exchanged, so letting one expire is not a route to renewal.
 		assertThat(callRefresh(tokens.accessToken()).getResponse().getStatus()).isEqualTo(401);
@@ -108,7 +132,8 @@ class AdminTokenSeparationTest extends AbstractAdminAuthIntegrationTest {
 
 		String multiAudience = this.tokens.sign(
 				this.tokens.adminAccessClaims(admin.getId(), sessionId, AdminRole.SUPER_ADMIN)
-						.audience(List.of(TokenAudience.ADMIN, TokenAudience.APP, TokenAudience.REFRESH))
+						.audience(List.of(TokenAudience.ADMIN, TokenAudience.APP,
+								TestTokenFactory.RETIRED_REFRESH_AUDIENCE))
 						.build());
 
 		assertThat(callMe(multiAudience).getResponse().getStatus()).isEqualTo(401);
@@ -148,7 +173,7 @@ class AdminTokenSeparationTest extends AbstractAdminAuthIntegrationTest {
 
 		String mislabelled = this.tokens.sign(
 				this.tokens.adminAccessClaims(admin.getId(), sessionId, AdminRole.SUPER_ADMIN)
-						.claim(TokenClaims.TOKEN_USE, TokenClaims.USE_REFRESH)
+						.claim(TokenClaims.TOKEN_USE, TestTokenFactory.RETIRED_REFRESH_TOKEN_USE)
 						.build());
 
 		assertThat(callMe(mislabelled).getResponse().getStatus()).isEqualTo(401);
@@ -204,8 +229,8 @@ class AdminTokenSeparationTest extends AbstractAdminAuthIntegrationTest {
 	}
 
 	/**
-	 * Login and refresh parse no bearer token, so a client holding a stale or corrupt access token
-	 * can still authenticate instead of being locked out by its own leftover header.
+	 * Login, refresh and logout parse no bearer token, so a client holding a stale or corrupt access
+	 * token can still authenticate instead of being locked out by its own leftover header.
 	 */
 	@Test
 	void letsAClientLogInWhileStillSendingAnUnusableAuthorizationHeader() throws Exception {
@@ -221,7 +246,7 @@ class AdminTokenSeparationTest extends AbstractAdminAuthIntegrationTest {
 
 		assertThat(result.getResponse().getStatus()).isEqualTo(200);
 
-		TokenResponse tokens = readTokens(result);
+		AdminLoginResponse tokens = readLogin(result);
 		MvcResult refreshResult = this.mockMvc.perform(
 				org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(REFRESH_PATH)
 						.header("Authorization", "Bearer completely-invalid-token")
@@ -231,6 +256,16 @@ class AdminTokenSeparationTest extends AbstractAdminAuthIntegrationTest {
 				.andReturn();
 
 		assertThat(refreshResult.getResponse().getStatus()).isEqualTo(200);
+
+		MvcResult logoutResult = this.mockMvc.perform(
+				org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(LOGOUT_PATH)
+						.header("Authorization", "Bearer completely-invalid-token")
+						.contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+						.content("""
+								{"refreshToken": "%s"}""".formatted(readTokens(refreshResult).refreshToken())))
+				.andReturn();
+
+		assertThat(logoutResult.getResponse().getStatus()).isEqualTo(204);
 	}
 
 	/**

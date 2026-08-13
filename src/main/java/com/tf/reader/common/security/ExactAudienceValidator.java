@@ -9,11 +9,8 @@ import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 /**
- * Requires {@code aud} to be exactly one value, equal to the expected audience.
- *
- * <p>Deliberately stricter than a "contains" check: a token carrying several audiences must not be
- * usable against any of them, so a single permissive multi-audience token can never be minted to
- * cross the admin/app/refresh boundary.
+ * Requires {@code aud} to be exactly one value, equal to the expected audience. Stricter than a
+ * "contains" check on purpose: a multi-audience token must not be usable against any of them.
  */
 public final class ExactAudienceValidator implements OAuth2TokenValidator<Jwt> {
 

@@ -7,24 +7,26 @@ import com.tf.reader.admin.entity.AdminUser;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
- * The authenticated admin's own profile.
- *
- * <p>An explicit projection rather than the entity, so {@code passwordHash} cannot reach a response
- * or the generated schema even if the entity later gains fields.
+ * An admin as the API exposes them: the contract's {@code AdminUser} shape. An explicit projection
+ * rather than the entity, so {@code passwordHash} cannot reach a response even if the entity gains
+ * fields later.
  */
-@Schema(name = "AdminProfileResponse", description = "Profile of the currently authenticated admin.")
+@Schema(name = "AdminUser", description = "An admin user.")
 public record AdminProfileResponse(
 
-		String id,
-		String email,
+		@Schema(requiredMode = Schema.RequiredMode.REQUIRED) String id,
+
+		@Schema(format = "email", requiredMode = Schema.RequiredMode.REQUIRED) String email,
+
 		String name,
-		AdminRole role,
+
+		@Schema(requiredMode = Schema.RequiredMode.REQUIRED) AdminRole role,
 
 		@Schema(description = "Publisher this admin is scoped to. Null unless the admin is publisher-scoped.")
-		String publisherId,
+		String scopePublisherId,
 
 		@Schema(description = "Institution this admin is scoped to. Null unless the admin is institution-scoped.")
-		String institutionId,
+		String scopeInstitutionId,
 
 		AdminStatus status) {
 

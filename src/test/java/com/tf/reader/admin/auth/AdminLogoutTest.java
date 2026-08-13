@@ -5,29 +5,29 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MvcResult;
 
-import com.tf.reader.admin.dto.TokenResponse;
+import com.tf.reader.admin.dto.AdminLoginResponse;
 import com.tf.reader.admin.entity.AdminRole;
 import com.tf.reader.admin.entity.AdminSession;
 import com.tf.reader.admin.entity.AdminStatus;
 import com.tf.reader.admin.service.AdminSessionService;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-
 /**
- * Logout must have a real server-side effect: the session is revoked, which kills both the refresh
- * token and, on the next request, the access token.
+ * Logout takes the refresh token in the body, needs no access token, and always answers 204.
+ *
+ * <p>It must still have a real server-side effect: the session is revoked, which kills both the
+ * refresh token and, on the next request, the access token.
  */
 class AdminLogoutTest extends AbstractAdminAuthIntegrationTest {
 
 	@Test
-	void revokesTheSessionForAnAuthenticatedAdmin() throws Exception {
+	void revokesTheSessionAndReturnsNoContent() throws Exception {
 		saveAdmin("logout@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
-		TokenResponse tokens = loginSuccessfully("logout@tandf.example");
+		AdminLoginResponse tokens = loginSuccessfully("logout@tandf.example");
 
-		MvcResult result = callLogout(tokens.accessToken());
+		MvcResult result = callLogout(tokens.refreshToken());
 
-		assertThat(result.getResponse().getStatus()).isEqualTo(200);
-		assertThat(result.getResponse().getContentAsString()).contains("\"sessionRevoked\":true");
+		assertThat(result.getResponse().getStatus()).isEqualTo(204);
+		assertThat(result.getResponse().getContentAsString()).isEmpty();
 
 		AdminSession session = onlySession();
 		assertThat(session.getRevokedAt()).isNotNull();
@@ -37,9 +37,9 @@ class AdminLogoutTest extends AbstractAdminAuthIntegrationTest {
 	@Test
 	void makesTheRefreshTokenUnusableAfterLogout() throws Exception {
 		saveAdmin("logoutrefresh@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
-		TokenResponse tokens = loginSuccessfully("logoutrefresh@tandf.example");
+		AdminLoginResponse tokens = loginSuccessfully("logoutrefresh@tandf.example");
 
-		assertThat(callLogout(tokens.accessToken()).getResponse().getStatus()).isEqualTo(200);
+		assertThat(callLogout(tokens.refreshToken()).getResponse().getStatus()).isEqualTo(204);
 
 		assertThat(callRefresh(tokens.refreshToken()).getResponse().getStatus()).isEqualTo(401);
 	}
@@ -51,30 +51,27 @@ class AdminLogoutTest extends AbstractAdminAuthIntegrationTest {
 	@Test
 	void makesTheAccessTokenUnusableImmediatelyAfterLogout() throws Exception {
 		saveAdmin("logoutaccess@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
-		TokenResponse tokens = loginSuccessfully("logoutaccess@tandf.example");
+		AdminLoginResponse tokens = loginSuccessfully("logoutaccess@tandf.example");
 
 		assertThat(callMe(tokens.accessToken()).getResponse().getStatus()).isEqualTo(200);
-		assertThat(callLogout(tokens.accessToken()).getResponse().getStatus()).isEqualTo(200);
+		assertThat(callLogout(tokens.refreshToken()).getResponse().getStatus()).isEqualTo(204);
 
 		assertThat(callMe(tokens.accessToken()).getResponse().getStatus()).isEqualTo(401);
 	}
 
 	/**
-	 * A second logout reports that it changed nothing, but the session stays revoked and the original
-	 * revocation reason and timestamp are preserved.
+	 * Repeating the call is safe and reports nothing different, while the original revocation reason
+	 * and timestamp survive untouched.
 	 */
 	@Test
 	void isIdempotent() throws Exception {
 		saveAdmin("logouttwice@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
-		TokenResponse tokens = loginSuccessfully("logouttwice@tandf.example");
+		AdminLoginResponse tokens = loginSuccessfully("logouttwice@tandf.example");
 
-		assertThat(callLogout(tokens.accessToken()).getResponse().getContentAsString())
-				.contains("\"sessionRevoked\":true");
+		assertThat(callLogout(tokens.refreshToken()).getResponse().getStatus()).isEqualTo(204);
 		AdminSession afterFirst = onlySession();
 
-		// The second call is rejected because the token's session is gone, which is itself the
-		// correct outcome: the caller is already logged out.
-		assertThat(callLogout(tokens.accessToken()).getResponse().getStatus()).isEqualTo(401);
+		assertThat(callLogout(tokens.refreshToken()).getResponse().getStatus()).isEqualTo(204);
 
 		AdminSession afterSecond = onlySession();
 		assertThat(afterSecond.getRevokedAt()).isEqualTo(afterFirst.getRevokedAt());
@@ -84,11 +81,11 @@ class AdminLogoutTest extends AbstractAdminAuthIntegrationTest {
 	@Test
 	void leavesOtherSessionsOfTheSameAdminAlone() throws Exception {
 		saveAdmin("twosessions@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
-		TokenResponse first = loginSuccessfully("twosessions@tandf.example");
-		TokenResponse second = loginSuccessfully("twosessions@tandf.example");
+		AdminLoginResponse first = loginSuccessfully("twosessions@tandf.example");
+		AdminLoginResponse second = loginSuccessfully("twosessions@tandf.example");
 
 		assertThat(this.adminSessionRepository.count()).isEqualTo(2);
-		assertThat(callLogout(first.accessToken()).getResponse().getStatus()).isEqualTo(200);
+		assertThat(callLogout(first.refreshToken()).getResponse().getStatus()).isEqualTo(204);
 
 		// Logging out of one device must not sign the admin out everywhere.
 		assertThat(callMe(first.accessToken()).getResponse().getStatus()).isEqualTo(401);
@@ -96,25 +93,67 @@ class AdminLogoutTest extends AbstractAdminAuthIntegrationTest {
 		assertThat(callRefresh(second.refreshToken()).getResponse().getStatus()).isEqualTo(200);
 	}
 
+	/**
+	 * A token that never existed gets the same 204 as a real one, so the endpoint cannot be used to
+	 * discover which refresh tokens are live.
+	 */
 	@Test
-	void rejectsLogoutWithoutAuthentication() throws Exception {
-		assertThat(this.mockMvc.perform(post(LOGOUT_PATH)).andReturn().getResponse().getStatus()).isEqualTo(401);
+	void answersNoContentForATokenThatNeverExisted() throws Exception {
+		assertThat(callLogout("not-a-jwt").getResponse().getStatus()).isEqualTo(204);
+
+		saveAdmin("logoutprobe@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
+		AdminLoginResponse tokens = loginSuccessfully("logoutprobe@tandf.example");
+
+		MvcResult unknown = callLogout("aaa.bbb.ccc");
+		MvcResult real = callLogout(tokens.refreshToken());
+
+		assertThat(unknown.getResponse().getStatus()).isEqualTo(real.getResponse().getStatus());
+		assertThat(unknown.getResponse().getContentAsString())
+				.isEqualTo(real.getResponse().getContentAsString());
 	}
 
+	/**
+	 * An access token is not a refresh token here either. It is accepted with the same 204 as any
+	 * other unusable value, but it revokes nothing.
+	 */
 	@Test
-	void rejectsLogoutWithAnInvalidToken() throws Exception {
-		assertThat(callLogout("not-a-jwt").getResponse().getStatus()).isEqualTo(401);
-	}
-
-	@Test
-	void rejectsLogoutWithARefreshToken() throws Exception {
+	void doesNotAcceptAnAccessTokenInPlaceOfTheRefreshToken() throws Exception {
 		saveAdmin("logoutwrongtoken@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
-		TokenResponse tokens = loginSuccessfully("logoutwrongtoken@tandf.example");
+		AdminLoginResponse tokens = loginSuccessfully("logoutwrongtoken@tandf.example");
 
-		assertThat(callLogout(tokens.refreshToken()).getResponse().getStatus()).isEqualTo(401);
+		assertThat(callLogout(tokens.accessToken()).getResponse().getStatus()).isEqualTo(204);
 
-		// The session survives, because the attempt never authenticated in the first place.
 		assertThat(onlySession().getRevokedAt()).isNull();
+		assertThat(callMe(tokens.accessToken()).getResponse().getStatus()).isEqualTo(200);
+	}
+
+	/** An unissued token that looks exactly like a real one still gets the uniform 204. */
+	@Test
+	void answersNoContentForAnUnissuedOpaqueToken() throws Exception {
+		saveAdmin("logoutopaque@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
+		loginSuccessfully("logoutopaque@tandf.example");
+
+		assertThat(callLogout(randomOpaqueLookingToken()).getResponse().getStatus()).isEqualTo(204);
+
+		assertThat(onlySession().getRevokedAt()).isNull();
+	}
+
+	/** A token the session has already rotated away from still identifies it, and revoking is safe. */
+	@Test
+	void revokesTheSessionForASupersededRefreshToken() throws Exception {
+		saveAdmin("logoutsuperseded@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
+		AdminLoginResponse tokens = loginSuccessfully("logoutsuperseded@tandf.example");
+		callRefresh(tokens.refreshToken());
+
+		assertThat(callLogout(tokens.refreshToken()).getResponse().getStatus()).isEqualTo(204);
+
+		assertThat(onlySession().getRevokedAt()).isNotNull();
+	}
+
+	@Test
+	void rejectsAnEmptyOrMissingRefreshTokenField() throws Exception {
+		assertThat(callLogoutWithRawBody("{}").getResponse().getStatus()).isEqualTo(400);
+		assertThat(callLogout("").getResponse().getStatus()).isEqualTo(400);
 	}
 
 }

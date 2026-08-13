@@ -13,7 +13,8 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import com.tf.reader.TestcontainersConfiguration;
-import com.tf.reader.admin.dto.TokenResponse;
+import com.tf.reader.admin.dto.AdminLoginResponse;
+import com.tf.reader.admin.dto.TokenPair;
 import com.tf.reader.admin.entity.AdminRole;
 import com.tf.reader.admin.entity.AdminSession;
 import com.tf.reader.admin.entity.AdminStatus;
@@ -99,17 +100,24 @@ abstract class AbstractAdminAuthIntegrationTest {
 	}
 
 	/** Logs in and returns the issued tokens. Fails loudly if the login itself did not succeed. */
-	protected TokenResponse loginSuccessfully(String email) throws Exception {
+	protected AdminLoginResponse loginSuccessfully(String email) throws Exception {
 		MvcResult result = performLogin(email, PASSWORD);
 		if (result.getResponse().getStatus() != 200) {
 			throw new IllegalStateException(
 					"Expected login to succeed but got HTTP " + result.getResponse().getStatus());
 		}
-		return readTokens(result);
+		return readLogin(result);
 	}
 
-	protected TokenResponse readTokens(MvcResult result) throws Exception {
-		return this.objectMapper.readValue(result.getResponse().getContentAsString(), TokenResponse.class);
+	/** Reads a login response, which carries the token pair plus the signed-in admin. */
+	protected AdminLoginResponse readLogin(MvcResult result) throws Exception {
+		return this.objectMapper.readValue(result.getResponse().getContentAsString(),
+				AdminLoginResponse.class);
+	}
+
+	/** Reads a refresh response, which is the token pair alone. */
+	protected TokenPair readTokens(MvcResult result) throws Exception {
+		return this.objectMapper.readValue(result.getResponse().getContentAsString(), TokenPair.class);
 	}
 
 	protected MvcResult callRefresh(String refreshToken) throws Exception {
@@ -121,6 +129,20 @@ abstract class AbstractAdminAuthIntegrationTest {
 		return this.mockMvc.perform(get(ME_PATH).header("Authorization", "Bearer " + accessToken)).andReturn();
 	}
 
+	/** Pushes a session's absolute expiry into the past, the one thing a client cannot do itself. */
+	protected void expireSession(String sessionId) {
+		AdminSession session = this.adminSessionRepository.findById(sessionId).orElseThrow();
+		session.setExpiresAt(java.time.Instant.now().minus(java.time.Duration.ofMinutes(1)));
+		this.adminSessionRepository.save(session);
+	}
+
+	/** Indistinguishable from a real refresh token, except that it was never issued. */
+	protected static String randomOpaqueLookingToken() {
+		byte[] tokenBytes = new byte[32];
+		new java.security.SecureRandom().nextBytes(tokenBytes);
+		return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
+	}
+
 	/** The single session under test. Fails if a test accidentally opened more than one. */
 	protected AdminSession onlySession() {
 		java.util.List<AdminSession> sessions = this.adminSessionRepository.findAll();
@@ -130,8 +152,14 @@ abstract class AbstractAdminAuthIntegrationTest {
 		return sessions.get(0);
 	}
 
-	protected MvcResult callLogout(String accessToken) throws Exception {
-		return this.mockMvc.perform(post(LOGOUT_PATH).header("Authorization", "Bearer " + accessToken)).andReturn();
+	/** Logout carries the refresh token in the body, not a bearer token. */
+	protected MvcResult callLogout(String refreshToken) throws Exception {
+		return this.mockMvc.perform(json(post(LOGOUT_PATH), """
+				{"refreshToken": "%s"}""".formatted(refreshToken))).andReturn();
+	}
+
+	protected MvcResult callLogoutWithRawBody(String body) throws Exception {
+		return this.mockMvc.perform(json(post(LOGOUT_PATH), body)).andReturn();
 	}
 
 	private static MockHttpServletRequestBuilder json(MockHttpServletRequestBuilder builder, String body) {

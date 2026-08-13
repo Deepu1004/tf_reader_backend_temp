@@ -12,7 +12,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.web.servlet.MvcResult;
 
-import com.tf.reader.admin.dto.TokenResponse;
+import com.tf.reader.admin.dto.AdminLoginResponse;
 import com.tf.reader.admin.entity.AdminRole;
 import com.tf.reader.admin.entity.AdminStatus;
 import com.tf.reader.admin.entity.AdminUser;
@@ -33,25 +33,27 @@ class AdminLoginTest extends AbstractAdminAuthIntegrationTest {
 		MvcResult result = performLogin("active@tandf.example", PASSWORD);
 		assertThat(result.getResponse().getStatus()).isEqualTo(200);
 
-		TokenResponse tokens = readTokens(result);
+		AdminLoginResponse tokens = readLogin(result);
 		assertThat(tokens.accessToken()).isNotBlank();
 		assertThat(tokens.refreshToken()).isNotBlank();
-		assertThat(tokens.tokenType()).isEqualTo("Bearer");
 		assertThat(tokens.expiresIn()).isEqualTo(Duration.ofMinutes(15).toSeconds());
+		assertThat(tokens.refreshExpiresIn()).isEqualTo(Duration.ofHours(12).toSeconds());
 	}
 
 	@Test
 	void opensExactlyOneServerSideSessionPerLogin() throws Exception {
 		AdminUser admin = saveAdmin("session@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
 
-		loginSuccessfully("session@tandf.example");
+		AdminLoginResponse tokens = loginSuccessfully("session@tandf.example");
 
 		assertThat(this.adminSessionRepository.findAll())
 				.singleElement()
 				.satisfies(session -> {
 					assertThat(session.getAdminUserId()).isEqualTo(admin.getId());
 					assertThat(session.getRevokedAt()).isNull();
-					assertThat(session.getCurrentRefreshJti()).isNotBlank();
+					assertThat(session.getCurrentRefreshTokenHash()).isNotBlank()
+							.isNotEqualTo(tokens.refreshToken());
+					assertThat(session.getSupersededRefreshTokenHashes()).isEmpty();
 				});
 	}
 
@@ -141,7 +143,7 @@ class AdminLoginTest extends AbstractAdminAuthIntegrationTest {
 	void neverReturnsThePasswordHash() throws Exception {
 		AdminUser admin = saveAdmin("nohash@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
 
-		TokenResponse tokens = loginSuccessfully("nohash@tandf.example");
+		AdminLoginResponse tokens = loginSuccessfully("nohash@tandf.example");
 		String profileBody = bodyOf(callMe(tokens.accessToken()));
 
 		assertThat(profileBody).doesNotContain("passwordHash").doesNotContain(admin.getPasswordHash());
@@ -152,7 +154,7 @@ class AdminLoginTest extends AbstractAdminAuthIntegrationTest {
 		AdminUser admin = saveAdmin("claims@tandf.example", AdminRole.PUBLISHER_ADMIN, AdminStatus.ACTIVE,
 				"publisher-1", null);
 
-		TokenResponse tokens = loginSuccessfully("claims@tandf.example");
+		AdminLoginResponse tokens = loginSuccessfully("claims@tandf.example");
 		Jwt accessToken = this.adminAccessTokenDecoder.decode(tokens.accessToken());
 
 		assertThat(accessToken.getClaimAsString("iss")).isEqualTo("tf-reader");
@@ -194,7 +196,7 @@ class AdminLoginTest extends AbstractAdminAuthIntegrationTest {
 		AdminUser admin = saveAdmin("me@tandf.example", AdminRole.INSTITUTION_ADMIN, AdminStatus.ACTIVE, null,
 				"institution-3");
 
-		TokenResponse tokens = loginSuccessfully("me@tandf.example");
+		AdminLoginResponse tokens = loginSuccessfully("me@tandf.example");
 		MvcResult result = callMe(tokens.accessToken());
 
 		assertThat(result.getResponse().getStatus()).isEqualTo(200);
@@ -204,6 +206,12 @@ class AdminLoginTest extends AbstractAdminAuthIntegrationTest {
 				.contains("INSTITUTION_ADMIN")
 				.contains("institution-3")
 				.contains("ACTIVE");
+
+		// The contract names the scope fields with a scope prefix; the unprefixed names must be gone.
+		assertThat(bodyOf(result))
+				.contains("\"scopeInstitutionId\":\"institution-3\"")
+				.doesNotContain("\"institutionId\"")
+				.doesNotContain("\"publisherId\"");
 	}
 
 	@Test

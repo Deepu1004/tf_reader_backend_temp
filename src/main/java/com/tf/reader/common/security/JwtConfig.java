@@ -31,26 +31,20 @@ import com.tf.reader.admin.security.ActiveSessionValidator;
 import com.tf.reader.admin.security.AdminRoles;
 
 /**
- * JWT signing and verification.
+ * JWT signing and verification. HS256 because this service is the only issuer and the only verifier.
  *
- * <p>HS256 is the right fit here: this service is both the only issuer and the only verifier of
- * these tokens, so a symmetric key avoids key distribution without giving anything up. Moving to an
- * asymmetric key only becomes worthwhile once a separate service must verify tokens independently.
- *
- * <p>There is one decoder per audience and no permissive decoder. Each rejects, in addition to a
- * bad signature, any token with the wrong issuer, wrong audience, wrong intent or a stale
- * timestamp.
+ * <p>One decoder per audience and no permissive decoder, so audience separation is enforced during
+ * decoding rather than by anything a caller has to remember.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(JwtProperties.class)
 public class JwtConfig {
 
-	/** HS256 requires a key of at least the hash length. Anything shorter is rejected outright. */
+	/** HS256 requires a key of at least the hash length. */
 	private static final int MINIMUM_SECRET_BYTES = 32;
 
 	public static final String ADMIN_ACCESS_TOKEN_DECODER = "adminAccessTokenDecoder";
 	public static final String APP_ACCESS_TOKEN_DECODER = "appAccessTokenDecoder";
-	public static final String REFRESH_TOKEN_DECODER = "refreshTokenDecoder";
 
 	private final JwtProperties jwtProperties;
 
@@ -84,10 +78,7 @@ public class JwtConfig {
 		return new NimbusJwtEncoder(new ImmutableSecret<SecurityContext>(jwtSigningKey));
 	}
 
-	/**
-	 * Admin access tokens. Additionally requires a role claim that maps to a known
-	 * {@link com.tf.reader.admin.entity.AdminRole}, and a session that is still active.
-	 */
+	/** Additionally requires a known role and a session that is still active. */
 	@Bean(ADMIN_ACCESS_TOKEN_DECODER)
 	JwtDecoder adminAccessTokenDecoder(SecretKey jwtSigningKey,
 			@Lazy AdminSessionRepository adminSessionRepository, Clock jwtClock) {
@@ -100,22 +91,9 @@ public class JwtConfig {
 		return decoder(jwtSigningKey, validators);
 	}
 
-	/**
-	 * Reader app access tokens. Present so that the app surface is validated against its own
-	 * audience from the outset; an admin token must never authenticate an app request.
-	 */
 	@Bean(APP_ACCESS_TOKEN_DECODER)
 	JwtDecoder appAccessTokenDecoder(SecretKey jwtSigningKey) {
 		return decoder(jwtSigningKey, baseValidators(TokenAudience.APP, TokenClaims.USE_ACCESS));
-	}
-
-	/**
-	 * Refresh tokens. Used only by the refresh endpoint, against a token supplied in the request
-	 * body, so a refresh token can never authenticate an API call.
-	 */
-	@Bean(REFRESH_TOKEN_DECODER)
-	JwtDecoder refreshTokenDecoder(SecretKey jwtSigningKey) {
-		return decoder(jwtSigningKey, baseValidators(TokenAudience.REFRESH, TokenClaims.USE_REFRESH));
 	}
 
 	private List<OAuth2TokenValidator<Jwt>> baseValidators(String audience, String tokenUse) {

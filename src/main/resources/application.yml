@@ -13,7 +13,9 @@ tf:
       # Supply it via the TF_JWT_SECRET environment variable in every deployed environment.
       secret: ${TF_JWT_SECRET:}
       access-token-ttl: 15m
-      refresh-token-ttl: 14d
+      # Twelve hours: one working day needs one sign in. This is the absolute session
+      # lifetime too, since rotation never extends it.
+      refresh-token-ttl: 12h
 
 # API documentation is off by default and enabled only by the dev profile.
 springdoc:

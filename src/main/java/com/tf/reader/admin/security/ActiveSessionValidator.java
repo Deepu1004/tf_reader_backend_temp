@@ -12,13 +12,8 @@ import com.tf.reader.admin.repository.AdminSessionRepository;
 import com.tf.reader.common.security.TokenClaims;
 
 /**
- * Rejects admin access tokens whose session has been revoked.
- *
- * <p>This is what makes logout take effect immediately rather than at access-token expiry. It plugs
- * into the decoder's validator chain, which is the supported Spring Security extension point, so no
- * custom authentication filter is involved.
- *
- * <p>Cost: one indexed lookup by {@code _id} per authenticated admin request.
+ * Rejects admin access tokens whose session has been revoked, which is what makes logout take effect
+ * immediately rather than at access-token expiry. Costs one indexed lookup per admin request.
  */
 public final class ActiveSessionValidator implements OAuth2TokenValidator<Jwt> {
 
@@ -34,8 +29,7 @@ public final class ActiveSessionValidator implements OAuth2TokenValidator<Jwt> {
 	public OAuth2TokenValidatorResult validate(Jwt token) {
 		String sessionId = token.getClaimAsString(TokenClaims.SESSION_ID);
 
-		// A token without a session claim can never be tied back to revocable state, so it is
-		// rejected rather than trusted.
+		// No session claim means nothing revocable to check against, so the token is rejected.
 		boolean active = sessionId != null && !sessionId.isBlank() && this.adminSessionRepository
 				.existsByIdAndRevokedAtIsNullAndExpiresAtAfter(sessionId, this.clock.instant());
 

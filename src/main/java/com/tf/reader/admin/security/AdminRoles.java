@@ -3,10 +3,8 @@ package com.tf.reader.admin.security;
 import com.tf.reader.admin.entity.AdminRole;
 
 /**
- * Single place that turns an untrusted {@code role} claim into an {@link AdminRole}.
- *
- * <p>Kept in one helper so the decoder validator, the authentication converter and the scope
- * authorizer cannot drift apart in how they interpret the claim.
+ * Single place that turns an untrusted {@code role} claim into an {@link AdminRole}, so the decoder,
+ * the authentication converter and the scope authorizer cannot drift apart.
  */
 public final class AdminRoles {
 

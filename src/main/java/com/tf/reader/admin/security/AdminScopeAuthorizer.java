@@ -9,22 +9,11 @@ import com.tf.reader.admin.entity.AdminRole;
 import com.tf.reader.common.security.TokenClaims;
 
 /**
- * Decides whether the current admin may operate on a given publisher or institution.
+ * Decides whether the current admin may operate on a given publisher or institution, for use as
+ * {@code @PreAuthorize("@adminScope.canAccessPublisher(#publisherId)")}.
  *
- * <p>Intended for {@code @PreAuthorize("@adminScope.canAccessPublisher(#publisherId)")}. Role
- * answers "what kind of admin is this"; this component answers "which tenant may they touch",
- * which is why there is no per-publisher or per-institution role.
- *
- * <p>Every rule fails closed:
- * <ul>
- * <li>no authentication, or not a JWT authentication, denies
- * <li>an unrecognised role denies
- * <li>a missing or blank scope claim denies; it is never read as global access
- * <li>a blank target denies
- * <li>matching is exact equality, never prefix or substring
- * <li>a role may only be checked against its own dimension, so an institution admin is denied by
- * {@link #canAccessPublisher} regardless of claims
- * </ul>
+ * <p>Every rule fails closed: missing authentication, an unrecognised role, a blank scope claim and a
+ * blank target all deny, and a role is only ever checked against its own dimension.
  */
 @Component("adminScope")
 public class AdminScopeAuthorizer {
@@ -38,9 +27,7 @@ public class AdminScopeAuthorizer {
 	}
 
 	private boolean canAccess(AdminRole scopedRole, String scopeClaim, String targetId) {
-		// "May I act on nothing in particular?" is not a question this can answer safely, so a blank
-		// target denies for every role. That also stops a null argument from silently passing a
-		// super admin through.
+		// A blank target denies for every role, so a null argument cannot pass a super admin through.
 		if (isBlank(targetId)) {
 			return false;
 		}
@@ -62,8 +49,7 @@ public class AdminScopeAuthorizer {
 		}
 
 		String scope = jwt.getClaimAsString(scopeClaim);
-		// Exact equality only. Prefix or substring matching would let publisher-1 reach
-		// publisher-10.
+		// Exact equality only: prefix matching would let publisher-1 reach publisher-10.
 		return !isBlank(scope) && scope.equals(targetId);
 	}
 

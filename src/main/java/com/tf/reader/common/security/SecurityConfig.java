@@ -21,14 +21,11 @@ import com.tf.reader.admin.security.AdminJwtAuthenticationConverter;
 import jakarta.servlet.DispatcherType;
 
 /**
- * HTTP security.
+ * HTTP security. Chains run most specific to least and the last denies everything, so a new endpoint
+ * is unreachable until deliberately placed under a chain.
  *
- * <p>The chains are ordered from most specific to least, and the last one denies everything. A new
- * endpoint is therefore unreachable until it is deliberately placed under a chain, which keeps the
- * default posture closed rather than open.
- *
- * <p>Each API surface gets its own resource server with its own decoder, so audience separation is
- * enforced by the filter chain rather than by anything a controller has to remember to do.
+ * <p>Each surface gets its own resource server and decoder, so audience separation is enforced by the
+ * filter chain rather than by anything a controller has to remember.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
@@ -37,12 +34,13 @@ public class SecurityConfig {
 
 	static final String LOGIN_PATH = "/api/admin/v1/auth/login";
 	static final String REFRESH_PATH = "/api/admin/v1/auth/refresh";
+	static final String LOGOUT_PATH = "/api/admin/v1/auth/logout";
 
-	private final ProblemAuthenticationEntryPoint authenticationEntryPoint;
-	private final ProblemAccessDeniedHandler accessDeniedHandler;
+	private final ApiErrorAuthenticationEntryPoint authenticationEntryPoint;
+	private final ApiErrorAccessDeniedHandler accessDeniedHandler;
 
-	public SecurityConfig(ProblemAuthenticationEntryPoint authenticationEntryPoint,
-			ProblemAccessDeniedHandler accessDeniedHandler) {
+	public SecurityConfig(ApiErrorAuthenticationEntryPoint authenticationEntryPoint,
+			ApiErrorAccessDeniedHandler accessDeniedHandler) {
 		this.authenticationEntryPoint = authenticationEntryPoint;
 		this.accessDeniedHandler = accessDeniedHandler;
 	}
@@ -53,19 +51,16 @@ public class SecurityConfig {
 	}
 
 	/**
-	 * Login and refresh, the only two public admin endpoints.
-	 *
-	 * <p>Deliberately has no resource server attached. Both endpoints carry their credential in the
-	 * request body, and if a bearer token were parsed here a stale one left in an
-	 * {@code Authorization} header would fail the request instead of letting the caller log in or
-	 * refresh.
+	 * Login, refresh and logout, the only three public admin endpoints. All three carry their
+	 * credential in the request body, so no resource server is attached: a stale {@code Authorization}
+	 * header must not stop a caller logging in, refreshing or logging out.
 	 */
 	@Bean
 	@Order(1)
 	SecurityFilterChain publicAdminAuthFilterChain(HttpSecurity http) throws Exception {
-		http.securityMatcher(LOGIN_PATH, REFRESH_PATH)
+		http.securityMatcher(LOGIN_PATH, REFRESH_PATH, LOGOUT_PATH)
 				.authorizeHttpRequests(authorize -> authorize
-						.requestMatchers(HttpMethod.POST, LOGIN_PATH, REFRESH_PATH).permitAll()
+						.requestMatchers(HttpMethod.POST, LOGIN_PATH, REFRESH_PATH, LOGOUT_PATH).permitAll()
 						.anyRequest().denyAll());
 		return stateless(http).build();
 	}
@@ -98,13 +93,7 @@ public class SecurityConfig {
 		return stateless(http).build();
 	}
 
-	/**
-	 * Reader app API. Requires a {@code tf-app} access token.
-	 *
-	 * <p>No app endpoints exist yet, but the chain is in place so the surface is closed and bound to
-	 * its own audience from the start: an admin or refresh token presented here is rejected during
-	 * decoding, before routing.
-	 */
+	/** No app endpoints exist yet; the chain keeps the surface closed and bound to its own audience. */
 	@Bean
 	@Order(4)
 	SecurityFilterChain appApiFilterChain(HttpSecurity http,
@@ -121,12 +110,7 @@ public class SecurityConfig {
 		return stateless(http).build();
 	}
 
-	/**
-	 * API documentation, dev profile only.
-	 *
-	 * <p>Absent in every other profile, so the deny-all chain below covers these paths there even
-	 * though springdoc is also switched off by configuration.
-	 */
+	/** Dev profile only; elsewhere these paths fall through to the deny-all chain. */
 	@Bean
 	@Order(5)
 	@Profile("dev")
@@ -137,12 +121,7 @@ public class SecurityConfig {
 		return stateless(http).build();
 	}
 
-	/**
-	 * Everything not matched above is denied.
-	 *
-	 * <p>ERROR dispatches are permitted so that a genuine 404 or 500 can still be rendered; that
-	 * dispatch type cannot be triggered directly by a client.
-	 */
+	/** Everything not matched above is denied. ERROR dispatches pass so a genuine 404 still renders. */
 	@Bean
 	@Order(100)
 	SecurityFilterChain denyAllFilterChain(HttpSecurity http) throws Exception {

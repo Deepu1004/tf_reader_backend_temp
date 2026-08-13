@@ -6,29 +6,23 @@ import java.util.Optional;
 import com.tf.reader.admin.entity.AdminSession;
 
 /**
- * Conditional session updates that must be a single atomic database operation.
- *
- * <p>Read-then-write would leave a window in which two concurrent refreshes with the same token
- * both succeed, so these are expressed as guarded {@code findAndModify}/{@code updateFirst} calls.
+ * Conditional session updates that must be a single atomic database operation. Read-then-write would
+ * let two concurrent refreshes with the same token both succeed.
  */
 public interface AdminSessionRepositoryCustom {
 
 	/**
-	 * Atomically swaps the session's current refresh token, but only if the presented token is
-	 * still the current one and the session is neither revoked nor expired.
+	 * Swaps the current refresh-token hash only if the presented one is still current and the session
+	 * is neither revoked nor expired, recording the presented hash as superseded.
 	 *
-	 * @return the rotated session, or empty when the guard did not match. Empty means the caller
-	 *         must treat the presented token as invalid; it may also indicate replay of a
-	 *         superseded token.
+	 * @return empty when the guard did not match, which may also mean a superseded token was replayed
 	 */
-	Optional<AdminSession> rotateRefreshToken(String sessionId, String expectedJti, String expectedTokenHash,
-			String newJti, String newTokenHash, Instant now);
+	Optional<AdminSession> rotateRefreshToken(String presentedTokenHash, String newTokenHash, Instant now);
 
 	/**
-	 * Marks the session revoked if it is not revoked already.
+	 * Marks the session revoked if it is not revoked already. Safe to call repeatedly.
 	 *
-	 * @return true when this call performed the revocation, false when it was already revoked or
-	 *         no such session exists. Safe to call repeatedly.
+	 * @return true only when this call performed the revocation
 	 */
 	boolean revoke(String sessionId, String reason, Instant now);
 

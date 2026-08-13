@@ -80,13 +80,17 @@ class AdminOpenApiTest {
 				.contains("200", "400", "401");
 		assertThat(paths.at("/~1api~1admin~1v1~1auth~1me/get/responses").propertyNames())
 				.contains("200", "401", "403");
+
+		// The contract's logout is 204 with no body, and never 401: it is a public endpoint.
 		assertThat(paths.at("/~1api~1admin~1v1~1auth~1logout/post/responses").propertyNames())
-				.contains("200", "401", "403");
+				.contains("204", "400")
+				.doesNotContain("200", "401");
 	}
 
+	/** The scheme is named {@code adminToken} because that is the name the contract gives it. */
 	@Test
 	void declaresBearerAuthenticationAndRequiresItOnlyWhereItApplies() throws Exception {
-		JsonNode scheme = apiDocs().at("/components/securitySchemes/adminBearerAuth");
+		JsonNode scheme = apiDocs().at("/components/securitySchemes/adminToken");
 
 		assertThat(scheme.at("/type").asString()).isEqualTo("http");
 		assertThat(scheme.at("/scheme").asString()).isEqualTo("bearer");
@@ -94,13 +98,13 @@ class AdminOpenApiTest {
 
 		JsonNode paths = apiDocs().get("paths");
 		assertThat(paths.at("/~1api~1admin~1v1~1auth~1me/get/security").toString())
-				.contains("adminBearerAuth");
-		assertThat(paths.at("/~1api~1admin~1v1~1auth~1logout/post/security").toString())
-				.contains("adminBearerAuth");
+				.contains("adminToken");
 
-		// The public endpoints must not advertise a bearer requirement.
+		// The three public endpoints must not advertise a bearer requirement. Logout is one of them:
+		// its credential is the refresh token in the body.
 		assertThat(paths.at("/~1api~1admin~1v1~1auth~1login/post/security").isMissingNode()).isTrue();
 		assertThat(paths.at("/~1api~1admin~1v1~1auth~1refresh/post/security").isMissingNode()).isTrue();
+		assertThat(paths.at("/~1api~1admin~1v1~1auth~1logout/post/security").isMissingNode()).isTrue();
 	}
 
 	@Test
@@ -114,10 +118,59 @@ class AdminOpenApiTest {
 
 	@Test
 	void documentsTheAdminProfileWithoutCredentialFields() throws Exception {
-		JsonNode profileProperties = apiDocs().at("/components/schemas/AdminProfileResponse/properties");
+		JsonNode profileProperties = apiDocs().at("/components/schemas/AdminUser/properties");
 
-		assertThat(profileProperties.propertyNames())
-				.containsExactlyInAnyOrder("id", "email", "name", "role", "publisherId", "institutionId", "status");
+		assertThat(profileProperties.propertyNames()).containsExactlyInAnyOrder("id", "email", "name", "role",
+				"scopePublisherId", "scopeInstitutionId", "status");
+	}
+
+	/** The generated schemas must carry the names and fields the published contract uses. */
+	@Test
+	void documentsTheContractsAuthSchemas() throws Exception {
+		JsonNode schemas = apiDocs().at("/components/schemas");
+
+		assertThat(schemas.at("/AdminLoginRequest/properties").propertyNames())
+				.containsExactlyInAnyOrder("email", "password");
+		assertThat(schemas.at("/RefreshRequest/properties").propertyNames())
+				.containsExactlyInAnyOrder("refreshToken");
+
+		assertThat(schemas.at("/TokenPair/properties").propertyNames())
+				.containsExactlyInAnyOrder("accessToken", "expiresIn", "refreshToken", "refreshExpiresIn");
+		assertThat(schemas.at("/AdminLoginResponse/properties").propertyNames())
+				.containsExactlyInAnyOrder("accessToken", "expiresIn", "refreshToken", "refreshExpiresIn",
+						"user");
+
+		// tokenType was never in the contract.
+		assertThat(schemas.at("/AdminLoginResponse/properties").propertyNames()).doesNotContain("tokenType");
+		assertThat(schemas.at("/TokenPair/properties").propertyNames()).doesNotContain("tokenType");
+	}
+
+	@Test
+	void documentsTheContractsErrorEnvelope() throws Exception {
+		JsonNode error = apiDocs().at("/components/schemas/Error");
+
+		assertThat(error.at("/properties").propertyNames())
+				.containsExactlyInAnyOrder("timestamp", "status", "code", "message", "path");
+
+		// springdoc inlines the code enum into the property rather than emitting a separate component;
+		// the vocabulary is what the contract pins down, and it is all here.
+		assertThat(error.at("/properties/code/enum").toString())
+				.contains("UNAUTHENTICATED", "FORBIDDEN_SCOPE", "FORBIDDEN_INSTITUTION_MISMATCH",
+						"VALIDATION_FAILED", "NOT_FOUND", "STALE_VERSION");
+
+		// Every documented error response points at that one envelope, as JSON.
+		JsonNode paths = apiDocs().get("paths");
+		assertThat(paths.at("/~1api~1admin~1v1~1auth~1login/post/responses/401/content/application~1json/schema")
+				.toString()).contains("Error");
+		assertThat(paths.at("/~1api~1admin~1v1~1auth~1refresh/post/responses/401/content/application~1json/schema")
+				.toString()).contains("Error");
+	}
+
+	/** The login response is the one place the admin's own record is embedded. */
+	@Test
+	void documentsTheLoginResponseUserAsTheAdminUserSchema() throws Exception {
+		assertThat(apiDocs().at("/components/schemas/AdminLoginResponse/properties/user").toString())
+				.contains("AdminUser");
 	}
 
 	@Test

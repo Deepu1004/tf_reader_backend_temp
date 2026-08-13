@@ -21,22 +21,17 @@ public class AdminSessionRepositoryCustomImpl implements AdminSessionRepositoryC
 	}
 
 	@Override
-	public Optional<AdminSession> rotateRefreshToken(String sessionId, String expectedJti, String expectedTokenHash,
-			String newJti, String newTokenHash, Instant now) {
-
-		// Every precondition is part of the query, so the whole check-and-swap is one atomic
-		// document update. A second concurrent request presenting the same refresh token finds
-		// currentRefreshJti already changed and gets no match.
-		Query guard = new Query(where("_id").is(sessionId)
-				.and("currentRefreshJti").is(expectedJti)
-				.and("currentRefreshTokenHash").is(expectedTokenHash)
+	public Optional<AdminSession> rotateRefreshToken(String presentedTokenHash, String newTokenHash, Instant now) {
+		// Every precondition is in the query, so check-and-swap is one atomic document update. The
+		// hash is unique across sessions, so it identifies the session on its own.
+		Query guard = new Query(where("currentRefreshTokenHash").is(presentedTokenHash)
 				.and("revokedAt").is(null)
 				.and("expiresAt").gt(now));
 
 		Update rotation = new Update()
-				.set("currentRefreshJti", newJti)
 				.set("currentRefreshTokenHash", newTokenHash)
-				.set("lastRotatedAt", now);
+				.set("lastRotatedAt", now)
+				.push("supersededRefreshTokenHashes", presentedTokenHash);
 
 		AdminSession rotated = this.mongoTemplate.findAndModify(guard, rotation,
 				FindAndModifyOptions.options().returnNew(true), AdminSession.class);

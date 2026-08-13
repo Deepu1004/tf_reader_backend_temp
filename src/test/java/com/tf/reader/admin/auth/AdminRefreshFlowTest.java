@@ -2,24 +2,24 @@ package com.tf.reader.admin.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
+import java.util.Base64;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.web.servlet.MvcResult;
 
-import com.tf.reader.admin.dto.TokenResponse;
+import com.tf.reader.admin.dto.AdminLoginResponse;
+import com.tf.reader.admin.dto.TokenPair;
 import com.tf.reader.admin.entity.AdminRole;
 import com.tf.reader.admin.entity.AdminSession;
 import com.tf.reader.admin.entity.AdminStatus;
 import com.tf.reader.admin.entity.AdminUser;
 import com.tf.reader.admin.service.AdminSessionService;
 import com.tf.reader.common.security.JwtConfig;
-import com.tf.reader.common.security.TokenAudience;
 import com.tf.reader.common.security.TokenClaims;
 
 class AdminRefreshFlowTest extends AbstractAdminAuthIntegrationTest {
@@ -28,66 +28,119 @@ class AdminRefreshFlowTest extends AbstractAdminAuthIntegrationTest {
 	@Qualifier(JwtConfig.ADMIN_ACCESS_TOKEN_DECODER)
 	private JwtDecoder adminAccessTokenDecoder;
 
-	@Autowired
-	@Qualifier(JwtConfig.REFRESH_TOKEN_DECODER)
-	private JwtDecoder refreshTokenDecoder;
+	/**
+	 * The refresh token is opaque: 256 bits of randomness, nothing encoded in it, and nothing about it
+	 * that a client could parse or forge.
+	 */
+	@Test
+	void issuesAnOpaqueRefreshTokenRatherThanAJwt() throws Exception {
+		saveAdmin("ropaque@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
+
+		AdminLoginResponse tokens = loginSuccessfully("ropaque@tandf.example");
+		String refreshToken = tokens.refreshToken();
+
+		assertThat(refreshToken).isNotBlank().doesNotContain(".");
+		assertThat(Base64.getUrlDecoder().decode(refreshToken)).hasSize(32);
+
+		// Nothing recoverable: no admin id, no session id, no expiry.
+		assertThat(refreshToken).doesNotContain(onlySession().getId());
+		assertThat(new String(Base64.getUrlDecoder().decode(refreshToken)))
+				.doesNotContain("tf-reader", "sid", "exp");
+	}
 
 	@Test
-	void issuesARefreshTokenWithTheExpectedClaims() throws Exception {
-		AdminUser admin = saveAdmin("rclaims@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
+	void issuesADifferentRefreshTokenEveryTime() throws Exception {
+		saveAdmin("rentropy@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
 
-		TokenResponse tokens = loginSuccessfully("rclaims@tandf.example");
-		Jwt refreshToken = this.refreshTokenDecoder.decode(tokens.refreshToken());
+		String first = loginSuccessfully("rentropy@tandf.example").refreshToken();
+		String second = loginSuccessfully("rentropy@tandf.example").refreshToken();
 
-		assertThat(refreshToken.getClaimAsString("iss")).isEqualTo("tf-reader");
-		assertThat(refreshToken.getAudience()).containsExactly(TokenAudience.REFRESH);
-		assertThat(refreshToken.getSubject()).isEqualTo(admin.getId());
-		assertThat(refreshToken.getId()).isNotBlank();
-		assertThat(refreshToken.getIssuedAt()).isNotNull();
-		assertThat(refreshToken.getExpiresAt()).isAfter(Instant.now().plus(13, ChronoUnit.DAYS));
-		assertThat(refreshToken.getClaimAsString(TokenClaims.TOKEN_USE)).isEqualTo(TokenClaims.USE_REFRESH);
-		assertThat(refreshToken.getClaimAsString(TokenClaims.SESSION_ID)).isNotBlank();
+		assertThat(first).isNotEqualTo(second);
+	}
 
-		// A refresh token authorizes nothing on its own, so it carries no role or scope.
-		assertThat(refreshToken.hasClaim(TokenClaims.ROLE)).isFalse();
-		assertThat(refreshToken.hasClaim(TokenClaims.SCOPE_PUBLISHER_ID)).isFalse();
+	/** A leaked database dump must not yield usable refresh tokens. */
+	@Test
+	void storesOnlyAFingerprintOfTheRefreshToken() throws Exception {
+		saveAdmin("rhash@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
+
+		AdminLoginResponse tokens = loginSuccessfully("rhash@tandf.example");
+		AdminSession session = onlySession();
+
+		assertThat(session.getCurrentRefreshTokenHash())
+				.isNotEqualTo(tokens.refreshToken())
+				.hasSize(64)
+				.matches("[0-9a-f]+");
+		assertThat(this.objectMapper.writeValueAsString(session)).doesNotContain(tokens.refreshToken());
+	}
+
+	/** Twelve hours, so one working day needs one sign in. */
+	@Test
+	void opensASessionThatLastsTwelveHours() throws Exception {
+		saveAdmin("rttl@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
+
+		AdminLoginResponse tokens = loginSuccessfully("rttl@tandf.example");
+		AdminSession session = onlySession();
+
+		assertThat(session.getExpiresAt())
+				.isCloseTo(session.getIssuedAt().plus(Duration.ofHours(12)),
+						org.assertj.core.api.Assertions.within(Duration.ofSeconds(5)));
+		assertThat(tokens.refreshExpiresIn()).isEqualTo(Duration.ofHours(12).toSeconds());
 	}
 
 	@Test
 	void exchangesAValidRefreshTokenForAWorkingNewAccessToken() throws Exception {
 		saveAdmin("exchange@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
-		TokenResponse original = loginSuccessfully("exchange@tandf.example");
+		AdminLoginResponse original = loginSuccessfully("exchange@tandf.example");
 
 		MvcResult result = callRefresh(original.refreshToken());
 		assertThat(result.getResponse().getStatus()).isEqualTo(200);
 
-		TokenResponse refreshed = readTokens(result);
+		TokenPair refreshed = readTokens(result);
 		assertThat(refreshed.accessToken()).isNotBlank().isNotEqualTo(original.accessToken());
 		assertThat(refreshed.refreshToken()).isNotBlank().isNotEqualTo(original.refreshToken());
-		assertThat(refreshed.tokenType()).isEqualTo("Bearer");
+		assertThat(refreshed.expiresIn()).isEqualTo(Duration.ofMinutes(15).toSeconds());
 
-		// The new access token must actually work.
+		// The session keeps its original absolute expiry, so refreshing reports the time left on it
+		// rather than a fresh twelve hours.
+		assertThat(refreshed.refreshExpiresIn())
+				.isPositive()
+				.isLessThanOrEqualTo(Duration.ofHours(12).toSeconds());
+
 		assertThat(callMe(refreshed.accessToken()).getResponse().getStatus()).isEqualTo(200);
 	}
 
 	@Test
 	void keepsTheSameSessionAcrossRotation() throws Exception {
 		saveAdmin("samesession@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
-		TokenResponse original = loginSuccessfully("samesession@tandf.example");
+		AdminLoginResponse original = loginSuccessfully("samesession@tandf.example");
 		String originalSessionId = sessionIdOf(original.accessToken());
 
-		TokenResponse refreshed = readTokens(callRefresh(original.refreshToken()));
+		TokenPair refreshed = readTokens(callRefresh(original.refreshToken()));
 
 		assertThat(sessionIdOf(refreshed.accessToken())).isEqualTo(originalSessionId);
 		assertThat(this.adminSessionRepository.count()).isEqualTo(1);
 	}
 
+	/** Rotation must never extend the session, however often a client refreshes. */
+	@Test
+	void neverExtendsTheAbsoluteSessionLifetime() throws Exception {
+		saveAdmin("rabsolute@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
+		AdminLoginResponse original = loginSuccessfully("rabsolute@tandf.example");
+		Instant expiryAtLogin = onlySession().getExpiresAt();
+
+		String refreshToken = original.refreshToken();
+		for (int i = 0; i < 3; i++) {
+			refreshToken = readTokens(callRefresh(refreshToken)).refreshToken();
+			assertThat(onlySession().getExpiresAt()).isEqualTo(expiryAtLogin);
+		}
+	}
+
 	@Test
 	void rotationInvalidatesThePreviousRefreshToken() throws Exception {
 		saveAdmin("rotate@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
-		TokenResponse original = loginSuccessfully("rotate@tandf.example");
+		AdminLoginResponse original = loginSuccessfully("rotate@tandf.example");
 
-		TokenResponse refreshed = readTokens(callRefresh(original.refreshToken()));
+		TokenPair refreshed = readTokens(callRefresh(original.refreshToken()));
 		assertThat(refreshed.refreshToken()).isNotEqualTo(original.refreshToken());
 
 		// The superseded token is dead on arrival.
@@ -101,8 +154,8 @@ class AdminRefreshFlowTest extends AbstractAdminAuthIntegrationTest {
 	@Test
 	void replayingASupersededRefreshTokenRevokesTheWholeSession() throws Exception {
 		saveAdmin("replay@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
-		TokenResponse original = loginSuccessfully("replay@tandf.example");
-		TokenResponse refreshed = readTokens(callRefresh(original.refreshToken()));
+		AdminLoginResponse original = loginSuccessfully("replay@tandf.example");
+		TokenPair refreshed = readTokens(callRefresh(original.refreshToken()));
 
 		assertThat(callRefresh(original.refreshToken()).getResponse().getStatus()).isEqualTo(401);
 
@@ -115,71 +168,59 @@ class AdminRefreshFlowTest extends AbstractAdminAuthIntegrationTest {
 		assertThat(callMe(refreshed.accessToken()).getResponse().getStatus()).isEqualTo(401);
 	}
 
+	/**
+	 * Reuse is detected however many generations back the replayed token is, not just for the token
+	 * immediately preceding the current one.
+	 */
 	@Test
-	void rejectsAnExpiredRefreshToken() throws Exception {
-		AdminUser admin = saveAdmin("rexpired@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
-		loginSuccessfully("rexpired@tandf.example");
-		String sessionId = onlySession().getId();
+	void detectsReplayOfATokenSeveralRotationsOld() throws Exception {
+		saveAdmin("roldreplay@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
+		AdminLoginResponse original = loginSuccessfully("roldreplay@tandf.example");
 
-		Instant expiredAt = TestTokenFactory.wellInThePast();
-		String expiredRefresh = this.tokens.sign(this.tokens.refreshClaims(admin.getId(), sessionId)
-				.issuedAt(expiredAt.minus(1, ChronoUnit.DAYS))
-				.expiresAt(expiredAt)
-				.build());
+		String second = readTokens(callRefresh(original.refreshToken())).refreshToken();
+		String third = readTokens(callRefresh(second)).refreshToken();
+		readTokens(callRefresh(third));
 
-		assertThat(callRefresh(expiredRefresh).getResponse().getStatus()).isEqualTo(401);
+		// The very first token, three rotations ago.
+		assertThat(callRefresh(original.refreshToken()).getResponse().getStatus()).isEqualTo(401);
+
+		assertThat(onlySession().getRevokedReason()).isEqualTo(AdminSessionService.REASON_TOKEN_REUSE);
 	}
 
 	@Test
-	void rejectsARefreshTokenWithTheWrongAudience() throws Exception {
-		AdminUser admin = saveAdmin("raud@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
-		loginSuccessfully("raud@tandf.example");
-		String sessionId = onlySession().getId();
+	void rejectsARefreshTokenOnceItsSessionHasExpired() throws Exception {
+		saveAdmin("rexpired@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
+		AdminLoginResponse tokens = loginSuccessfully("rexpired@tandf.example");
 
-		String adminAudience = this.tokens.sign(this.tokens.refreshClaims(admin.getId(), sessionId)
-				.audience(java.util.List.of(TokenAudience.ADMIN))
-				.build());
-		String appAudience = this.tokens.sign(this.tokens.refreshClaims(admin.getId(), sessionId)
-				.audience(java.util.List.of(TokenAudience.APP))
-				.build());
+		expireSession(onlySession().getId());
 
-		assertThat(callRefresh(adminAudience).getResponse().getStatus()).isEqualTo(401);
-		assertThat(callRefresh(appAudience).getResponse().getStatus()).isEqualTo(401);
-	}
+		assertThat(callRefresh(tokens.refreshToken()).getResponse().getStatus()).isEqualTo(401);
 
-	@Test
-	void rejectsARefreshTokenSignedWithAnotherKeyOrIssuedByAnother() throws Exception {
-		AdminUser admin = saveAdmin("rforge@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
-		loginSuccessfully("rforge@tandf.example");
-		String sessionId = onlySession().getId();
-
-		String forged = this.tokens
-				.signWithForeignKey(this.tokens.refreshClaims(admin.getId(), sessionId).build());
-		String wrongIssuer = this.tokens.sign(this.tokens.refreshClaims(admin.getId(), sessionId)
-				.issuer("https://evil.example")
-				.build());
-
-		assertThat(callRefresh(forged).getResponse().getStatus()).isEqualTo(401);
-		assertThat(callRefresh(wrongIssuer).getResponse().getStatus()).isEqualTo(401);
+		// An expired session is not a theft signal, so it is left as it is rather than revoked.
+		assertThat(onlySession().getRevokedAt()).isNull();
 	}
 
 	/**
-	 * A correctly signed refresh token for a session that was never created must not work. This is
-	 * the check that makes the server-side state load bearing rather than decorative.
+	 * The token is only a lookup key, so anything that is not a stored fingerprint is simply unknown.
+	 * There is no signature to forge and no audience to get wrong.
 	 */
 	@Test
-	void rejectsARefreshTokenWithNoServerSideSession() throws Exception {
-		AdminUser admin = saveAdmin("nosession@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
+	void rejectsARefreshTokenThatMatchesNoSession() throws Exception {
+		saveAdmin("rnosession@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
+		loginSuccessfully("rnosession@tandf.example");
 
-		String orphan = this.tokens.sign(this.tokens.refreshClaims(admin.getId(), "never-created").build());
+		assertThat(callRefresh("not-a-real-token").getResponse().getStatus()).isEqualTo(401);
+		assertThat(callRefresh("aaa.bbb.ccc").getResponse().getStatus()).isEqualTo(401);
+		assertThat(callRefresh(randomOpaqueLookingToken()).getResponse().getStatus()).isEqualTo(401);
 
-		assertThat(callRefresh(orphan).getResponse().getStatus()).isEqualTo(401);
+		// None of that touched the live session.
+		assertThat(onlySession().getRevokedAt()).isNull();
 	}
 
 	@Test
 	void refusesToRefreshForAnAdminSuspendedAfterLogin() throws Exception {
 		AdminUser admin = saveAdmin("suspendlater@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
-		TokenResponse tokens = loginSuccessfully("suspendlater@tandf.example");
+		AdminLoginResponse tokens = loginSuccessfully("suspendlater@tandf.example");
 
 		admin.setStatus(AdminStatus.SUSPENDED);
 		this.adminUserRepository.save(admin);
@@ -194,7 +235,7 @@ class AdminRefreshFlowTest extends AbstractAdminAuthIntegrationTest {
 	@Test
 	void refusesToRefreshForADeletedAdmin() throws Exception {
 		saveAdmin("deleted@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
-		TokenResponse tokens = loginSuccessfully("deleted@tandf.example");
+		AdminLoginResponse tokens = loginSuccessfully("deleted@tandf.example");
 
 		this.adminUserRepository.deleteAll();
 
@@ -205,14 +246,14 @@ class AdminRefreshFlowTest extends AbstractAdminAuthIntegrationTest {
 	void picksUpARoleChangeOnTheNextRefresh() throws Exception {
 		AdminUser admin = saveAdmin("rolechange@tandf.example", AdminRole.PUBLISHER_ADMIN, AdminStatus.ACTIVE,
 				"publisher-1", null);
-		TokenResponse original = loginSuccessfully("rolechange@tandf.example");
+		AdminLoginResponse original = loginSuccessfully("rolechange@tandf.example");
 		assertThat(roleOf(original.accessToken())).isEqualTo("PUBLISHER_ADMIN");
 
 		admin.setRole(AdminRole.SUPER_ADMIN);
 		admin.setPublisherId(null);
 		this.adminUserRepository.save(admin);
 
-		TokenResponse refreshed = readTokens(callRefresh(original.refreshToken()));
+		TokenPair refreshed = readTokens(callRefresh(original.refreshToken()));
 
 		assertThat(roleOf(refreshed.accessToken())).isEqualTo("SUPER_ADMIN");
 		assertThat(this.adminAccessTokenDecoder.decode(refreshed.accessToken())
