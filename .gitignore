@@ -122,5 +122,7 @@ mongo-data/
 
 
 .claude/settings.local.json
+.claude-context/
+
 
 /docs/
