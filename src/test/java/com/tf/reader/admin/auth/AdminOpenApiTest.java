@@ -145,27 +145,6 @@ class AdminOpenApiTest {
 		assertThat(schemas.at("/TokenPair/properties").propertyNames()).doesNotContain("tokenType");
 	}
 
-	@Test
-	void documentsTheContractsErrorEnvelope() throws Exception {
-		JsonNode error = apiDocs().at("/components/schemas/Error");
-
-		assertThat(error.at("/properties").propertyNames())
-				.containsExactlyInAnyOrder("timestamp", "status", "code", "message", "path");
-
-		// springdoc inlines the code enum into the property rather than emitting a separate component;
-		// the vocabulary is what the contract pins down, and it is all here.
-		assertThat(error.at("/properties/code/enum").toString())
-				.contains("UNAUTHENTICATED", "FORBIDDEN_SCOPE", "FORBIDDEN_INSTITUTION_MISMATCH",
-						"VALIDATION_FAILED", "NOT_FOUND", "STALE_VERSION");
-
-		// Every documented error response points at that one envelope, as JSON.
-		JsonNode paths = apiDocs().get("paths");
-		assertThat(paths.at("/~1api~1admin~1v1~1auth~1login/post/responses/401/content/application~1json/schema")
-				.toString()).contains("Error");
-		assertThat(paths.at("/~1api~1admin~1v1~1auth~1refresh/post/responses/401/content/application~1json/schema")
-				.toString()).contains("Error");
-	}
-
 	/** The login response is the one place the admin's own record is embedded. */
 	@Test
 	void documentsTheLoginResponseUserAsTheAdminUserSchema() throws Exception {

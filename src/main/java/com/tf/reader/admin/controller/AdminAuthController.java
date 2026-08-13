@@ -17,11 +17,9 @@ import com.tf.reader.admin.dto.LoginRequest;
 import com.tf.reader.admin.dto.RefreshRequest;
 import com.tf.reader.admin.dto.TokenPair;
 import com.tf.reader.admin.service.AdminAuthService;
-import com.tf.reader.common.error.ApiError;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -47,11 +45,9 @@ public class AdminAuthController {
 	@ApiResponses({
 			@ApiResponse(responseCode = "200", description = "An access token and a refresh token."),
 			@ApiResponse(responseCode = "400", description = "Malformed or incomplete request body.",
-					content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
-							schema = @Schema(implementation = ApiError.class))),
+					content = @Content()),
 			@ApiResponse(responseCode = "401", description = "Authentication failed.",
-					content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
-							schema = @Schema(implementation = ApiError.class))) })
+					content = @Content()) })
 	public AdminLoginResponse login(@Valid @RequestBody LoginRequest request) {
 		return this.adminAuthService.login(request.email(), request.password());
 	}
@@ -65,13 +61,11 @@ public class AdminAuthController {
 	@ApiResponses({
 			@ApiResponse(responseCode = "200", description = "A new pair. The one you sent is now dead."),
 			@ApiResponse(responseCode = "400", description = "Malformed or incomplete request body.",
-					content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
-							schema = @Schema(implementation = ApiError.class))),
+					content = @Content()),
 			@ApiResponse(responseCode = "401",
 					description = "Unknown, expired, already used or revoked. All four are the same answer, "
 							+ "and the only cure is signing in again.",
-					content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
-							schema = @Schema(implementation = ApiError.class))) })
+					content = @Content()) })
 	public TokenPair refresh(@Valid @RequestBody RefreshRequest request) {
 		return this.adminAuthService.refresh(request.refreshToken());
 	}
@@ -83,11 +77,9 @@ public class AdminAuthController {
 	@ApiResponses({
 			@ApiResponse(responseCode = "200", description = "The signed in operator."),
 			@ApiResponse(responseCode = "401", description = "Missing, invalid, expired or revoked access token.",
-					content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
-							schema = @Schema(implementation = ApiError.class))),
+					content = @Content()),
 			@ApiResponse(responseCode = "403", description = "Authenticated but not permitted.",
-					content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
-							schema = @Schema(implementation = ApiError.class))) })
+					content = @Content()) })
 	public AdminProfileResponse me(@AuthenticationPrincipal Jwt accessToken) {
 		return AdminProfileResponse.from(this.adminAuthService.requireAdmin(accessToken.getSubject()));
 	}
@@ -102,8 +94,7 @@ public class AdminAuthController {
 			@ApiResponse(responseCode = "204", description = "Revoked, or was never valid. Same answer either way.",
 					content = @Content()),
 			@ApiResponse(responseCode = "400", description = "Malformed or incomplete request body.",
-					content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
-							schema = @Schema(implementation = ApiError.class))) })
+					content = @Content()) })
 	public void logout(@Valid @RequestBody RefreshRequest request) {
 		this.adminAuthService.logout(request.refreshToken());
 	}

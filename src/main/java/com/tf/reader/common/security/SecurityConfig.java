@@ -36,11 +36,11 @@ public class SecurityConfig {
 	static final String REFRESH_PATH = "/api/admin/v1/auth/refresh";
 	static final String LOGOUT_PATH = "/api/admin/v1/auth/logout";
 
-	private final ApiErrorAuthenticationEntryPoint authenticationEntryPoint;
-	private final ApiErrorAccessDeniedHandler accessDeniedHandler;
+	private final ProblemAuthenticationEntryPoint authenticationEntryPoint;
+	private final ProblemAccessDeniedHandler accessDeniedHandler;
 
-	public SecurityConfig(ApiErrorAuthenticationEntryPoint authenticationEntryPoint,
-			ApiErrorAccessDeniedHandler accessDeniedHandler) {
+	public SecurityConfig(ProblemAuthenticationEntryPoint authenticationEntryPoint,
+			ProblemAccessDeniedHandler accessDeniedHandler) {
 		this.authenticationEntryPoint = authenticationEntryPoint;
 		this.accessDeniedHandler = accessDeniedHandler;
 	}
