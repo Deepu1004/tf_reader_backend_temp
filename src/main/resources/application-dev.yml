@@ -1,0 +1,20 @@
+# Local development profile. Never activate this profile in a deployed environment.
+tf:
+  security:
+    jwt:
+      # Development-only signing key. Overridable, and deliberately not a production secret.
+      secret: ${TF_JWT_SECRET:dev-only-insecure-signing-key-change-me-32b+}
+  admin:
+    seed:
+      enabled: true
+      # Development-only password shared by the three seeded admins.
+      password: ${TF_DEV_ADMIN_PASSWORD:DevAdmin#12345}
+      publisher-id: dev-publisher
+      institution-id: dev-institution
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
