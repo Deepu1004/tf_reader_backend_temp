@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
@@ -100,6 +101,45 @@ class GlobalExceptionHandlerTest {
 		ErrorResponse body = (ErrorResponse) response.getBody();
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
 		assertThat(body.code()).isEqualTo("VALIDATION_FAILED");
+		// The code maps to 400 on its own; the body must still report the 405 actually sent.
+		assertThat(body.status()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED.value());
+	}
+
+	@Test
+	void answersAMethodSecurityDenialWithForbiddenRatherThanAServerError() {
+		MockHttpServletRequest request = new MockHttpServletRequest();
+		request.setRequestURI("/api/admin/v1/publishers/pub_rtlg");
+
+		ResponseEntity<ErrorResponse> response = handler.handleAccessDenied(
+				new AccessDeniedException("Access Denied"), request);
+
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+		assertThat(response.getBody().code()).isEqualTo("FORBIDDEN_SCOPE");
+		assertThat(response.getBody().status()).isEqualTo(HttpStatus.FORBIDDEN.value());
+		assertThat(response.getBody().path()).isEqualTo("/api/admin/v1/publishers/pub_rtlg");
+		assertThat(response.getBody().traceId()).isNotBlank();
+	}
+
+	@Test
+	void neverNamesTheMissingScopeInAForbiddenResponse() {
+		ResponseEntity<ErrorResponse> response = handler.handleAccessDenied(
+				new AccessDeniedException("Access is denied for publisher pub_secret"), new MockHttpServletRequest());
+
+		assertThat(response.getBody().message()).doesNotContain("pub_secret");
+	}
+
+	@Test
+	void reportsTheSameStatusInTheBodyAsInTheResponseOnEveryPath() {
+		MockHttpServletRequest request = new MockHttpServletRequest();
+
+		assertBodyStatusMatches(handler.handleApiException(
+				new ApiException(ErrorCode.STALE_VERSION, "Stale."), request));
+		assertBodyStatusMatches(handler.handleAccessDenied(new AccessDeniedException("nope"), request));
+		assertBodyStatusMatches(handler.handleUnexpected(new IllegalStateException("boom"), request));
+	}
+
+	private static void assertBodyStatusMatches(ResponseEntity<ErrorResponse> response) {
+		assertThat(response.getBody().status()).isEqualTo(response.getStatusCode().value());
 	}
 
 	@Test
