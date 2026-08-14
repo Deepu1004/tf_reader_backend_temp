@@ -1,0 +1,319 @@
+{
+  "_comment": [
+    "GENERATED from src/main/resources/seed/demo-dataset.json. Do not hand-edit.",
+    "Regenerate with: python3 day4/tools/regenerate_canonical.py",
+    "",
+    "The published identity of everything the Task 8 seed writes: ids, titles, byte lengths and the",
+    "acquisition terms each book carries. This is what team1 and t4targaryen build against, so a diff",
+    "here is a diff in a cross-team contract and needs one of their reviewers.",
+    "",
+    "originalLength is the plaintext byte length. The entity calls the same number sizeBytes.",
+    "cipherLength = 12 (nonce) + originalLength + 16 (GCM tag), and exists only where encrypted.",
+    "",
+    "opdsForImperial is institution-specific on purpose: licence model and copy count come from the",
+    "entitlement, not the book. Imperial is the only seeded institution with grants, so it is the",
+    "reference. null means that institution gets no acquisition link, either because nothing entitles",
+    "it or because the book is not both PUBLISHED and READY."
+  ],
+  "constants": {
+    "encryptionAlgorithm": "http://www.w3.org/2009/xmlenc11#aes256-gcm",
+    "_encryptionAlgorithmNote": "The OPDS 'encrypted' link property is the Readium encryption extension, where algorithm is required and must be a URI. This is the XML Encryption 1.1 identifier for AES-256-GCM. The bare string 'AES-256-GCM' from the source of truth fails strict OPDS validation. See DAY1_WHAT_AND_WHY.md, finding F1.",
+    "objectLayout": "nonce(12) || ciphertext || tag(16)",
+    "cipherLengthFormula": "12 + originalLength + 16",
+    "borrowUrlTemplate": "https://api.tf/api/v1/loans?itemId={itemId}",
+    "openAccessUrlTemplate": "https://api.tf/api/v1/reading-sessions?itemId={itemId}",
+    "_openAccessUrlNote": "Open question OQ-1: confirm with flambeau. Their read endpoint is the target for open access because a cached feed cannot carry a 15-minute signed URL."
+  },
+  "publishers": [
+    {
+      "id": "pub_rtlg",
+      "code": "RTLG",
+      "name": "Routledge"
+    },
+    {
+      "id": "pub_crc",
+      "code": "CRCP",
+      "name": "CRC Press"
+    }
+  ],
+  "collections": [
+    {
+      "id": "col_law2024",
+      "publisherId": "pub_rtlg",
+      "code": "LAW2024",
+      "name": "Law and Technology 2024"
+    },
+    {
+      "id": "col_env2024",
+      "publisherId": "pub_crc",
+      "code": "ENV2024",
+      "name": "Environment and Policy 2024"
+    }
+  ],
+  "institutions": [
+    {
+      "id": "inst_7f3",
+      "code": "imperial",
+      "name": "Imperial College London",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "inst_ucl",
+      "code": "ucl",
+      "name": "University College London",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "inst_leeds",
+      "code": "leeds",
+      "name": "University of Leeds",
+      "status": "SUSPENDED"
+    }
+  ],
+  "items": [
+    {
+      "id": "item_42",
+      "title": "Rights for Robots",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "accessTier": "ELITE",
+      "contentType": "PDF",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "identifier": "urn:isbn:9780367211745",
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "originalLength": 6373752,
+          "cipherLength": 6373780,
+          "encrypted": true,
+          "hasSearchIndex": true
+        }
+      ],
+      "appearsInFeeds": true,
+      "reachableBy": [
+        "inst_7f3"
+      ],
+      "opdsForImperial": {
+        "rel": "borrow",
+        "licenceModel": "CONCURRENT",
+        "copiesTotal": 2,
+        "canPersist": false
+      },
+      "note": "Canonical. ELITE, so copies.total 2 and canPersist false. Reached through the COLLECTION grant, which must beat the PUBLISHER grant on the same book."
+    },
+    {
+      "id": "item_env",
+      "title": "Environmental Policy and Air Pollution in China",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "accessTier": "SUBSCRIPTION",
+      "contentType": "PDF",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "identifier": "urn:tf:catalogue:item_env",
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "originalLength": 3596255,
+          "cipherLength": 3596283,
+          "encrypted": true,
+          "hasSearchIndex": true
+        }
+      ],
+      "appearsInFeeds": true,
+      "reachableBy": [
+        "inst_7f3"
+      ],
+      "opdsForImperial": {
+        "rel": "acquisition",
+        "licenceModel": "UNLIMITED",
+        "copiesTotal": null,
+        "canPersist": true
+      },
+      "note": "Canonical. In no collection, so it is reachable only through the PUBLISHER grant. That is what makes CONCURRENT and UNLIMITED appear side by side in one institution's feed, as the frozen day 1 fixtures show."
+    },
+    {
+      "id": "item_ab6",
+      "title": "Ethnographies of Waiting",
+      "publisherId": "pub_crc",
+      "collectionIds": [
+        "col_env2024"
+      ],
+      "accessTier": "OPEN_ACCESS",
+      "contentType": "EPUB",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "identifier": "urn:tf:catalogue:item_ab6",
+      "assets": [
+        {
+          "format": "EPUB",
+          "mimeType": "application/epub+zip",
+          "originalLength": 2170646,
+          "cipherLength": null,
+          "encrypted": false,
+          "hasSearchIndex": true
+        }
+      ],
+      "appearsInFeeds": true,
+      "reachableBy": [
+        "inst_7f3",
+        "inst_ucl",
+        "inst_leeds"
+      ],
+      "opdsForImperial": {
+        "rel": "open-access",
+        "licenceModel": null,
+        "copiesTotal": null,
+        "canPersist": true
+      },
+      "note": "Canonical. Open access, so it appears for every institution including one with zero entitlements. Plaintext: no encryption, no wrapped key. Also the only edited volume, so editors is populated and authors is empty."
+    },
+    {
+      "id": "item_stat",
+      "title": "An Introduction to Statistics",
+      "publisherId": "pub_crc",
+      "collectionIds": [
+        "col_env2024"
+      ],
+      "accessTier": "SUBSCRIPTION",
+      "contentType": "AUDIO",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "identifier": "urn:tf:catalogue:item_stat",
+      "assets": [
+        {
+          "format": "AUDIO",
+          "mimeType": "audio/mpeg",
+          "originalLength": 18440112,
+          "cipherLength": null,
+          "encrypted": false,
+          "hasSearchIndex": false,
+          "indexSkipReason": "AudioNotIndexable"
+        }
+      ],
+      "appearsInFeeds": true,
+      "reachableBy": [],
+      "opdsForImperial": null,
+      "note": "Canonical, and the most misread row in the project. A PAID tier with NO encryption, because audio is never encrypted at any tier: whole-file encryption cannot seek and scrubbing is required behaviour. hasSearchIndex is false, so there is no index to fetch."
+    },
+    {
+      "id": "item_dual",
+      "title": "Research Methods in Practice",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "accessTier": "SUBSCRIPTION",
+      "contentType": "PDF",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "identifier": "urn:tf:catalogue:item_dual",
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "originalLength": 4210880,
+          "cipherLength": 4210908,
+          "encrypted": true,
+          "hasSearchIndex": true
+        },
+        {
+          "format": "EPUB",
+          "mimeType": "application/epub+zip",
+          "originalLength": 1988402,
+          "cipherLength": 1988430,
+          "encrypted": true,
+          "hasSearchIndex": true
+        }
+      ],
+      "appearsInFeeds": true,
+      "reachableBy": [
+        "inst_7f3"
+      ],
+      "opdsForImperial": {
+        "rel": "acquisition",
+        "licenceModel": "UNLIMITED",
+        "copiesTotal": null,
+        "canPersist": true
+      },
+      "note": "Two assets on one item, PDF and EPUB. Exercises multi-format acquisition, which the assets array allows and which nothing else in the seed covers. In no collection, so it is reached through the PUBLISHER grant."
+    },
+    {
+      "id": "item_oa9",
+      "title": "Open Data for Cities",
+      "publisherId": "pub_crc",
+      "collectionIds": [
+        "col_env2024"
+      ],
+      "accessTier": "OPEN_ACCESS",
+      "contentType": "PDF",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "identifier": "urn:tf:catalogue:item_oa9",
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "originalLength": 1204880,
+          "cipherLength": null,
+          "encrypted": false,
+          "hasSearchIndex": true
+        }
+      ],
+      "appearsInFeeds": true,
+      "reachableBy": [
+        "inst_7f3",
+        "inst_ucl",
+        "inst_leeds"
+      ],
+      "opdsForImperial": {
+        "rel": "open-access",
+        "licenceModel": null,
+        "copiesTotal": null,
+        "canPersist": true
+      },
+      "note": "Open access with NO cover art. coverUrl is null, not an empty string, so the 'images must be absent, not empty' OPDS case has real data behind it rather than only a hand-written fixture."
+    },
+    {
+      "id": "item_q7",
+      "title": "Climate Finance and Policy",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "accessTier": "ELITE",
+      "contentType": "EPUB",
+      "status": "PUBLISHED",
+      "contentState": "QUEUED",
+      "identifier": "urn:tf:catalogue:item_q7",
+      "assets": [],
+      "appearsInFeeds": false,
+      "reachableBy": [
+        "inst_7f3"
+      ],
+      "opdsForImperial": null,
+      "note": "NOT READY. Editorially published but the file is still queued, which is the half-ready state the two-field design exists to represent. It is inside the granted collection, so it proves the exclusion is contentState and not entitlement. Must never appear in a feed."
+    },
+    {
+      "id": "item_f3",
+      "title": "Machine Learning for Chemists",
+      "publisherId": "pub_crc",
+      "collectionIds": [
+        "col_env2024"
+      ],
+      "accessTier": "SUBSCRIPTION",
+      "contentType": "PDF",
+      "status": "PUBLISHED",
+      "contentState": "FAILED",
+      "identifier": "urn:tf:catalogue:item_f3",
+      "assets": [],
+      "appearsInFeeds": false,
+      "reachableBy": [],
+      "opdsForImperial": null,
+      "note": "Ingest FAILED, with a real error string. Never in a feed, but it must be visible on the admin ingest-status screen, which is the only row in the seed that gives that screen anything to show."
+    }
+  ]
+}
