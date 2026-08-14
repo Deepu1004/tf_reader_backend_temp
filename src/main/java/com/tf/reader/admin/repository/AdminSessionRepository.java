@@ -12,8 +12,6 @@ public interface AdminSessionRepository extends MongoRepository<AdminSession, St
 	boolean existsByIdAndRevokedAtIsNullAndExpiresAtAfter(String id, Instant now);
 
 	/** The lookup every refresh starts from, since an opaque token carries no session id. */
-	Optional<AdminSession> findByCurrentRefreshTokenHash(String currentRefreshTokenHash);
-
-	Optional<AdminSession> findBySupersededRefreshTokenHashesContaining(String supersededRefreshTokenHash);
+	Optional<AdminSession> findByRefreshTokenHash(String refreshTokenHash);
 
 }

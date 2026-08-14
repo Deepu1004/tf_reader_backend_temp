@@ -74,10 +74,6 @@ public class AdminTokenService {
 		return this.jwtProperties.refreshTokenTtl().toSeconds();
 	}
 
-	public String newSessionId() {
-		return newId();
-	}
-
 	private String encode(JwtClaimsSet claims) {
 		JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
 		return this.jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();

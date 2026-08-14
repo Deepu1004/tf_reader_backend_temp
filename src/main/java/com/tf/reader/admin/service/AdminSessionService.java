@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
@@ -16,8 +17,8 @@ import com.tf.reader.admin.entity.AdminSession;
 import com.tf.reader.admin.repository.AdminSessionRepository;
 
 /**
- * Owns the lifecycle of {@link AdminSession} and of the opaque refresh token itself: mint on login,
- * rotate on refresh, revoke on logout.
+ * Owns the lifecycle of {@link AdminSession} and of the opaque refresh token itself: one row per sign
+ * in, revoked and replaced on refresh, revoked on logout.
  *
  * <p>The raw token exists only in the response that hands it out. Only a SHA-256 fingerprint is
  * stored, so a leaked database dump yields no usable session. A plain hash suffices here, unlike for
@@ -27,7 +28,10 @@ import com.tf.reader.admin.repository.AdminSessionRepository;
 public class AdminSessionService {
 
 	public static final String REASON_LOGOUT = "LOGOUT";
-	public static final String REASON_TOKEN_REUSE = "REFRESH_TOKEN_REUSE";
+	public static final String REASON_ROTATED = "ROTATED";
+
+	/** The contract prefixes an admin session id with {@code sess_}. */
+	static final String SESSION_ID_PREFIX = "sess_";
 
 	/** 256 bits, so the token is not guessable and needs no key stretching. */
 	private static final int REFRESH_TOKEN_BYTES = 32;
@@ -42,50 +46,45 @@ public class AdminSessionService {
 	}
 
 	/**
-	 * A refresh token and the session it belongs to. The value is returned to the caller once and is
-	 * not recoverable from the session afterwards.
+	 * A refresh token and the row it belongs to. The value is returned to the caller once and is not
+	 * recoverable from the row afterwards.
 	 */
 	public record IssuedRefreshToken(String value, AdminSession session) {
 	}
 
-	public IssuedRefreshToken createSession(String sessionId, String adminUserId, Instant expiresAt) {
+	/**
+	 * Inserts a new session row.
+	 *
+	 * @param expiresAt when the session dies, absolutely. A replacement row issued on refresh inherits
+	 *                  the original value rather than getting a fresh one.
+	 */
+	public IssuedRefreshToken createSession(String adminUserId, Instant expiresAt) {
 		String tokenValue = newRefreshTokenValue();
-		Instant now = this.clock.instant();
 
 		AdminSession session = new AdminSession();
-		session.setId(sessionId);
+		session.setId(newSessionId());
 		session.setAdminUserId(adminUserId);
-		session.setCurrentRefreshTokenHash(fingerprint(tokenValue));
-		session.setIssuedAt(now);
-		session.setLastRotatedAt(now);
+		session.setRefreshTokenHash(fingerprint(tokenValue));
+		session.setIssuedAt(this.clock.instant());
 		session.setExpiresAt(expiresAt);
 
 		return new IssuedRefreshToken(tokenValue, this.adminSessionRepository.save(session));
 	}
 
 	/**
-	 * Atomically issues a replacement token for the session the presented one belongs to. Never
-	 * touches {@code expiresAt}, so a session cannot be extended by refreshing.
+	 * Claims the row this token belongs to by revoking it, which is what earns the right to issue a
+	 * replacement.
 	 *
-	 * @return empty when the presented token is not the current one, or the session is revoked or
+	 * @return the row as it was before revocation, or empty when the token is unknown, already used or
 	 *         expired
 	 */
-	public Optional<IssuedRefreshToken> rotate(String presentedTokenValue) {
-		String newTokenValue = newRefreshTokenValue();
-
-		return this.adminSessionRepository
-				.rotateRefreshToken(fingerprint(presentedTokenValue), fingerprint(newTokenValue),
-						this.clock.instant())
-				.map(rotated -> new IssuedRefreshToken(newTokenValue, rotated));
+	public Optional<AdminSession> revokeForExchange(String presentedTokenValue) {
+		return this.adminSessionRepository.revokeForExchange(fingerprint(presentedTokenValue),
+				REASON_ROTATED, this.clock.instant());
 	}
 
 	public Optional<AdminSession> findByRefreshToken(String tokenValue) {
-		return this.adminSessionRepository.findByCurrentRefreshTokenHash(fingerprint(tokenValue));
-	}
-
-	/** Matches a token this session has already rotated away from, which means it was replayed. */
-	public Optional<AdminSession> findBySupersededRefreshToken(String tokenValue) {
-		return this.adminSessionRepository.findBySupersededRefreshTokenHashesContaining(fingerprint(tokenValue));
+		return this.adminSessionRepository.findByRefreshTokenHash(fingerprint(tokenValue));
 	}
 
 	/** @return true if this call revoked the session; false if it was already revoked or unknown. */
@@ -102,12 +101,17 @@ public class AdminSessionService {
 				this.clock.instant());
 	}
 
+	private static String newSessionId() {
+		return SESSION_ID_PREFIX + UUID.randomUUID().toString().replace("-", "");
+	}
+
 	private String newRefreshTokenValue() {
 		byte[] tokenBytes = new byte[REFRESH_TOKEN_BYTES];
 		this.secureRandom.nextBytes(tokenBytes);
 		return Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
 	}
 
+	/** SHA-256, lowercase hex, as the contract specifies for {@code refreshTokenHash}. */
 	static String fingerprint(String tokenValue) {
 		try {
 			byte[] digest = MessageDigest.getInstance("SHA-256").digest(tokenValue.getBytes(StandardCharsets.UTF_8));

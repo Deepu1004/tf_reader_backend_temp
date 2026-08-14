@@ -143,6 +143,20 @@ abstract class AbstractAdminAuthIntegrationTest {
 		return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
 	}
 
+	/**
+	 * The one row that is still exchangeable. Refresh leaves the old row behind, revoked, so after a
+	 * refresh there is more than one row per sign in but only ever one live.
+	 */
+	protected AdminSession liveSession() {
+		java.util.List<AdminSession> live = this.adminSessionRepository.findAll().stream()
+				.filter(session -> session.getRevokedAt() == null)
+				.toList();
+		if (live.size() != 1) {
+			throw new IllegalStateException("Expected exactly one live session but found " + live.size());
+		}
+		return live.get(0);
+	}
+
 	/** The single session under test. Fails if a test accidentally opened more than one. */
 	protected AdminSession onlySession() {
 		java.util.List<AdminSession> sessions = this.adminSessionRepository.findAll();

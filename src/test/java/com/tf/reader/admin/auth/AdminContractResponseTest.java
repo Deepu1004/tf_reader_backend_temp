@@ -132,7 +132,8 @@ class AdminContractResponseTest extends AbstractAdminAuthIntegrationTest {
 		long afterRefresh = bodyAsJson(callRefresh(login.refreshToken())).get("refreshExpiresIn").asLong();
 
 		assertThat(afterRefresh).isPositive().isLessThanOrEqualTo(login.refreshExpiresIn());
-		assertThat(this.onlySession().getExpiresAt())
+		// The replacement row inherits the original expiry rather than getting a fresh twelve hours.
+		assertThat(this.liveSession().getExpiresAt())
 				.isBefore(java.time.Instant.now().plus(Duration.ofHours(12)).plusSeconds(5));
 	}
 

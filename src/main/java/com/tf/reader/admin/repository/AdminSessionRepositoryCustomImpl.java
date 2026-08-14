@@ -21,22 +21,20 @@ public class AdminSessionRepositoryCustomImpl implements AdminSessionRepositoryC
 	}
 
 	@Override
-	public Optional<AdminSession> rotateRefreshToken(String presentedTokenHash, String newTokenHash, Instant now) {
-		// Every precondition is in the query, so check-and-swap is one atomic document update. The
-		// hash is unique across sessions, so it identifies the session on its own.
-		Query guard = new Query(where("currentRefreshTokenHash").is(presentedTokenHash)
+	public Optional<AdminSession> revokeForExchange(String refreshTokenHash, String reason, Instant now) {
+		// Every precondition is in the query, so claiming the row is one atomic document update. The
+		// hash is unique across rows, so it identifies the session on its own.
+		Query guard = new Query(where("refreshTokenHash").is(refreshTokenHash)
 				.and("revokedAt").is(null)
 				.and("expiresAt").gt(now));
 
-		Update rotation = new Update()
-				.set("currentRefreshTokenHash", newTokenHash)
-				.set("lastRotatedAt", now)
-				.push("supersededRefreshTokenHashes", presentedTokenHash);
+		Update revocation = new Update().set("revokedAt", now).set("revokedReason", reason);
 
-		AdminSession rotated = this.mongoTemplate.findAndModify(guard, rotation,
-				FindAndModifyOptions.options().returnNew(true), AdminSession.class);
+		// returnNew(false): the pre-update row, which still carries the expiry the replacement inherits.
+		AdminSession claimed = this.mongoTemplate.findAndModify(guard, revocation,
+				FindAndModifyOptions.options().returnNew(false), AdminSession.class);
 
-		return Optional.ofNullable(rotated);
+		return Optional.ofNullable(claimed);
 	}
 
 	@Override

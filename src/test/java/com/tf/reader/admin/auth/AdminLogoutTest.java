@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MvcResult;
 
 import com.tf.reader.admin.dto.AdminLoginResponse;
+import com.tf.reader.admin.dto.TokenPair;
 import com.tf.reader.admin.entity.AdminRole;
 import com.tf.reader.admin.entity.AdminSession;
 import com.tf.reader.admin.entity.AdminStatus;
@@ -138,16 +139,21 @@ class AdminLogoutTest extends AbstractAdminAuthIntegrationTest {
 		assertThat(onlySession().getRevokedAt()).isNull();
 	}
 
-	/** A token the session has already rotated away from still identifies it, and revoking is safe. */
+	/**
+	 * A token whose row was already revoked by refresh still answers 204, and logging out with it does
+	 * not reach the row that replaced it.
+	 */
 	@Test
-	void revokesTheSessionForASupersededRefreshToken() throws Exception {
+	void answersNoContentForAnAlreadyRotatedRefreshToken() throws Exception {
 		saveAdmin("logoutsuperseded@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
 		AdminLoginResponse tokens = loginSuccessfully("logoutsuperseded@tandf.example");
-		callRefresh(tokens.refreshToken());
+		TokenPair refreshed = readTokens(callRefresh(tokens.refreshToken()));
 
 		assertThat(callLogout(tokens.refreshToken()).getResponse().getStatus()).isEqualTo(204);
 
-		assertThat(onlySession().getRevokedAt()).isNotNull();
+		// The replacement row is untouched, so the honest holder is still signed in.
+		assertThat(liveSession().getRevokedAt()).isNull();
+		assertThat(callMe(refreshed.accessToken()).getResponse().getStatus()).isEqualTo(200);
 	}
 
 	@Test

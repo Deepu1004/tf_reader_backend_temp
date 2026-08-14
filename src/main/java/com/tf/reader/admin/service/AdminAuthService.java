@@ -53,9 +53,9 @@ public class AdminAuthService {
 	}
 
 	/**
-	 * Verifies credentials and opens a new session. Unknown email, wrong password and a non-active
-	 * account are indistinguishable: same exception, and comparable timing because BCrypt runs either
-	 * way.
+	 * Verifies credentials against the stored BCrypt hash and opens a session. Unknown email, wrong
+	 * password and a non-active account are indistinguishable: same exception, and comparable timing
+	 * because BCrypt runs either way.
 	 */
 	public AdminLoginResponse login(String email, String rawPassword) {
 		Optional<AdminUser> candidate = this.adminUserRepository.findByEmail(email);
@@ -76,17 +76,27 @@ public class AdminAuthService {
 			throw new InvalidCredentialsException();
 		}
 
-		TokenPair tokens = openSession(adminUser);
+		// The row must exist before the access token is handed out, since every admin request
+		// validates against it.
+		IssuedRefreshToken issued = this.adminSessionService.createSession(adminUser.getId(),
+				this.adminTokenService.refreshTokenExpiryFromNow());
+
+		MintedToken accessToken = this.adminTokenService.mintAccessToken(adminUser,
+				issued.session().getId());
 
 		adminUser.setLastLoginAt(this.clock.instant());
 		this.adminUserRepository.save(adminUser);
 
-		log.info("Admin {} logged in", adminUser.getId());
+		log.info("Admin {} logged in, session {}", adminUser.getId(), issued.session().getId());
+
+		TokenPair tokens = new TokenPair(accessToken.value(), this.adminTokenService.accessTokenTtlSeconds(),
+				issued.value(), this.adminTokenService.refreshTokenTtlSeconds());
+
 		return AdminLoginResponse.of(tokens, AdminProfileResponse.from(adminUser));
 	}
 
 	/**
-	 * Exchanges a refresh token for a new access token and a new refresh token.
+	 * Exchanges a refresh token: the row it belongs to is revoked and a fresh row issued in its place.
 	 *
 	 * <p>The token is opaque, so it is resolved by looking up its fingerprint rather than by reading
 	 * anything out of it. An access token hashes to nothing this store knows, so letting one expire is
@@ -97,40 +107,42 @@ public class AdminAuthService {
 			throw new InvalidRefreshTokenException("Refresh token was blank");
 		}
 
-		AdminSession session = this.adminSessionService.findByRefreshToken(refreshTokenValue)
-				.orElseThrow(() -> rejectTokenMatchingNoCurrentSession(refreshTokenValue));
+		// Winning this revocation is what earns the right to issue a replacement, so two concurrent
+		// refreshes with one token cannot both succeed.
+		AdminSession claimed = this.adminSessionService.revokeForExchange(refreshTokenValue)
+				.orElseThrow(() -> rejectUnexchangeableToken(refreshTokenValue));
 
 		// Role and scope are re-read here rather than carried in the token, so a change takes effect on
 		// the next refresh.
-		AdminUser adminUser = this.adminUserRepository.findById(session.getAdminUserId())
-				.orElseThrow(() -> revokeAndReject(session.getId(), "Admin no longer exists"));
+		AdminUser adminUser = this.adminUserRepository.findById(claimed.getAdminUserId())
+				.orElseThrow(() -> new InvalidRefreshTokenException(
+						"Admin " + claimed.getAdminUserId() + " no longer exists"));
 
 		if (adminUser.getStatus() != AdminStatus.ACTIVE) {
-			throw revokeAndReject(session.getId(), "Admin is in status " + adminUser.getStatus());
+			throw new InvalidRefreshTokenException("Admin is in status " + adminUser.getStatus());
 		}
 
-		IssuedRefreshToken rotated = this.adminSessionService.rotate(refreshTokenValue)
-				.orElseThrow(() -> handleRotationFailure(session.getId()));
+		// The replacement inherits the original expiry, so activity never extends the session.
+		IssuedRefreshToken issued = this.adminSessionService.createSession(adminUser.getId(),
+				claimed.getExpiresAt());
 
-		MintedToken accessToken = this.adminTokenService.mintAccessToken(adminUser, session.getId());
+		MintedToken accessToken = this.adminTokenService.mintAccessToken(adminUser,
+				issued.session().getId());
 
-		// Time left on the original session, not a fresh TTL: rotation does not move that moment.
 		return new TokenPair(accessToken.value(), this.adminTokenService.accessTokenTtlSeconds(),
-				rotated.value(), secondsUntil(rotated.session().getExpiresAt()));
+				issued.value(), secondsUntil(claimed.getExpiresAt()));
 	}
 
 	/**
-	 * Revokes the session the presented refresh token belongs to. A token matching no session is
-	 * accepted silently, so the endpoint cannot be used to discover which sessions are live.
+	 * Revokes the session the presented refresh token belongs to. A token matching no row is accepted
+	 * silently, so the endpoint cannot be used to discover which sessions are live.
 	 */
 	public void logout(String refreshTokenValue) {
 		if (isBlank(refreshTokenValue)) {
 			return;
 		}
 
-		// A superseded token still identifies its session, and revoking is the safe direction.
-		Optional<AdminSession> session = this.adminSessionService.findByRefreshToken(refreshTokenValue)
-				.or(() -> this.adminSessionService.findBySupersededRefreshToken(refreshTokenValue));
+		Optional<AdminSession> session = this.adminSessionService.findByRefreshToken(refreshTokenValue);
 
 		if (session.isEmpty()) {
 			log.debug("Logout presented a refresh token that matched no session");
@@ -148,66 +160,26 @@ public class AdminAuthService {
 				.orElseThrow(InvalidCredentialsException::new);
 	}
 
-	private TokenPair openSession(AdminUser adminUser) {
-		String sessionId = this.adminTokenService.newSessionId();
-		Instant refreshExpiresAt = this.adminTokenService.refreshTokenExpiryFromNow();
-
-		// The session must exist before the access token is handed out, since every admin request
-		// validates against it.
-		IssuedRefreshToken refreshToken = this.adminSessionService.createSession(sessionId, adminUser.getId(),
-				refreshExpiresAt);
-
-		MintedToken accessToken = this.adminTokenService.mintAccessToken(adminUser, sessionId);
-
-		return new TokenPair(accessToken.value(), this.adminTokenService.accessTokenTtlSeconds(),
-				refreshToken.value(), this.adminTokenService.refreshTokenTtlSeconds());
-	}
-
 	/**
-	 * No live session holds this token as current. If a session rotated away from it, it is a stolen
-	 * token being replayed, so the whole session is revoked rather than one request refused.
+	 * The row could not be claimed. Unknown, already exchanged, revoked and expired are all the same
+	 * 401 to the caller; only the server log distinguishes them. Nothing else is revoked: a replayed
+	 * token affects its own row and no other session belonging to the admin.
 	 */
-	private InvalidRefreshTokenException rejectTokenMatchingNoCurrentSession(String refreshTokenValue) {
-		Optional<AdminSession> superseded = this.adminSessionService
-				.findBySupersededRefreshToken(refreshTokenValue);
+	private InvalidRefreshTokenException rejectUnexchangeableToken(String refreshTokenValue) {
+		Optional<AdminSession> existing = this.adminSessionService.findByRefreshToken(refreshTokenValue);
 
-		if (superseded.isEmpty()) {
+		if (existing.isEmpty()) {
 			return new InvalidRefreshTokenException("Refresh token matches no session");
 		}
 
-		String sessionId = superseded.get().getId();
-		this.adminSessionService.revoke(sessionId, AdminSessionService.REASON_TOKEN_REUSE);
-		log.warn("Superseded refresh token replayed for session {}; session revoked", sessionId);
-		return new InvalidRefreshTokenException("Refresh token reuse detected for session " + sessionId);
-	}
-
-	/**
-	 * The token was current when read but the guarded swap did not match, so decide which precondition
-	 * failed. A concurrent refresh having won the race is the same reuse signature.
-	 */
-	private InvalidRefreshTokenException handleRotationFailure(String sessionId) {
-		Optional<AdminSession> session = this.adminSessionService.find(sessionId);
-
-		if (session.isEmpty()) {
-			return new InvalidRefreshTokenException("No session " + sessionId);
+		AdminSession session = existing.get();
+		if (session.getRevokedAt() != null) {
+			log.warn("Refresh token for session {} was presented again after being {}", session.getId(),
+					session.getRevokedReason());
+			return new InvalidRefreshTokenException("Refresh token for session " + session.getId()
+					+ " was already used or revoked");
 		}
-
-		AdminSession existing = session.get();
-		if (existing.getRevokedAt() != null) {
-			return new InvalidRefreshTokenException("Session " + sessionId + " is revoked");
-		}
-		if (!existing.getExpiresAt().isAfter(this.clock.instant())) {
-			return new InvalidRefreshTokenException("Session " + sessionId + " is expired");
-		}
-
-		this.adminSessionService.revoke(sessionId, AdminSessionService.REASON_TOKEN_REUSE);
-		log.warn("Concurrent use of one refresh token for session {}; session revoked", sessionId);
-		return new InvalidRefreshTokenException("Refresh token reuse detected for session " + sessionId);
-	}
-
-	private InvalidRefreshTokenException revokeAndReject(String sessionId, String reason) {
-		this.adminSessionService.revoke(sessionId, reason);
-		return new InvalidRefreshTokenException(reason);
+		return new InvalidRefreshTokenException("Session " + session.getId() + " is expired");
 	}
 
 	/** Never negative: an expired session never reaches this point. */

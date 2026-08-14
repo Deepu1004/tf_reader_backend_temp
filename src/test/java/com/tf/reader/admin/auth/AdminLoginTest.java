@@ -51,9 +51,9 @@ class AdminLoginTest extends AbstractAdminAuthIntegrationTest {
 				.satisfies(session -> {
 					assertThat(session.getAdminUserId()).isEqualTo(admin.getId());
 					assertThat(session.getRevokedAt()).isNull();
-					assertThat(session.getCurrentRefreshTokenHash()).isNotBlank()
+					assertThat(session.getId()).startsWith("sess_");
+					assertThat(session.getRefreshTokenHash()).isNotBlank()
 							.isNotEqualTo(tokens.refreshToken());
-					assertThat(session.getSupersededRefreshTokenHashes()).isEmpty();
 				});
 	}
 

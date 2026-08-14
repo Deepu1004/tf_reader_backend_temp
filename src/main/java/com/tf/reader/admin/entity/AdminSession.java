@@ -1,8 +1,6 @@
 package com.tf.reader.admin.entity;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
@@ -14,11 +12,11 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Server-side state for one admin login session.
+ * One row per sign in, as the contract's ninth collection.
  *
- * <p>The refresh token is opaque, so this document is the only thing that gives it meaning: every
- * refresh is a lookup by {@link #currentRefreshTokenHash}. Exactly one token is current at a time and
- * rotation replaces it atomically, which is what makes replay of a superseded token detectable.
+ * <p>Login inserts a row, refresh revokes it and inserts a new one, logout sets {@link #revokedAt}.
+ * The refresh token is opaque, so this row is the only thing that gives it meaning: every refresh is
+ * a lookup by {@link #refreshTokenHash}.
  */
 @Document(collection = "adminSessions")
 @Getter
@@ -27,33 +25,26 @@ import lombok.Setter;
 @AllArgsConstructor
 public class AdminSession {
 
-	/** Also issued as the {@code sid} claim of the access token. */
+	/** Prefixed {@code sess_}, and issued as the {@code sid} claim of the access token. */
 	@Id
 	private String id;
 
 	@Indexed(name = "adminUserId_idx")
 	private String adminUserId;
 
-	/** SHA-256 of the only refresh token this session currently accepts. The raw token is never stored. */
+	/** SHA-256 of the token, lowercase hex. The raw token is never stored. */
 	@Indexed(name = "refreshTokenHash_unique", unique = true)
-	private String currentRefreshTokenHash;
-
-	/**
-	 * Hashes this session has already rotated away from. Presenting one is the signature of a stolen
-	 * token, and without this an opaque token would become indistinguishable from one that never
-	 * existed the moment it was rotated.
-	 */
-	@Indexed(name = "supersededRefreshTokenHashes_idx")
-	private List<String> supersededRefreshTokenHashes = new ArrayList<>();
+	private String refreshTokenHash;
 
 	private Instant issuedAt;
-	private Instant lastRotatedAt;
 
 	/** Mongo removes the document once this passes, bounding growth without a cleanup job. */
 	@Indexed(name = "expiresAt_ttl", expireAfter = "0s")
 	private Instant expiresAt;
 
+	/** Once set, the row can never be exchanged again and its access token is rejected too. */
 	private Instant revokedAt;
+
 	private String revokedReason;
 
 }

@@ -66,7 +66,7 @@ class AdminRefreshFlowTest extends AbstractAdminAuthIntegrationTest {
 		AdminLoginResponse tokens = loginSuccessfully("rhash@tandf.example");
 		AdminSession session = onlySession();
 
-		assertThat(session.getCurrentRefreshTokenHash())
+		assertThat(session.getRefreshTokenHash())
 				.isNotEqualTo(tokens.refreshToken())
 				.hasSize(64)
 				.matches("[0-9a-f]+");
@@ -109,16 +109,27 @@ class AdminRefreshFlowTest extends AbstractAdminAuthIntegrationTest {
 		assertThat(callMe(refreshed.accessToken()).getResponse().getStatus()).isEqualTo(200);
 	}
 
+	/**
+	 * The contract keeps one row per sign in: refresh revokes the old row and inserts a new one, so the
+	 * session id moves and the previous row stays behind as an audit trail.
+	 */
 	@Test
-	void keepsTheSameSessionAcrossRotation() throws Exception {
+	void revokesTheOldRowAndInsertsANewOneOnRefresh() throws Exception {
 		saveAdmin("samesession@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
 		AdminLoginResponse original = loginSuccessfully("samesession@tandf.example");
 		String originalSessionId = sessionIdOf(original.accessToken());
 
 		TokenPair refreshed = readTokens(callRefresh(original.refreshToken()));
+		String newSessionId = sessionIdOf(refreshed.accessToken());
 
-		assertThat(sessionIdOf(refreshed.accessToken())).isEqualTo(originalSessionId);
-		assertThat(this.adminSessionRepository.count()).isEqualTo(1);
+		assertThat(newSessionId).startsWith("sess_").isNotEqualTo(originalSessionId);
+		assertThat(this.adminSessionRepository.count()).isEqualTo(2);
+
+		AdminSession oldRow = this.adminSessionRepository.findById(originalSessionId).orElseThrow();
+		assertThat(oldRow.getRevokedAt()).isNotNull();
+		assertThat(oldRow.getRevokedReason()).isEqualTo(AdminSessionService.REASON_ROTATED);
+
+		assertThat(liveSession().getId()).isEqualTo(newSessionId);
 	}
 
 	/** Rotation must never extend the session, however often a client refreshes. */
@@ -126,12 +137,13 @@ class AdminRefreshFlowTest extends AbstractAdminAuthIntegrationTest {
 	void neverExtendsTheAbsoluteSessionLifetime() throws Exception {
 		saveAdmin("rabsolute@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
 		AdminLoginResponse original = loginSuccessfully("rabsolute@tandf.example");
-		Instant expiryAtLogin = onlySession().getExpiresAt();
+		Instant expiryAtLogin = liveSession().getExpiresAt();
 
 		String refreshToken = original.refreshToken();
 		for (int i = 0; i < 3; i++) {
 			refreshToken = readTokens(callRefresh(refreshToken)).refreshToken();
-			assertThat(onlySession().getExpiresAt()).isEqualTo(expiryAtLogin);
+			// The replacement row inherits the original expiry rather than getting a fresh twelve hours.
+			assertThat(liveSession().getExpiresAt()).isEqualTo(expiryAtLogin);
 		}
 	}
 
@@ -148,24 +160,25 @@ class AdminRefreshFlowTest extends AbstractAdminAuthIntegrationTest {
 	}
 
 	/**
-	 * Replaying a superseded token is the signature of a stolen refresh token, so the entire session
-	 * is revoked rather than only the one request being refused.
+	 * A replayed token is refused with a 401 and its row stays revoked. Nothing else is touched: the
+	 * live session the legitimate holder is using keeps working.
 	 */
 	@Test
-	void replayingASupersededRefreshTokenRevokesTheWholeSession() throws Exception {
+	void rejectsAReplayedRefreshTokenWithoutDisturbingTheLiveSession() throws Exception {
 		saveAdmin("replay@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
 		AdminLoginResponse original = loginSuccessfully("replay@tandf.example");
+		String firstSessionId = sessionIdOf(original.accessToken());
 		TokenPair refreshed = readTokens(callRefresh(original.refreshToken()));
 
 		assertThat(callRefresh(original.refreshToken()).getResponse().getStatus()).isEqualTo(401);
 
-		AdminSession session = onlySession();
-		assertThat(session.getRevokedAt()).isNotNull();
-		assertThat(session.getRevokedReason()).isEqualTo(AdminSessionService.REASON_TOKEN_REUSE);
+		AdminSession replayed = this.adminSessionRepository.findById(firstSessionId).orElseThrow();
+		assertThat(replayed.getRevokedAt()).isNotNull();
+		assertThat(replayed.getRevokedReason()).isEqualTo(AdminSessionService.REASON_ROTATED);
 
-		// The legitimate holder is locked out too, which is the intended response to a suspected theft.
-		assertThat(callRefresh(refreshed.refreshToken()).getResponse().getStatus()).isEqualTo(401);
-		assertThat(callMe(refreshed.accessToken()).getResponse().getStatus()).isEqualTo(401);
+		// No unrelated session is revoked, so the honest holder is not locked out.
+		assertThat(callMe(refreshed.accessToken()).getResponse().getStatus()).isEqualTo(200);
+		assertThat(callRefresh(refreshed.refreshToken()).getResponse().getStatus()).isEqualTo(200);
 	}
 
 	/**
@@ -183,8 +196,12 @@ class AdminRefreshFlowTest extends AbstractAdminAuthIntegrationTest {
 
 		// The very first token, three rotations ago.
 		assertThat(callRefresh(original.refreshToken()).getResponse().getStatus()).isEqualTo(401);
+		// And every intermediate one.
+		assertThat(callRefresh(second).getResponse().getStatus()).isEqualTo(401);
+		assertThat(callRefresh(third).getResponse().getStatus()).isEqualTo(401);
 
-		assertThat(onlySession().getRevokedReason()).isEqualTo(AdminSessionService.REASON_TOKEN_REUSE);
+		// The current row is still live throughout.
+		assertThat(liveSession().getRevokedAt()).isNull();
 	}
 
 	@Test
