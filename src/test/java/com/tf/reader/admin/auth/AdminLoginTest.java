@@ -116,11 +116,11 @@ class AdminLoginTest extends AbstractAdminAuthIntegrationTest {
 		saveAdmin("known@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
 		saveAdmin("locked@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.SUSPENDED);
 
-		String unknownEmail = withoutTimestamp(bodyOf(performLogin("ghost@tandf.example", PASSWORD)));
-		String wrongPassword = withoutTimestamp(bodyOf(performLogin("known@tandf.example", "wrong")));
-		String suspended = withoutTimestamp(bodyOf(performLogin("locked@tandf.example", PASSWORD)));
+		String unknownEmail = withoutVaryingFields(bodyOf(performLogin("ghost@tandf.example", PASSWORD)));
+		String wrongPassword = withoutVaryingFields(bodyOf(performLogin("known@tandf.example", "wrong")));
+		String suspended = withoutVaryingFields(bodyOf(performLogin("locked@tandf.example", PASSWORD)));
 
-		// Only the clock may differ between the three; nothing else may hint at which case occurred.
+		// Only the clock and the trace id may differ; nothing else may hint at which case occurred.
 		assertThat(unknownEmail).isEqualTo(wrongPassword).isEqualTo(suspended);
 		assertThat(unknownEmail).doesNotContainIgnoringCase("suspend", "disabl", "exist", "unknown", "password");
 	}
@@ -237,9 +237,15 @@ class AdminLoginTest extends AbstractAdminAuthIntegrationTest {
 		return result.getResponse().getContentAsString();
 	}
 
-	/** Drops the one field that legitimately varies between two otherwise identical responses. */
-	private static String withoutTimestamp(String problemJson) {
-		return problemJson.replaceAll(",?\"timestamp\":\"[^\"]*\"", "");
+	/**
+	 * Drops the two fields that legitimately vary between otherwise identical responses: the clock, and
+	 * the trace id, which is fresh per request by design so a caller can quote one when reporting a
+	 * problem.
+	 */
+	private static String withoutVaryingFields(String errorJson) {
+		return errorJson
+				.replaceAll(",?\"timestamp\":\"[^\"]*\"", "")
+				.replaceAll(",?\"traceId\":\"[^\"]*\"", "");
 	}
 
 }
