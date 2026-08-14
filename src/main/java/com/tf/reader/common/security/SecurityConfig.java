@@ -36,6 +36,25 @@ public class SecurityConfig {
 	static final String REFRESH_PATH = "/api/admin/v1/auth/refresh";
 	static final String LOGOUT_PATH = "/api/admin/v1/auth/logout";
 
+	/**
+	 * The app-side prefixes, taken from the API contract rather than invented. Everything under them
+	 * needs a {@code tf-app} token unless one of the public matchers below claims it first.
+	 */
+	static final String APP_API_PATHS = "/api/v1/**";
+	static final String APP_OPDS_PATHS = "/opds/v1/**";
+
+	/**
+	 * The app paths the contract marks {@code security: []}. Public institution discovery is how a
+	 * reader chooses where to sign in, and the public OPDS feeds are open-access browsing, so both have
+	 * to work before anyone holds a token at all.
+	 */
+	static final String PUBLIC_INSTITUTIONS_PATH = "/api/v1/institutions";
+
+	/** One segment only, so a later {@code /{id}/something-private} does not inherit public access. */
+	static final String PUBLIC_INSTITUTION_PATH = "/api/v1/institutions/*";
+
+	static final String PUBLIC_OPDS_PATHS = "/opds/v1/public/**";
+
 	private final ProblemAuthenticationEntryPoint authenticationEntryPoint;
 	private final ProblemAccessDeniedHandler accessDeniedHandler;
 
@@ -74,9 +93,34 @@ public class SecurityConfig {
 		return stateless(http).build();
 	}
 
-	/** Admin API. Requires a valid, session-backed {@code tf-admin} access token. */
+	/**
+	 * The app paths that carry no token: public institution discovery and the open-access feeds.
+	 *
+	 * <p>Ordered ahead of the {@code tf-app} chain because only the first chain whose matcher matches
+	 * ever runs, and these paths sit underneath its prefixes. Without this chain, binding the app
+	 * surface to {@code tf-app} would make team1's institution picker and anonymous open-access
+	 * browsing require a token the caller cannot have yet.
+	 *
+	 * <p>No resource server is attached, for the same reason as the admin auth chain: a stale token
+	 * left in an {@code Authorization} header must not break a request that needs no token, so a reader
+	 * whose app token has expired can still browse open access.
+	 */
 	@Bean
 	@Order(3)
+	SecurityFilterChain publicAppFilterChain(HttpSecurity http) throws Exception {
+		http.securityMatcher(PUBLIC_INSTITUTIONS_PATH, PUBLIC_INSTITUTION_PATH, PUBLIC_OPDS_PATHS)
+				.authorizeHttpRequests(authorize -> authorize
+						.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+						.requestMatchers(HttpMethod.GET, PUBLIC_INSTITUTIONS_PATH, PUBLIC_INSTITUTION_PATH,
+								PUBLIC_OPDS_PATHS)
+						.permitAll()
+						.anyRequest().denyAll());
+		return stateless(http).build();
+	}
+
+	/** Admin API. Requires a valid, session-backed {@code tf-admin} access token. */
+	@Bean
+	@Order(4)
 	SecurityFilterChain adminApiFilterChain(HttpSecurity http,
 			@Qualifier(JwtConfig.ADMIN_ACCESS_TOKEN_DECODER) JwtDecoder adminAccessTokenDecoder) throws Exception {
 
@@ -93,13 +137,19 @@ public class SecurityConfig {
 		return stateless(http).build();
 	}
 
-	/** No app endpoints exist yet; the chain keeps the surface closed and bound to its own audience. */
+	/**
+	 * Reader app API: the institution-scoped OPDS feeds and the catalogue batch endpoint.
+	 *
+	 * <p>Most of these are not written yet. The chain still binds the surface to its own audience now,
+	 * so an admin or refresh token presented here is rejected during decoding, before routing, and an
+	 * endpoint another team adds later inherits that without anyone having to remember.
+	 */
 	@Bean
-	@Order(4)
+	@Order(5)
 	SecurityFilterChain appApiFilterChain(HttpSecurity http,
 			@Qualifier(JwtConfig.APP_ACCESS_TOKEN_DECODER) JwtDecoder appAccessTokenDecoder) throws Exception {
 
-		http.securityMatcher("/api/app/**")
+		http.securityMatcher(APP_API_PATHS, APP_OPDS_PATHS)
 				.authorizeHttpRequests(authorize -> authorize
 						.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
 						.anyRequest().authenticated())
@@ -112,7 +162,7 @@ public class SecurityConfig {
 
 	/** Dev profile only; elsewhere these paths fall through to the deny-all chain. */
 	@Bean
-	@Order(5)
+	@Order(6)
 	@Profile("dev")
 	SecurityFilterChain apiDocsFilterChain(HttpSecurity http) throws Exception {
 		http.securityMatcher("/v3/api-docs", "/v3/api-docs/**", "/v3/api-docs.yaml", "/swagger-ui.html",

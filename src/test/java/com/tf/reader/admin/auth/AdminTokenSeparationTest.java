@@ -25,8 +25,18 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  */
 class AdminTokenSeparationTest extends AbstractAdminAuthIntegrationTest {
 
-	/** Any path under the app chain: the token is rejected while decoding, before routing. */
-	private static final String APP_PATH = "/api/app/v1/catalogue";
+	/**
+	 * A real institution-scoped app path from the contract. The endpoint is not written yet, which does
+	 * not weaken these tests: a wrong-audience token is rejected while decoding, before routing, so the
+	 * absence of a controller is never what produces the 401.
+	 */
+	private static final String APP_PATH = "/opds/v1/institutions/inst_7f3/catalogue";
+
+	/** Anonymous by contract: open-access browsing works before anyone holds a token. */
+	private static final String PUBLIC_OPDS_PATH = "/opds/v1/public/catalogue";
+
+	/** Anonymous by contract: team1's institution picker is how a reader chooses where to sign in. */
+	private static final String PUBLIC_INSTITUTIONS_PATH = "/api/v1/institutions";
 
 	@Test
 	void rejectsAnAppTokenOnTheAdminApi() throws Exception {
@@ -292,6 +302,49 @@ class AdminTokenSeparationTest extends AbstractAdminAuthIntegrationTest {
 				.findFirst()
 				.orElseThrow()
 				.getId();
+	}
+
+	// The three tests below are about what is ALLOWED. Every other test in this class proves what is
+	// refused, and a chain that refused everything would pass all of them — which is exactly how the app
+	// chain came to guard a path that did not exist.
+
+	/**
+	 * A valid app token has to get past the app chain. No controller sits behind the path yet, so the
+	 * proof is a 404: routing was reached, and that only happens once authentication has succeeded.
+	 * Tighten this to 200 when the OPDS endpoint lands.
+	 */
+	@Test
+	void letsAValidAppTokenPastTheAppChain() throws Exception {
+		String appToken = this.tokens.sign(this.tokens.appAccessClaims("reader-1").build());
+
+		assertThat(callApp(appToken)).isEqualTo(404);
+	}
+
+	/** Open-access browsing and the institution picker must work with no token at all. */
+	@Test
+	void leavesThePublicAppPathsOpenToAnAnonymousCaller() throws Exception {
+		assertThat(this.mockMvc.perform(get(PUBLIC_OPDS_PATH)).andReturn().getResponse().getStatus())
+				.isNotIn(401, 403);
+		assertThat(this.mockMvc.perform(get(PUBLIC_INSTITUTIONS_PATH)).andReturn().getResponse().getStatus())
+				.isNotIn(401, 403);
+	}
+
+	/**
+	 * The public chain parses no token, so a stale or foreign one in the header is ignored rather than
+	 * failing the request. Without this, a reader whose app token expired could not browse open access.
+	 */
+	@Test
+	void ignoresAnUnusableTokenOnThePublicAppPaths() throws Exception {
+		assertThat(this.mockMvc.perform(get(PUBLIC_OPDS_PATH).header("Authorization", "Bearer not-a-jwt"))
+				.andReturn().getResponse().getStatus()).isNotIn(401, 403);
+
+		AdminUser admin = saveAdmin("public@tandf.example", AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE);
+		String adminAudienceToken = this.tokens.sign(
+				this.tokens.adminAccessClaims(admin.getId(), "no-such-session", AdminRole.SUPER_ADMIN).build());
+
+		assertThat(this.mockMvc.perform(get(PUBLIC_INSTITUTIONS_PATH)
+				.header("Authorization", "Bearer " + adminAudienceToken))
+				.andReturn().getResponse().getStatus()).isNotIn(401, 403);
 	}
 
 	private int callApp(String bearerToken) throws Exception {
