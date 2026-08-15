@@ -4,3 +4,7 @@ spring:
   data:
     mongodb:
       auto-index-creation: true
+
+tnf:
+  catalogue:
+    base-url: http://localhost:8080
