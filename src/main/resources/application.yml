@@ -26,3 +26,7 @@ springdoc:
     enabled: false
   swagger-ui:
     enabled: false
+management:
+  health:
+    redis:
+      enabled: false
