@@ -4,6 +4,10 @@ spring:
   data:
     mongodb:
       auto-index-creation: true
+  config:
+    import: "optional:file:.env[.properties]"
+  mongodb:
+    uri: ${MONGODB_URI:}
 
 tnf:
   catalogue:
