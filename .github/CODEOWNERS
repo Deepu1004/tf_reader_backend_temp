@@ -1,0 +1,41 @@
+# CODEOWNERS
+#
+# GitHub auto-requests a review from the owner when a PR touches their files.
+#
+# REPLACE EVERY PLACEHOLDER BELOW WITH A REAL GITHUB USERNAME.
+# Until you do, this file does nothing useful. Usernames need push access to the repo
+# or GitHub silently ignores the entry.
+#
+# Later entries win, so the specific rules at the bottom override the catch-all at the top.
+
+# ---- catch-all: a lead sees anything not claimed below -----------------------
+*                                   @abhishek-tf
+
+# ---- wokay: catalogue, console, content, keys, ingest ------------------------
+/src/main/java/com/tf/reader/catalogue/   @abhishek-tf @PLACEHOLDER-kashish
+/src/main/java/com/tf/reader/admin/       @abhishek-tf @PLACEHOLDER-kashish
+/src/main/java/com/tf/reader/content/     @abhishek-tf @PLACEHOLDER-ashwin
+/src/main/java/com/tf/reader/crypto/      @abhishek-tf @PLACEHOLDER-ashwin
+/src/main/java/com/tf/reader/ingest/      @abhishek-tf @PLACEHOLDER-akshay
+
+# ---- flambeau: identity, loans, holds, reading -------------------------------
+/src/main/java/com/tf/reader/auth/        @PLACEHOLDER-flambeau-lead
+/src/main/java/com/tf/reader/loan/        @PLACEHOLDER-flambeau-lead
+/src/main/java/com/tf/reader/hold/        @PLACEHOLDER-flambeau-lead
+/src/main/java/com/tf/reader/reading/     @PLACEHOLDER-flambeau-lead
+/src/main/java/com/tf/reader/library/     @PLACEHOLDER-flambeau-lead
+
+# ---- shared: both leads, because a change here reaches everybody -------------
+/src/main/java/com/tf/reader/common/      @abhishek-tf @PLACEHOLDER-flambeau-lead
+/pom.xml                                  @abhishek-tf @PLACEHOLDER-flambeau-lead
+
+# ---- the api/ seams: a change here breaks another team's build ---------------
+# Deliberately owned by both leads. Nothing here should change without a conversation.
+/src/main/java/com/tf/reader/catalogue/api/   @abhishek-tf @PLACEHOLDER-flambeau-lead
+/src/main/java/com/tf/reader/content/api/     @abhishek-tf @PLACEHOLDER-flambeau-lead
+
+# ---- the workflow itself ------------------------------------------------------
+/CLAUDE.md                          @abhishek-tf
+/.claude/                           @abhishek-tf
+/.githooks/                         @abhishek-tf
+/api-docs/                          @abhishek-tf

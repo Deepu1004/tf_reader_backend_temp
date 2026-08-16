@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# prepare-commit-msg hook. Runs BEFORE the message is finalised, including for `git commit -m`.
+#
+# Job: strip every trailer line, so the commit is authored by the team member alone.
+#
+# This is layer one of two. It removes the trailer silently rather than failing, so a session
+# that adds one does not waste your time with a rejected commit. `commit-msg` is layer two and
+# rejects anything that somehow survives, which is what catches a half-installed hooks setup.
+#
+# Activate once per clone:   git config core.hooksPath .githooks
+set -euo pipefail
+
+msg_file="$1"
+[ -f "$msg_file" ] || exit 0
+
+# Every trailer we refuse. `Co-Authored-By` in ANY form, not just Claude's, because a second
+# author means the commit is not authored by one team member alone. Plus every tool-credit
+# trailer an assistant might add.
+TRAILERS='^[[:space:]]*(Co-Authored-By|Co-authored-by|CoAuthoredBy|Signed-off-by|Signed-Off-By|Generated-by|Generated-By|Assisted-by|Assisted-By|Authored-by|Authored-By|Reviewed-by|Reviewed-By|Helped-by|Tested-by|Acked-by|On-behalf-of)[[:space:]]*:'
+
+# Also strip a free-text credit line, which is not a formal trailer but does the same job.
+CREDIT='(Generated with|Created with|Written with|Made with)[[:space:]].*(Claude|Anthropic|Copilot|Cursor|ChatGPT|GPT|AI assistant)'
+
+removed=$(grep -nEi "$TRAILERS" "$msg_file" 2>/dev/null || true)
+removed_credit=$(grep -nEi "$CREDIT" "$msg_file" 2>/dev/null || true)
+removed_emoji=$(grep -n '🤖' "$msg_file" 2>/dev/null || true)
+
+if [ -z "$removed" ] && [ -z "$removed_credit" ] && [ -z "$removed_emoji" ]; then
+  exit 0
+fi
+
+tmp=$(mktemp)
+# Drop the offending lines, then squeeze the blank lines they leave behind at the end.
+grep -vEi "$TRAILERS" "$msg_file" \
+  | grep -vEi "$CREDIT" \
+  | grep -v '🤖' \
+  | awk 'BEGIN{blank=0} /^[[:space:]]*$/{blank++; next} {while(blank>0){print ""; blank--}; print} END{}' \
+  > "$tmp"
+mv "$tmp" "$msg_file"
+
+echo "" >&2
+echo "NOTE: trailer lines removed from the commit message." >&2
+echo "  On this project a commit is authored by one team member, with no trailers and no" >&2
+echo "  tool attribution. Removed:" >&2
+for line in $removed $removed_credit $removed_emoji; do
+  echo "    $line" >&2
+done
+echo "" >&2
+
+exit 0
