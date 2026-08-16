@@ -954,6 +954,35 @@ paths:
       responses:
         '200':
           description: An access token and a refresh token
+          headers:
+            Set-Cookie:
+              description: |
+                The refresh token, as an `HttpOnly` cookie named `adminRefresh`.
+
+                **This is what lets a console reload survive.** The access token stays in
+                memory, because a browser store that JavaScript can read is a store an XSS
+                can read. `HttpOnly` is the only one it cannot, so the refresh token goes
+                here and the browser replays it after a reload.
+
+                `Path` is narrow on purpose: only `/auth/refresh` and `/auth/logout` ever
+                need it, so no other admin request carries it. `SameSite=Strict` is what
+                stops a cross-site POST, because a cookie is sent without being asked.
+
+                `Max-Age` matches `refreshExpiresIn` in the body.
+
+                **Two cookies are set here, not one.** Alongside `adminRefresh` comes
+                `XSRF-TOKEN`, which is deliberately readable: `/auth/refresh` and
+                `/auth/logout` require it echoed back in an `X-XSRF-TOKEN` header. A CSRF
+                token is not a secret, it is proof that the caller is same-origin, so a script
+                on our origin must be able to read it and a page on another origin must not.
+
+                Login itself is exempt from that check, which is what lets a client obtain the
+                token in the first place. The token is stable for the session and is not
+                reissued on refresh.
+              schema: { type: string }
+              example: >-
+                adminRefresh=8Kd2mXqR7vT1nP4wZ0aB3cE6gH9jL5sY; HttpOnly; Secure;
+                SameSite=Strict; Path=/api/admin/v1/auth; Max-Age=43200
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AdminLoginResponse' }
@@ -989,12 +1018,37 @@ paths:
         Takes no access token: an expired access token is the normal reason to be here.
         Holding the refresh token is the proof.
 
+        **Two ways to present it, and the cookie wins.** A browser sends the `adminRefresh`
+        cookie on its own, which is how the console rebuilds a session after a reload without
+        ever holding the token in JavaScript. The body stays for a non-browser caller, so
+        neither is required and presenting neither is a `401`, not a `400`.
+
         Admin only. App token refresh belongs to flambeau.
       x-stability: DRAFT
       x-called-by: [wokay]
       security: []
+      parameters:
+        - name: adminRefresh
+          in: cookie
+          required: false
+          description: >-
+            The refresh token, set by a previous login or refresh. Preferred over the body.
+            A browser sends this automatically and no script can read it.
+          schema: { type: string }
+        - name: X-XSRF-TOKEN
+          in: header
+          required: true
+          description: >-
+            The value of the `XSRF-TOKEN` cookie set at login, echoed back. **Required for
+            every caller, not only browsers**, because a cookie is sent without being asked
+            and `SameSite` alone should not be the only thing standing in the way. Omitting
+            it is a `403`.
+          schema: { type: string }
       requestBody:
-        required: true
+        required: false
+        description: >-
+          For a caller that is not a browser and so has no cookie jar. Ignored when the
+          cookie is present.
         content:
           application/json:
             schema: { $ref: '#/components/schemas/RefreshRequest' }
@@ -1003,6 +1057,16 @@ paths:
       responses:
         '200':
           description: A new pair. The one you sent is now dead
+          headers:
+            Set-Cookie:
+              description: >-
+                The rotated refresh token, replacing the one just spent. Same attributes as
+                login. One cookie per origin, so every open tab is updated at once, which is
+                what stops two tabs diverging onto different tokens.
+              schema: { type: string }
+              example: >-
+                adminRefresh=4Qw8zN2vC5xM7bK1rT6yU0pA3dF9hJ2e; HttpOnly; Secure;
+                SameSite=Strict; Path=/api/admin/v1/auth; Max-Age=43200
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RefreshResponse' }
@@ -1012,6 +1076,21 @@ paths:
                 refreshToken: 4Qw8zN2vC5xM7bK1rT6yU0pA3dF9hJ2e
                 refreshExpiresIn: 43200
         '400': { $ref: '#/components/responses/BadRequest' }
+        '403':
+          description: >-
+            The `X-XSRF-TOKEN` header was missing, or did not match the `XSRF-TOKEN` cookie.
+            Reuses `FORBIDDEN_SCOPE`, because there are eleven error codes and no spare one
+            for this. A client that sends the header correctly never sees it.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                timestamp: '2026-08-16T09:55:15Z'
+                status: 403
+                code: FORBIDDEN_SCOPE
+                message: You do not have permission to perform this action.
+                path: /api/admin/v1/auth/refresh
+                traceId: 1641cb21437d
         '401':
           description: >-
             Unknown, expired, already used or revoked. All four are the same answer, and
@@ -1046,11 +1125,30 @@ paths:
 
         Always `204`, even for a token that never existed, so nobody can probe which
         ones are live.
+
+        Takes the token from the `adminRefresh` cookie, or from the body for a caller that
+        has no cookie jar. Neither is required, because `204` is the answer either way.
       x-stability: DRAFT
       x-called-by: [wokay]
       security: []
+      parameters:
+        - name: adminRefresh
+          in: cookie
+          required: false
+          description: The refresh token to revoke. Preferred over the body.
+          schema: { type: string }
+        - name: X-XSRF-TOKEN
+          in: header
+          required: true
+          description: >-
+            The value of the `XSRF-TOKEN` cookie, echoed back. Required, as on refresh.
+            Omitting it is a `403`, which is the one case where this endpoint does not
+            answer `204`.
+          schema: { type: string }
       requestBody:
-        required: true
+        required: false
+        description: >-
+          For a caller that is not a browser. Ignored when the cookie is present.
         content:
           application/json:
             schema: { $ref: '#/components/schemas/RefreshRequest' }
@@ -1059,8 +1157,30 @@ paths:
       responses:
         '204':
           description: Revoked, or was never valid. Same answer either way.
+          headers:
+            Set-Cookie:
+              description: >-
+                Clears the cookie, so a reload after signing out lands on the login page
+                rather than restoring the session that was just revoked.
+              schema: { type: string }
+              example: >-
+                adminRefresh=; HttpOnly; Secure; SameSite=Strict;
+                Path=/api/admin/v1/auth; Max-Age=0
 
         '400': { $ref: '#/components/responses/BadRequest' }
+        '403':
+          description: >-
+            The `X-XSRF-TOKEN` header was missing or did not match the cookie. See refresh.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                timestamp: '2026-08-16T09:55:15Z'
+                status: 403
+                code: FORBIDDEN_SCOPE
+                message: You do not have permission to perform this action.
+                path: /api/admin/v1/auth/logout
+                traceId: 1641cb21437d
   /api/admin/v1/auth/me:
     get:
       tags: [Admin · auth]
