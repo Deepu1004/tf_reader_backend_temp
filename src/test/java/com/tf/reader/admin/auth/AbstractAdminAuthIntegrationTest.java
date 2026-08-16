@@ -25,6 +25,7 @@ import com.tf.reader.common.security.JwtProperties;
 
 import tools.jackson.databind.ObjectMapper;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
@@ -122,7 +123,7 @@ abstract class AbstractAdminAuthIntegrationTest {
 
 	protected MvcResult callRefresh(String refreshToken) throws Exception {
 		return this.mockMvc.perform(json(post(REFRESH_PATH), """
-				{"refreshToken": "%s"}""".formatted(refreshToken))).andReturn();
+				{"refreshToken": "%s"}""".formatted(refreshToken)).with(csrf())).andReturn();
 	}
 
 	protected MvcResult callMe(String accessToken) throws Exception {
@@ -166,14 +167,19 @@ abstract class AbstractAdminAuthIntegrationTest {
 		return sessions.get(0);
 	}
 
-	/** Logout carries the refresh token in the body, not a bearer token. */
+	/**
+	 * Logout carries the refresh token in the body or the cookie, not a bearer token.
+	 *
+	 * <p>{@code csrf()} here and on refresh because both read a cookie, so both are CSRF protected.
+	 * Login is deliberately exempt and its helper stays plain, which is what proves the exemption.
+	 */
 	protected MvcResult callLogout(String refreshToken) throws Exception {
 		return this.mockMvc.perform(json(post(LOGOUT_PATH), """
-				{"refreshToken": "%s"}""".formatted(refreshToken))).andReturn();
+				{"refreshToken": "%s"}""".formatted(refreshToken)).with(csrf())).andReturn();
 	}
 
 	protected MvcResult callLogoutWithRawBody(String body) throws Exception {
-		return this.mockMvc.perform(json(post(LOGOUT_PATH), body)).andReturn();
+		return this.mockMvc.perform(json(post(LOGOUT_PATH), body).with(csrf())).andReturn();
 	}
 
 	private static MockHttpServletRequestBuilder json(MockHttpServletRequestBuilder builder, String body) {

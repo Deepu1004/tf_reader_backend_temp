@@ -1,6 +1,8 @@
 package com.tf.reader.admin.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MvcResult;
@@ -156,10 +158,17 @@ class AdminLogoutTest extends AbstractAdminAuthIntegrationTest {
 		assertThat(callMe(refreshed.accessToken()).getResponse().getStatus()).isEqualTo(200);
 	}
 
+	/**
+	 * Was a 400 while the token was required in the body. The contract now says neither the cookie nor
+	 * the body is required, because 204 is the answer either way and a browser signing out may already
+	 * have had its cookie cleared.
+	 */
 	@Test
-	void rejectsAnEmptyOrMissingRefreshTokenField() throws Exception {
-		assertThat(callLogoutWithRawBody("{}").getResponse().getStatus()).isEqualTo(400);
-		assertThat(callLogout("").getResponse().getStatus()).isEqualTo(400);
+	void answersNoContentWhenNoTokenIsPresentedAtAll() throws Exception {
+		assertThat(callLogoutWithRawBody("{}").getResponse().getStatus()).isEqualTo(204);
+		assertThat(callLogout("").getResponse().getStatus()).isEqualTo(204);
+		assertThat(this.mockMvc.perform(post(LOGOUT_PATH).with(csrf())).andReturn().getResponse().getStatus())
+				.isEqualTo(204);
 	}
 
 }

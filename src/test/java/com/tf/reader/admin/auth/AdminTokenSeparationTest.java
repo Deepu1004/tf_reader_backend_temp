@@ -1,6 +1,7 @@
 package com.tf.reader.admin.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -262,7 +263,8 @@ class AdminTokenSeparationTest extends AbstractAdminAuthIntegrationTest {
 						.header("Authorization", "Bearer completely-invalid-token")
 						.contentType(org.springframework.http.MediaType.APPLICATION_JSON)
 						.content("""
-								{"refreshToken": "%s"}""".formatted(tokens.refreshToken())))
+								{"refreshToken": "%s"}""".formatted(tokens.refreshToken()))
+						.with(csrf()))
 				.andReturn();
 
 		assertThat(refreshResult.getResponse().getStatus()).isEqualTo(200);
@@ -272,7 +274,8 @@ class AdminTokenSeparationTest extends AbstractAdminAuthIntegrationTest {
 						.header("Authorization", "Bearer completely-invalid-token")
 						.contentType(org.springframework.http.MediaType.APPLICATION_JSON)
 						.content("""
-								{"refreshToken": "%s"}""".formatted(readTokens(refreshResult).refreshToken())))
+								{"refreshToken": "%s"}""".formatted(readTokens(refreshResult).refreshToken()))
+						.with(csrf()))
 				.andReturn();
 
 		assertThat(logoutResult.getResponse().getStatus()).isEqualTo(204);

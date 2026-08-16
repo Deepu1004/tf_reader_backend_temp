@@ -1,6 +1,8 @@
 package com.tf.reader.admin.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -277,9 +279,16 @@ class AdminRefreshFlowTest extends AbstractAdminAuthIntegrationTest {
 				.hasClaim(TokenClaims.SCOPE_PUBLISHER_ID)).isFalse();
 	}
 
+	/**
+	 * Was a 400 while {@code @NotBlank} guarded the body. Presenting no credential is an authentication
+	 * failure, not a malformed request, and the contract says so explicitly now that the console sends
+	 * a bodyless refresh on every page load.
+	 */
 	@Test
-	void rejectsAnEmptyOrMissingRefreshTokenField() throws Exception {
-		assertThat(callRefresh("").getResponse().getStatus()).isEqualTo(400);
+	void answersUnauthorizedRatherThanBadRequestWhenNoTokenIsPresented() throws Exception {
+		assertThat(callRefresh("").getResponse().getStatus()).isEqualTo(401);
+		assertThat(this.mockMvc.perform(post(REFRESH_PATH).with(csrf())).andReturn().getResponse().getStatus())
+				.isEqualTo(401);
 	}
 
 	private String sessionIdOf(String accessToken) {
