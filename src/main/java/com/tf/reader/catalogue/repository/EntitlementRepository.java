@@ -19,4 +19,6 @@ public interface EntitlementRepository extends MongoRepository<Entitlement, Stri
 
 	List<Entitlement> findByValidToBefore(LocalDate date);
 
+	List<Entitlement> findByScopeTypeAndScopeId(ScopeType scopeType, String scopeId);
+
 }
