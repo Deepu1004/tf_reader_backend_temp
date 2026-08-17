@@ -1,5 +1,7 @@
 package com.tf.reader.shared.error;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -13,6 +15,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+	private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
 	@ExceptionHandler(ApiException.class)
 	public ResponseEntity<ApiError> handleApiException(ApiException exception) {
@@ -35,8 +39,19 @@ public class GlobalExceptionHandler {
 		return respond(ErrorCode.VALIDATION_FAILED, "A JSON request body is required.");
 	}
 
+	/** Catch-all: any unhandled exception becomes a 500 with a traceId the team can grep for. */
+	@ExceptionHandler(Exception.class)
+	public ResponseEntity<ApiError> handleUnexpected(Exception exception) {
+		String traceId = TraceId.next();
+		log.error("Unhandled exception, traceId={}", traceId, exception);
+		return respond(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred.", traceId);
+	}
+
 	private ResponseEntity<ApiError> respond(ErrorCode code, String message) {
-		ApiError body = ApiError.of(code, message, TraceId.next());
-		return ResponseEntity.status(code.status()).body(body);
+		return respond(code, message, TraceId.next());
+	}
+
+	private ResponseEntity<ApiError> respond(ErrorCode code, String message, String traceId) {
+		return ResponseEntity.status(code.status()).body(ApiError.of(code, message, traceId));
 	}
 }

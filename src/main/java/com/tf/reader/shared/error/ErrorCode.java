@@ -69,7 +69,28 @@ public enum ErrorCode {
 	FORBIDDEN_ROLE(HttpStatus.FORBIDDEN),
 
 	/** 404. Unknown id, or not visible to this user. */
-	NOT_FOUND(HttpStatus.NOT_FOUND);
+	NOT_FOUND(HttpStatus.NOT_FOUND),
+
+	/**
+	 * 403. The user holds no entitlement for this title — not subscribed, or entitlement expired.
+	 * Loan module raises this when {@code EntitlementQuery.check} returns {@code entitled=false}.
+	 */
+	NO_ENTITLEMENT(HttpStatus.FORBIDDEN),
+
+	/**
+	 * 409. A borrow was attempted for an Elite title but no slot is currently free.
+	 * The caller should direct the user to {@code /api/v1/holds} to join the wait queue.
+	 */
+	NO_COPIES_AVAILABLE(HttpStatus.CONFLICT),
+
+	/**
+	 * 409. A return was attempted but the loan is not ACTIVE (already RETURNED or EXPIRED).
+	 * Safe to retry on the client side once the caller has refreshed the loan state.
+	 */
+	LOAN_NOT_ACTIVE(HttpStatus.CONFLICT),
+
+	/** 500. An unexpected internal failure. The traceId in the body links to the server log. */
+	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);
 
 	private final HttpStatus status;
 
