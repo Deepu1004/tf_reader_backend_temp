@@ -1,5 +1,11 @@
 package com.tf.reader.hold.api;
 
-// Read model of copy availability for one title.
-public class AvailabilitySnapshot {
-}
+/**
+ * Snapshot describing current availability and queue state for a copy-limited title.
+ */
+public record AvailabilitySnapshot(
+		int copiesTotal,
+		int copiesFree,
+		int queueLength,
+		Integer myPosition
+) {}

@@ -32,7 +32,6 @@ import com.tf.reader.reading.entity.DeviceFingerprint;
 @Service
 public class DeviceCapService {
 
-	/** Field names, once. A typo in one of these is a filter that silently matches nothing. */
 	private static final String USER_ID = "userId";
 	private static final String DEVICES = "devices";
 	private static final String FINGERPRINT = "devices.fingerprint";
