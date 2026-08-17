@@ -3,6 +3,8 @@ package com.tf.reader.catalogue;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -47,6 +49,26 @@ class EntitlementRepositoryTest {
 
 		assertThatThrownBy(() -> entitlementRepository.save(newEntitlement("inst_dupe", ScopeType.PUBLISHER, "pub_rtlg")))
 				.isInstanceOf(DuplicateKeyException.class);
+	}
+
+	@Test
+	void findsEveryEntitlementForAScopeRegardlessOfStatus() {
+		entitlementRepository.save(newEntitlement("inst_a", ScopeType.COLLECTION, "col_1"));
+		Entitlement suspended = newEntitlement("inst_b", ScopeType.COLLECTION, "col_1");
+		suspended.setStatus(EntitlementStatus.SUSPENDED);
+		entitlementRepository.save(suspended);
+		entitlementRepository.save(newEntitlement("inst_a", ScopeType.COLLECTION, "col_2"));
+
+		List<Entitlement> found = entitlementRepository.findByScopeTypeAndScopeId(ScopeType.COLLECTION, "col_1");
+
+		assertThat(found).extracting(Entitlement::getInstitutionId).containsExactlyInAnyOrder("inst_a", "inst_b");
+	}
+
+	@Test
+	void aScopeWithNoEntitlementsReturnsAnEmptyList() {
+		List<Entitlement> found = entitlementRepository.findByScopeTypeAndScopeId(ScopeType.ITEM, "item_none");
+
+		assertThat(found).isEmpty();
 	}
 
 }

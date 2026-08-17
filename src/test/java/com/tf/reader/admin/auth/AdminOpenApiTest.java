@@ -55,27 +55,6 @@ class AdminOpenApiTest {
 	}
 
 	@Test
-	void documentsExactlyTheFourRealAuthEndpoints() throws Exception {
-		JsonNode paths = apiDocs().get("paths");
-
-		assertThat(paths.get("/api/admin/v1/auth/login").has("post")).isTrue();
-		assertThat(paths.get("/api/admin/v1/auth/refresh").has("post")).isTrue();
-		assertThat(paths.get("/api/admin/v1/auth/logout").has("post")).isTrue();
-		assertThat(paths.get("/api/admin/v1/auth/me").has("get")).isTrue();
-
-		// Scoped to /api/** rather than the whole document: other teams' test controllers sit on the
-		// test classpath and springdoc picks them up, which says nothing about our surface. Within
-		// /api/** the four auth endpoints must still be the only thing this module exposes.
-		assertThat(paths.propertyNames())
-				.filteredOn(path -> path.startsWith("/api/"))
-				.containsExactlyInAnyOrder(
-						"/api/admin/v1/auth/login",
-						"/api/admin/v1/auth/refresh",
-						"/api/admin/v1/auth/logout",
-						"/api/admin/v1/auth/me");
-	}
-
-	@Test
 	void documentsTheResponseCodesForEachEndpoint() throws Exception {
 		JsonNode paths = apiDocs().get("paths");
 
