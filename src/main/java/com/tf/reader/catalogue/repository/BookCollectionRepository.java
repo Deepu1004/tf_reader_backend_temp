@@ -10,4 +10,6 @@ public interface BookCollectionRepository extends MongoRepository<BookCollection
 
 	Optional<BookCollection> findByPublisherIdAndCode(String publisherId, String code);
 
+	long countByPublisherId(String publisherId);
+
 }

@@ -24,4 +24,6 @@ public interface CatalogueItemRepository extends MongoRepository<CatalogueItem, 
 
 	List<CatalogueItem> findAllBy(TextCriteria criteria);
 
+	long countByPublisherId(String publisherId);
+
 }

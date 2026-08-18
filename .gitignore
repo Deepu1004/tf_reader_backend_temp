@@ -151,3 +151,7 @@ master-key*
 *bek*.hex
 .env
 .env.local
+
+
+# temp
+temp/
