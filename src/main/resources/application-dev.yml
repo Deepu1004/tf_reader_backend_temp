@@ -1,0 +1,14 @@
+# Local development profile. Never activate this profile in a deployed environment.
+# Admin users come from the shared seeder: run with the local profile and tnf.seed.enabled=true.
+tf:
+  security:
+    jwt:
+      # Development-only signing key. Overridable, and deliberately not a production secret.
+      secret: ${TF_JWT_SECRET:dev-only-insecure-signing-key-change-me-32b+}
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html

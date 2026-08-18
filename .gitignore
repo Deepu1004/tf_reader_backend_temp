@@ -128,3 +128,26 @@ CLAUDE.md
 
 /docs/
 /documents
+
+# ── Claude Code workflow ───────────────────────────────────────────────────
+# Per person, never committed. This is what makes the two-team setup work
+# without merge conflicts.
+.claude/settings.local.json
+.claude/team
+
+# Review output. Local by choice: reviews in a PR diff cause arguments,
+# and two people reviewing one branch would conflict.
+.reviews/
+
+# ── Never commit, under any circumstances ─────────────────────────────────
+# Content encryption keys, device keystores, master keys.
+# The pre-commit hook also blocks these, but belt and braces.
+*.pem
+*.key
+*.p12
+*.jks
+**/keystore/
+master-key*
+*bek*.hex
+.env
+.env.local

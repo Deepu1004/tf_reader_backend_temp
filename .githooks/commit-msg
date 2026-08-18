@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+# commit-msg hook. Runs for EVERY commit in this clone, including ones made by hand outside
+# Claude. This is the backstop for the authorship rule.
+#
+# The rule: a commit is authored by ONE team member, alone. No trailers, no second author, no
+# tool credit. `prepare-commit-msg` strips trailers first; this refuses anything that survived,
+# which is what catches a partially installed hooks setup.
+#
+# Activate once per clone:   git config core.hooksPath .githooks
+set -euo pipefail
+
+msg_file="$1"
+msg=$(cat "$msg_file")
+
+fail() {
+  echo "" >&2
+  echo "COMMIT REJECTED" >&2
+  echo "  $1" >&2
+  echo "" >&2
+  exit 1
+}
+
+# ── 1. no trailers, of any kind ───────────────────────────────────────────────
+# Co-Authored-By is refused whoever it names. A second author means the commit is not
+# authored by one team member alone, which is the rule.
+if grep -qiE '^[[:space:]]*(Co-Authored-By|CoAuthoredBy)[[:space:]]*:' <<<"$msg"; then
+  who=$(grep -iE '^[[:space:]]*Co-Authored-By[[:space:]]*:' <<<"$msg" | head -1 | sed 's/^[[:space:]]*//')
+  fail "The message carries a co-author trailer:
+      $who
+  On this project every commit is authored by ONE team member, alone. Delete the line.
+  If two people genuinely worked on it, say so in the body in your own words."
+fi
+
+if grep -qiE '^[[:space:]]*(Generated-by|Assisted-by|Authored-by|Helped-by|On-behalf-of)[[:space:]]*:' <<<"$msg"; then
+  fail "The message carries an attribution trailer. No trailers on this project.
+  The commit author is you, and that is recorded by git itself."
+fi
+
+if grep -qiE '^[[:space:]]*(Signed-off-by|Reviewed-by|Tested-by|Acked-by)[[:space:]]*:' <<<"$msg"; then
+  fail "The message carries a trailer. This project uses none, so that the author is
+  unambiguous and every message reads the same way.
+  If the team later needs Signed-off-by for a DCO, remove it from the block list in
+  .githooks/commit-msg and .githooks/prepare-commit-msg together."
+fi
+
+# ── 2. no tool credit, in any wording ─────────────────────────────────────────
+if grep -qiE '(generated|created|written|made|built) with .*(claude|anthropic|copilot|cursor|chatgpt|gpt|ai)' <<<"$msg"; then
+  fail "The message says a tool wrote it. Remove that line. The commit is yours."
+fi
+if grep -qiE 'noreply@anthropic\.com|@anthropic\.com' <<<"$msg"; then
+  fail "The message references an anthropic.com address. Remove it."
+fi
+if grep -q '🤖' <<<"$msg"; then
+  fail "The message contains a robot emoji, which is a tool-credit marker. Remove it."
+fi
+
+# ── 3. the author and the committer must both be a real person ────────────────
+# Use the RESOLVED identity, not `git config`, because --author and the GIT_AUTHOR_* env
+# vars override the config and would otherwise slip past this check entirely.
+author=$(git var GIT_AUTHOR_IDENT 2>/dev/null || true)
+committer=$(git var GIT_COMMITTER_IDENT 2>/dev/null || true)
+if [ -z "$author" ]; then
+  fail "This clone has no git identity, so the commit cannot be attributed to anyone. Run:
+      git config user.name  \"Your Name\"
+      git config user.email \"your@email\""
+fi
+
+# "Name <email> 1786632061 +0530" -> name and email
+ident_name() { sed -E 's/ <.*//' <<<"$1"; }
+ident_mail() { sed -E 's/.*<([^>]*)>.*/\1/' <<<"$1"; }
+
+a_name=$(ident_name "$author");    a_mail=$(ident_mail "$author")
+c_name=$(ident_name "$committer"); c_mail=$(ident_mail "$committer")
+
+# The author and the committer must be the same person. If they differ, somebody passed
+# --author, which reattributes the work to a name that did not write it.
+if [ "$a_mail" != "$c_mail" ]; then
+  fail "The author ($a_mail) and the committer ($c_mail) are different people.
+  That happens when --author is passed. Do not reattribute a commit: commit as yourself."
+fi
+
+check_person() {
+  local label="$1" name="$2" mail="$3"
+  # Must come from a config file. If not, git guessed it, and a guess is not an attribution.
+  if ! git config --show-origin user.email 2>/dev/null | grep -q '^file:'; then
+    fail "git derived '$mail' from the system rather than from a config file. A guessed
+  address is not an attribution. Set yours explicitly:
+      git config user.email \"your@email\""
+  fi
+  case "$mail" in
+    *.local|*.lan|*.localdomain)
+      fail "$label email is '$mail', a machine hostname rather than an address.
+  Set your real one:  git config user.email \"your@email\"" ;;
+  esac
+  if printf '%s' "$mail" | grep -qiE 'anthropic|claude|copilot|noreply|no-reply|example\.(com|org)|@localhost|users\.noreply|bot@'; then
+    fail "$label email is '$mail', which is a bot or placeholder address, not a person on
+  this team. Every commit here is attributed to a human. Set your own:
+      git config user.email \"your@email\""
+  fi
+  if ! printf '%s' "$mail" | grep -qE '^[^@[:space:]]+@[^@[:space:]]+\.[A-Za-z]{2,}$'; then
+    fail "$label email is '$mail', which is not a valid address."
+  fi
+  if printf '%s' "$name" | grep -qiE '^(claude|anthropic|copilot|bot|admin|user|test|unknown)$'; then
+    fail "$label name is '$name', which is not a person's name. Use your own."
+  fi
+  if [ "${#name}" -lt 3 ] || ! printf '%s' "$name" | grep -q '[A-Za-z]'; then
+    fail "$label name is '$name'. Use your real name, so the log is readable."
+  fi
+}
+
+check_person "The author" "$a_name" "$a_mail"
+
+# ── 4. a message somebody can read in six weeks ───────────────────────────────
+subject=$(head -n1 <<<"$msg")
+# git writes these itself, so leave them alone.
+if [[ "$subject" == Merge* ]] || [[ "$subject" == Revert* ]] \
+   || [[ "$subject" == fixup!* ]] || [[ "$subject" == squash!* ]]; then
+  exit 0
+fi
+if [ ${#subject} -gt 72 ]; then
+  fail "The first line is ${#subject} characters. Keep it under 72 so it reads in git log.
+  Put the detail in the body, after a blank line."
+fi
+if [ ${#subject} -lt 10 ]; then
+  fail "The first line is only ${#subject} characters. Say what changed."
+fi
+if grep -qiE '^(wip|test|temp|asdf|fix|update|changes|stuff|misc)$' <<<"$subject"; then
+  fail "'$subject' does not say what changed. Somebody reads this in week 8 hunting a bug."
+fi
+
+exit 0

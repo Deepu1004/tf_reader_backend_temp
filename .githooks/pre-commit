@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# pre-commit hook. Formats staged files so formatting is never a review comment,
+# and blocks two things that must never reach the repo.
+#
+# Activate once per clone:   git config core.hooksPath .githooks
+set -euo pipefail
+
+fail() { echo "" >&2; echo "COMMIT REJECTED" >&2; echo "  $1" >&2; echo "" >&2; exit 1; }
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+# --- 1. never commit a secret or a key ---------------------------------------
+if grep -qE '\.(pem|key|p12|jks)$|(^|/)master-key|bek.*\.hex$' <<<"$staged"; then
+  fail "A key or keystore file is staged. Those must never enter the repo. Unstage it:
+      git restore --staged <file>"
+fi
+if grep -qE '(^|/)\.env$' <<<"$staged"; then
+  fail ".env is staged. It holds local secrets. Unstage it."
+fi
+
+# Look for a hardcoded master key inside staged content, not just filenames.
+if git diff --cached -U0 | grep -qiE '^\+.*(master-key|masterKey)[[:space:]]*[:=][[:space:]]*["'"'"'][A-Za-z0-9+/]{20,}'; then
+  fail "A staged line looks like a hardcoded master key. It belongs in an environment variable.
+  If this is a false positive, say so and we will narrow the pattern."
+fi
+
+# --- 2. format, so nobody argues about it ------------------------------------
+if [ -f pom.xml ] && grep -qE '\.java$' <<<"$staged"; then
+  if ! ./mvnw -q spotless:apply; then
+    fail "spotless:apply failed. Fix the build error, then commit."
+  fi
+  # Re-stage only files that were already staged, so an unrelated file is not swept in.
+  while IFS= read -r f; do [ -f "$f" ] && git add -- "$f"; done <<<"$staged"
+elif [ -f package.json ] && grep -qE '\.(js|jsx|json|css|md)$' <<<"$staged"; then
+  npx --no-install prettier --write $(grep -E '\.(js|jsx|json|css|md)$' <<<"$staged" | tr '\n' ' ') >/dev/null
+  while IFS= read -r f; do [ -f "$f" ] && git add -- "$f"; done <<<"$staged"
+fi
+
+# --- 3. leftover debugging ----------------------------------------------------
+if git diff --cached -U0 | grep -qE '^\+.*(System\.out\.println|console\.log)\(' ; then
+  echo "NOTE: a println or console.log is being committed. Use the logger instead if it is meant to stay." >&2
+fi
+
+exit 0

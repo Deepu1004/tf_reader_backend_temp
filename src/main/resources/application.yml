@@ -61,3 +61,33 @@ tnf:
     jwt:
       secret: ${TNF_JWT_SECRET}
       ttl: 1h
+  config:
+    import: "optional:file:.env[.properties]"
+  mongodb:
+    uri: ${MONGODB_URI:}
+
+tnf:
+  catalogue:
+    base-url: http://localhost:8080
+tf:
+  security:
+    jwt:
+      issuer: tf-reader
+      # No default. Startup fails fast when this is missing or shorter than 32 bytes.
+      # Supply it via the TF_JWT_SECRET environment variable in every deployed environment.
+      secret: ${TF_JWT_SECRET:}
+      access-token-ttl: 15m
+      # Twelve hours: one working day needs one sign in. This is the absolute session
+      # lifetime too, since rotation never extends it.
+      refresh-token-ttl: 12h
+
+# API documentation is off by default and enabled only by the dev profile.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+management:
+  health:
+    redis:
+      enabled: false
