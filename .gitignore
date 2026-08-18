@@ -123,9 +123,11 @@ mongo-data/
 
 .claude/settings.local.json
 .claude-context/
+CLAUDE.md
 
 
 /docs/
+/documents
 
 # ── Claude Code workflow ───────────────────────────────────────────────────
 # Per person, never committed. This is what makes the two-team setup work
