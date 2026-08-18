@@ -31,6 +31,20 @@
 		<!-- Not managed by the Spring Boot parent. -->
 		<jjwt.version>0.12.6</jjwt.version>
 	</properties>
+
+	<!--
+	  OpenSAML 5, which spring-security-saml2-service-provider requires, is not published
+	  to Maven Central - Central stops at 4.0.1 (2021). Shibboleth publish it themselves,
+	  so this repository is mandatory for the SAML dependency to resolve.
+	-->
+	<repositories>
+		<repository>
+			<id>shibboleth</id>
+			<name>Shibboleth Releases</name>
+			<url>https://build.shibboleth.net/maven/releases/</url>
+		</repository>
+	</repositories>
+
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -48,6 +62,11 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
+		</dependency>
+		<!-- Our application is the SAML 2.0 Service Provider. samlmock.dev is the IdP. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security-saml2</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -176,6 +195,7 @@
 								<path>
 									<groupId>org.projectlombok</groupId>
 									<artifactId>lombok</artifactId>
+									<version>${lombok.version}</version>
 								</path>
 							</annotationProcessorPaths>
 						</configuration>
@@ -191,6 +211,7 @@
 								<path>
 									<groupId>org.projectlombok</groupId>
 									<artifactId>lombok</artifactId>
+									<version>${lombok.version}</version>
 								</path>
 							</annotationProcessorPaths>
 						</configuration>
