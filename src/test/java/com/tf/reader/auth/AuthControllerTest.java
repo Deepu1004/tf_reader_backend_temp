@@ -29,7 +29,7 @@ import com.tf.reader.shared.error.GlobalExceptionHandler;
 
 /**
  * Slice test of the endpoint that starts SAML. Spring Security's SAML filters are not in this
- * slice - {@link com.tf.reader.auth.SecurityConfig} needs a relying party registration
+ * slice - {@link UserSecurityConfig} needs a relying party registration
  * and is covered by {@code SamlRelyingPartyRegistrationTest} instead.
  */
 @WebMvcTest(AuthController.class)

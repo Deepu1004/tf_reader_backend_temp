@@ -128,7 +128,7 @@ public class AuthController {
 	private String authorizationUrl(AuthTransaction transaction) {
 		return UriComponentsBuilder.fromPath("/saml2/authenticate")
 				.queryParam("registrationId", REGISTRATION_ID)
-				.queryParam(SecurityConfig.AUTH_TRANSACTION_PARAM, transaction.id())
+				.queryParam(UserSecurityConfig.AUTH_TRANSACTION_PARAM, transaction.id())
 				.build()
 				.toUriString();
 	}

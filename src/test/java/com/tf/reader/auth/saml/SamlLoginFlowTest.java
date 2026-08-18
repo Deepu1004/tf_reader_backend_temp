@@ -18,7 +18,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-import com.tf.reader.auth.SecurityConfig;
+import com.tf.reader.auth.UserSecurityConfig;
 import com.tf.reader.auth.transaction.AuthTransaction;
 import com.tf.reader.auth.transaction.AuthTransactionStore;
 
@@ -49,7 +49,7 @@ class SamlLoginFlowTest {
 
 		MvcResult result = mockMvc.perform(get("/saml2/authenticate")
 						.queryParam("registrationId", "tf-reader")
-						.queryParam(SecurityConfig.AUTH_TRANSACTION_PARAM, transaction.id()))
+						.queryParam(UserSecurityConfig.AUTH_TRANSACTION_PARAM, transaction.id()))
 				.andExpect(status().is3xxRedirection())
 				.andReturn();
 
@@ -129,7 +129,7 @@ class SamlLoginFlowTest {
 		AuthTransaction transaction = transactions.open(institutionId);
 		String redirect = mockMvc.perform(get("/saml2/authenticate")
 						.queryParam("registrationId", "tf-reader")
-						.queryParam(SecurityConfig.AUTH_TRANSACTION_PARAM, transaction.id()))
+						.queryParam(UserSecurityConfig.AUTH_TRANSACTION_PARAM, transaction.id()))
 				.andReturn()
 				.getResponse()
 				.getRedirectedUrl();

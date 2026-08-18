@@ -41,7 +41,7 @@ import com.tf.reader.auth.security.CurrentUserJwtConverter;
  * </ul>
  */
 @Configuration
-public class SecurityConfig {
+public class UserSecurityConfig {
 
 	/**
 	 * The query parameter carrying our opaque transaction id into the SAML flow. Read on the
