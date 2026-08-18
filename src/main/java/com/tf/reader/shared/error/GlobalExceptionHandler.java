@@ -36,7 +36,9 @@ public class GlobalExceptionHandler {
 	/** A body that is absent or is not parseable JSON. */
 	@ExceptionHandler(HttpMessageNotReadableException.class)
 	public ResponseEntity<ApiError> handleUnreadableBody(HttpMessageNotReadableException exception) {
-		return respond(ErrorCode.VALIDATION_FAILED, "A JSON request body is required.");
+		log.warn("Failed to read JSON request body: {}", exception.getMessage(), exception);
+		String causeMessage = exception.getCause() != null ? exception.getCause().getMessage() : exception.getMessage();
+		return respond(ErrorCode.VALIDATION_FAILED, "A JSON request body is required: " + causeMessage);
 	}
 
 	/** Catch-all: any unhandled exception becomes a 500 with a traceId the team can grep for. */
@@ -44,7 +46,8 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ApiError> handleUnexpected(Exception exception) {
 		String traceId = TraceId.next();
 		log.error("Unhandled exception, traceId={}", traceId, exception);
-		return respond(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred.", traceId);
+		String message = exception.getMessage() != null ? exception.getMessage() : exception.getClass().getSimpleName();
+		return respond(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred: " + message, traceId);
 	}
 
 	private ResponseEntity<ApiError> respond(ErrorCode code, String message) {

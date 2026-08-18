@@ -101,7 +101,7 @@ public class UserSecurityConfig {
 	 * filter, not just for the ones written today.
 	 */
 	@Bean
-	@Order(2)
+	@Order(0)
 	SecurityFilterChain apiFilterChain(HttpSecurity http,
 			ApiAuthenticationEntryPoint apiEntryPoint,
 			CurrentUserJwtConverter currentUserConverter,
@@ -114,6 +114,7 @@ public class UserSecurityConfig {
 				.sessionManagement(session -> session
 						.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(requests -> requests
+						.requestMatchers("/api/v1/auth/dev-token").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/saml/start").permitAll()
 						.requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
 						.anyRequest().authenticated())
