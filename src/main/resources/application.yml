@@ -65,8 +65,6 @@ tnf:
     import: "optional:file:.env[.properties]"
   mongodb:
     uri: ${MONGODB_URI:}
-
-tnf:
   catalogue:
     base-url: http://localhost:8080
 tf:

@@ -13,7 +13,7 @@ package com.tf.reader.loan.entity;
  * <p>The translation lives in exactly one place (the create flow), so this enum stays a plain
  * vocabulary of our own domain rather than a mirror of the catalogue's.
  */
-public enum LicenceModel {
+public enum LicenseModel {
 
 	/** Unlimited concurrent access. No lease, no queue. {@code canPersist = true}. */
 	SUBSCRIPTION,

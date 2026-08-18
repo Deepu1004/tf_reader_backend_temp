@@ -9,7 +9,7 @@ import com.tf.reader.content.api.IndexUrl;
 import com.tf.reader.content.api.SignedUrl;
 
 /**
- * Response body for {@code POST /api/v1/reading-sessions} — the licence, the queue and the content
+ * Response body for {@code POST /api/v1/reading-sessions} — the license, the queue and the content
  * grant, in one response, for the app and the reader team.
  *
  * <p><b>{@code content}, {@code index} and {@code encryption} are the catalogue team's own records,
@@ -27,7 +27,7 @@ public record ReadingSessionResponse(
 		/** For correlating logs with a support report. Not a credential, and never presented back. */
 		String sessionId,
 
-		String licenceId,
+		String licenseId,
 		String itemId,
 
 		/** What the entitlement check returned: OPEN_ACCESS, ENTITLED_UNLIMITED, ENTITLED_CONCURRENT. */
@@ -38,7 +38,7 @@ public record ReadingSessionResponse(
 		 * OPEN_ACCESS, SUBSCRIPTION, ELITE. The two enums are both committed and they are not the
 		 * same, so the translation happens once, in the broker, and travels here.
 		 */
-		String licenceModel,
+		String licenseModel,
 
 		/** <b>Use this for the download button, not the tier.</b> The server refuses either way. */
 		boolean canPersist,

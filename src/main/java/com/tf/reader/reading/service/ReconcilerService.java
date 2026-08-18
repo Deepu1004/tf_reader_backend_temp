@@ -3,7 +3,7 @@ package com.tf.reader.reading.service;
 import org.springframework.stereotype.Service;
 
 /**
- * Rebuilds Redis lease state from Mongo active licences and offers.
+ * Rebuilds Redis lease state from Mongo active licenses and offers.
  */
 @Service
 public class ReconcilerService {

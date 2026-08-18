@@ -4,6 +4,7 @@ import java.time.Clock;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
@@ -21,7 +22,11 @@ import com.tf.reader.auth.token.JwtProperties;
 @Configuration
 public class JwtDecoderConfig {
 
+	// @Primary: the wokay common/security/JwtConfig adds two more JwtDecoder beans
+	// (admin + app, qualified). This one verifies the flambeau app token and is the
+	// default the auth apiFilterChain resolves. Qualified injections are unaffected.
 	@Bean
+	@Primary
 	public JwtDecoder jwtDecoder(JwtProperties properties, Clock clock) {
 		NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(properties.signingKey())
 				.macAlgorithm(MacAlgorithm.HS256)

@@ -420,7 +420,7 @@ paths:
         null means unlimited. We read it; we neither store nor derive it.
 
         `OPEN_ACCESS` needs no loan. Borrowing one is not an error and not a no-op — it
-        returns `201` with a loan carrying `licenceModel: OPEN_ACCESS` and no due date, so
+        returns `201` with a loan carrying `licenseModel: OPEN_ACCESS` and no due date, so
         the app has one shelf rather than two.
 
         The order inside is the correctness, and it is not negotiable: check entitlement,
@@ -455,7 +455,7 @@ paths:
                 itemId: item_42
                 userId: user_9c2
                 institutionId: inst_7f3
-                licenceModel: ELITE
+                licenseModel: ELITE
                 status: ACTIVE
                 borrowedAt: '2026-08-01T09:00:00Z'
                 dueAt: '2026-08-15T09:00:00Z'
@@ -474,7 +474,7 @@ paths:
                     itemId: item_42
                     userId: user_9c2
                     institutionId: inst_7f3
-                    licenceModel: ELITE
+                    licenseModel: ELITE
                     status: ACTIVE
                     borrowedAt: '2026-08-13T10:00:00Z'
                     dueAt: '2026-08-27T10:00:00Z'
@@ -487,7 +487,7 @@ paths:
                     itemId: item_ab6
                     userId: user_9c2
                     institutionId: inst_7f3
-                    licenceModel: OPEN_ACCESS
+                    licenseModel: OPEN_ACCESS
                     status: ACTIVE
                     borrowedAt: '2026-08-13T10:00:00Z'
                     canPersist: true
@@ -534,7 +534,7 @@ paths:
                     itemId: item_42
                     userId: user_9c2
                     institutionId: inst_7f3
-                    licenceModel: ELITE
+                    licenseModel: ELITE
                     status: ACTIVE
                     borrowedAt: '2026-08-13T10:00:00Z'
                     dueAt: '2026-08-27T10:00:00Z'
@@ -924,7 +924,7 @@ paths:
                 itemId: item_42
                 userId: user_9c2
                 institutionId: inst_7f3
-                licenceModel: ELITE
+                licenseModel: ELITE
                 status: ACTIVE
                 borrowedAt: '2026-08-13T10:00:00Z'
                 dueAt: '2026-08-27T10:00:00Z'
@@ -974,7 +974,7 @@ paths:
                   summary: Two of five copies free, nobody queued
                   value:
                     itemId: item_42
-                    licenceModel: ELITE
+                    licenseModel: ELITE
                     total: 5
                     available: 2
                     queueLength: 0
@@ -983,7 +983,7 @@ paths:
                   summary: None free, seven waiting
                   value:
                     itemId: item_42
-                    licenceModel: ELITE
+                    licenseModel: ELITE
                     total: 5
                     available: 0
                     queueLength: 7
@@ -992,7 +992,7 @@ paths:
                   summary: No copy limit, so no number to report
                   value:
                     itemId: item_ab6
-                    licenceModel: SUBSCRIPTION
+                    licenseModel: SUBSCRIPTION
                     serverTime: '2026-08-13T10:00:00Z'
         '401': { $ref: '#/components/responses/Unauthorized' }
 
@@ -1033,7 +1033,7 @@ paths:
                 loans:
                   - loanId: loan_7c1
                     itemId: item_42
-                    licenceModel: ELITE
+                    licenseModel: ELITE
                     status: ACTIVE
                     borrowedAt: '2026-08-13T10:00:00Z'
                     dueAt: '2026-08-27T10:00:00Z'
@@ -1449,7 +1449,7 @@ components:
         - LOAN_NOT_ACTIVE
         - OFFER_EXPIRED
 
-    LicenceModel:
+    LicenseModel:
       type: string
       description: >-
         wokay's vocabulary, which is what the app already speaks from the feeds. We receive
@@ -1599,7 +1599,7 @@ components:
       description: >-
         Possession. `dueAt` is absent for open access, which never expires, and the loan
         period for everything else comes from the entitlement rather than from our config.
-      required: [loanId, itemId, userId, licenceModel, status, borrowedAt, canPersist, serverTime]
+      required: [loanId, itemId, userId, licenseModel, status, borrowedAt, canPersist, serverTime]
       properties:
         loanId: { type: string, example: loan_7c1 }
         itemId: { type: string, example: item_42 }
@@ -1607,7 +1607,7 @@ components:
         institutionId:
           type: string
           description: Omitted for an individual subscriber.
-        licenceModel: { $ref: '#/components/schemas/LicenceModel' }
+        licenseModel: { $ref: '#/components/schemas/LicenseModel' }
         status: { $ref: '#/components/schemas/LoanStatus' }
         borrowedAt: { type: string, format: date-time }
         dueAt:
@@ -1808,11 +1808,11 @@ components:
       required: [itemId, serverTime]
       properties:
         itemId: { type: string }
-        licenceModel: { $ref: '#/components/schemas/LicenceModel' }
+        licenseModel: { $ref: '#/components/schemas/LicenseModel' }
         total:
           type: integer
           minimum: 1
-          description: Licensed copies. Absent unless the licence model is ELITE.
+          description: Licensed copies. Absent unless the license model is ELITE.
         available:
           type: integer
           minimum: 0

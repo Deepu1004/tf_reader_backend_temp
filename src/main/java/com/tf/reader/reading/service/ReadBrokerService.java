@@ -21,8 +21,8 @@ import com.tf.reader.content.api.ContentGrantRequest;
 import com.tf.reader.content.api.LoanProof;
 import com.tf.reader.hold.api.AvailabilityQuery;
 import com.tf.reader.hold.api.AvailabilitySnapshot;
-import com.tf.reader.loan.api.LicenceCommand;
-import com.tf.reader.loan.api.LicenceView;
+import com.tf.reader.loan.api.LicenseView;
+import com.tf.reader.loan.api.LicenseCommand;
 import com.tf.reader.reading.api.CopyLease;
 import com.tf.reader.reading.api.LeaseHandle;
 import com.tf.reader.reading.dto.ReadingSessionRequest;
@@ -40,7 +40,7 @@ public class ReadBrokerService {
 
 	private final EntitlementQuery entitlements;
 	private final ContentAccessGrant content;
-	private final LicenceCommand licences;
+	private final LicenseCommand licenses;
 	private final CopyLease lease;
 	private final AvailabilityQuery availability;
 	private final ReconcilerService reconciler;
@@ -51,7 +51,7 @@ public class ReadBrokerService {
 	public ReadBrokerService(
 			EntitlementQuery entitlements,
 			ContentAccessGrant content,
-			LicenceCommand licences,
+			LicenseCommand licenses,
 			CopyLease lease,
 			AvailabilityQuery availability,
 			ReconcilerService reconciler,
@@ -60,7 +60,7 @@ public class ReadBrokerService {
 			Clock clock) {
 		this.entitlements = entitlements;
 		this.content = content;
-		this.licences = licences;
+		this.licenses = licenses;
 		this.lease = lease;
 		this.availability = availability;
 		this.reconciler = reconciler;
@@ -99,8 +99,8 @@ public class ReadBrokerService {
 		}
 
 		try {
-			// ── Step 6: Create licence ──
-			LicenceView licence = licences.create(
+			// ── Step 6: Create license ──
+			LicenseView license = licenses.create(
 					subject,
 					request.itemId(),
 					decision.accessLevel(),
@@ -115,13 +115,13 @@ public class ReadBrokerService {
 					request.intent(),
 					deviceKey,
 					subject,
-					new LoanProof(licence.licenceId(), licence.expiresAt()),
+					new LoanProof(license.licenseId(), license.expiresAt()),
 					request.wantSearchIndex()
 			));
 
 			// ── Step 8: Extend claim to loan due date ──
-			if (copyLimited && !lease.extend(held, licence.expiresAt())) {
-				if (!lease.extend(held, licence.expiresAt())) {
+			if (copyLimited && !lease.extend(held, license.expiresAt())) {
+				if (!lease.extend(held, license.expiresAt())) {
 					reconciler.reconcile(request.itemId());
 				}
 			}
@@ -130,11 +130,11 @@ public class ReadBrokerService {
 			Instant now = clock.instant();
 			return new ReadingSessionResponse(
 					"sess_" + UUID.randomUUID().toString().substring(0, 8),
-					licence.licenceId(),
+					license.licenseId(),
 					request.itemId(),
 					decision.accessLevel().name(),
-					licenceModelOf(decision.accessLevel()),
-					licence.canPersist(),
+					licenseModelOf(decision.accessLevel()),
+					license.canPersist(),
 					null,
 					grant.content(),
 					grant.index(),
@@ -196,7 +196,7 @@ public class ReadBrokerService {
 		};
 	}
 
-	private static String licenceModelOf(AccessLevel level) {
+	private static String licenseModelOf(AccessLevel level) {
 		if (level == null) return "SUBSCRIPTION";
 		return switch (level) {
 			case OPEN_ACCESS -> "OPEN_ACCESS";

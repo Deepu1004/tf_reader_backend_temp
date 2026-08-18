@@ -21,6 +21,8 @@ public enum ErrorCode {
 	// Added by Deepak (reading) — the read broker refuses a full elite title with this
 	// code. Raise with Haripriya (common/error owner) rather than treating as settled.
 	NO_COPIES_AVAILABLE(HttpStatus.CONFLICT),
+	/** 409. Return attempted on a loan that is already RETURNED or EXPIRED. */
+	LOAN_NOT_ACTIVE(HttpStatus.CONFLICT),
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);
 
 	private final HttpStatus status;

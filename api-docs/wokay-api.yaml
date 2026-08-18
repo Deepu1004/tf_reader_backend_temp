@@ -86,11 +86,11 @@ info:
     Test for presence, not length.
 
     **`properties` appears on acquisition links and nowhere else.** Everything the UI
-    decides, `licenceModel` and `canPersist` and `copies`, lives there. These are our
+    decides, `licenseModel` and `canPersist` and `copies`, lives there. These are our
     extensions to OPDS: a generic reader ignores them, our app needs them.
 
     **One vocabulary for the three tiers: `OPEN_ACCESS`, `SUBSCRIPTION`, `ELITE`.** The
-    same three values appear in `licenceModel` in a feed, in `accessTier` on a book, and
+    same three values appear in `licenseModel` in a feed, in `accessTier` on a book, and
     in the `?accessTier=` filter. There is nothing to translate.
   contact:
     name: Team wokay
@@ -330,7 +330,7 @@ paths:
                             href: '{flambeauBaseUrl}/api/v1/loans?itemId=item_42'
                             type: application/json
                             properties:
-                              licenceModel: ELITE
+                              licenseModel: ELITE
                               indirectAcquisition: [{ type: application/pdf }]
                               copies: { total: 2 }
                               encrypted:
@@ -428,7 +428,7 @@ paths:
                         href: '{flambeauBaseUrl}/api/v1/loans?itemId=item_42'
                         type: application/json
                         properties:
-                          licenceModel: ELITE
+                          licenseModel: ELITE
                           indirectAcquisition: [{ type: application/pdf }]
                           copies: { total: 2 }
                           encrypted:
@@ -518,7 +518,7 @@ paths:
                             href: '{flambeauBaseUrl}/api/v1/loans?itemId=item_42'
                             type: application/json
                             properties:
-                              licenceModel: ELITE
+                              licenseModel: ELITE
                               indirectAcquisition: [{ type: application/pdf }]
                               copies: { total: 2 }
                               encrypted:
@@ -605,7 +605,7 @@ paths:
                     type: application/json
                     title: Borrow
                     properties:
-                      licenceModel: ELITE
+                      licenseModel: ELITE
                       indirectAcquisition: [{ type: application/pdf }]
                       copies: { total: 2 }
                       encrypted:
@@ -692,7 +692,7 @@ paths:
                         href: '{flambeauBaseUrl}/api/v1/content/item_ab6/access'
                         type: application/json
                         properties:
-                          licenceModel: OPEN_ACCESS
+                          licenseModel: OPEN_ACCESS
                           indirectAcquisition: [{ type: application/epub+zip }]
                           hasSearchIndex: true
                           canPersist: true
@@ -778,7 +778,7 @@ paths:
                         href: '{flambeauBaseUrl}/api/v1/content/item_ab6/access'
                         type: application/json
                         properties:
-                          licenceModel: OPEN_ACCESS
+                          licenseModel: OPEN_ACCESS
                           indirectAcquisition: [{ type: application/epub+zip }]
                           hasSearchIndex: true
                           canPersist: true
@@ -801,7 +801,7 @@ paths:
                         type: application/json
                         title: Available through your institution
                         properties:
-                          licenceModel: ELITE
+                          licenseModel: ELITE
                           availability: { state: unavailable }
                     images:
                       - href: https://cdn.tf/covers/item_42.jpg
@@ -864,7 +864,7 @@ paths:
                     type: application/json
                     title: Available through your institution
                     properties:
-                      licenceModel: ELITE
+                      licenseModel: ELITE
                       availability: { state: unavailable }
                 images:
                   - href: https://cdn.tf/covers/item_42.jpg
@@ -2355,7 +2355,7 @@ components:
       type: string
       description: |
         **The one tier vocabulary in the system.** An operator sets it on the book; the
-        feed reports it back as `licenceModel`; the `?accessTier=` filter takes it. Same
+        feed reports it back as `licenseModel`; the `?accessTier=` filter takes it. Same
         three values in all three places, so a client never translates.
 
         | Value | Badge | Primary button | Download | Copy limit |
@@ -2544,16 +2544,16 @@ components:
       type: object
       description: >-
         Extra facts about **an acquisition link**. Nothing else in the feed has these.
-        Switch on `licenceModel`.
-      required: [licenceModel]
+        Switch on `licenseModel`.
+      required: [licenseModel]
       properties:
-        licenceModel:
+        licenseModel:
           allOf:
             - $ref: '#/components/schemas/AccessTier'
           description: >-
             **Always present on an acquisition link, including open access.** Do not
             infer the tier from `rel` alone. `rel` says how the book is obtained,
-            `licenceModel` says what to render, and the client should read one field
+            `licenseModel` says what to render, and the client should read one field
             rather than two. Same three values as `accessTier` on the book and as the
             `?accessTier=` filter.
         indirectAcquisition:
@@ -2594,7 +2594,7 @@ components:
           description: |
             **`total` only.** We do not call flambeau while building a feed, so we cannot
             know how many copies are free. Fetch `available` from flambeau on the detail
-            screen. Absent unless `licenceModel` is `ELITE`.
+            screen. Absent unless `licenseModel` is `ELITE`.
           properties:
             total: { type: integer, minimum: 1 }
         encrypted:

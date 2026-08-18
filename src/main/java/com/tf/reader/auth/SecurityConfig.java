@@ -104,6 +104,11 @@ public class SecurityConfig {
 			ApiAuthenticationEntryPoint apiEntryPoint,
 			CurrentUserJwtConverter currentUserConverter) throws Exception {
 		return http
+				// Scoped to the flambeau app surface, so this is NOT an any-request chain — the
+				// wokay common/security deny-all remains the single catch-all, published last.
+				// (Two any-request chains is what Spring Security 7 refuses to start with.)
+				.securityMatcher("/api/v1/auth/**", "/api/v1/loans/**", "/api/v1/reading-sessions",
+						"/api/v1/holds/**", "/api/v1/library", "/api/v1/ops/**")
 				// The API is bearer-token based: there is no cookie-authorised state-changing
 				// endpoint for CSRF protection to protect.
 				.csrf(csrf -> csrf.disable())
