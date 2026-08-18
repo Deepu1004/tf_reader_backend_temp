@@ -13,19 +13,22 @@ import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
 
-
 @Component
 @RequiredArgsConstructor
 public class AdminAuditWriter {
 
-
-	private static final Set<String> SENSITIVE_KEYS =
-			Set.of("passwordhash", "password", "token", "accesstoken", "refreshtoken");
+	private static final Set<String> SENSITIVE_KEYS = Set.of("passwordhash", "password", "token", "accesstoken",
+			"refreshtoken");
 
 	private final AuditLogRepository auditLogRepository;
 
-	public void record(AuditLog.Action action, String entityType, String entityId,
-			Map<String, Object> before, Map<String, Object> after) {
+	public void record(AuditLog.Action action, String entityType, String entityId, Map<String, Object> before,
+			Map<String, Object> after) {
+		record(action, entityType, entityId, before, after, null);
+	}
+
+	public void record(AuditLog.Action action, String entityType, String entityId, Map<String, Object> before,
+			Map<String, Object> after, Map<String, Object> meta) {
 		AuditLog log = new AuditLog();
 		log.setActorId(currentAdminId());
 		log.setActorEmail(null);
@@ -34,6 +37,7 @@ public class AdminAuditWriter {
 		log.setEntityId(entityId);
 		log.setBefore(strip(before));
 		log.setAfter(strip(after));
+		log.setMeta(meta);
 		log.setAt(Instant.now());
 
 		auditLogRepository.save(log);
