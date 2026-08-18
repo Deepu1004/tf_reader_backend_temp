@@ -156,15 +156,20 @@ public class ReadBrokerService {
 		try {
 			AvailabilitySnapshot snapshot = availability.forItem(scope, itemId, copies != null ? copies : 1);
 			if (snapshot != null) {
-				detail = " " + snapshot.queueLength() + " reader(s) are waiting."
-						+ (snapshot.myPosition() != null
-							? " You are already " + snapshot.myPosition() + " in line."
-							: " You can join the queue at POST /api/v1/holds.");
+				Integer q = snapshot.queueLength();
+				if (q != null) {
+					detail = " " + q + " reader(s) are waiting.";
+					if (snapshot.myPosition() != null) {
+						detail += " You are already " + snapshot.myPosition() + " in line.";
+					} else {
+						detail += " You can join the queue at POST /api/v1/holds.";
+					}
+				}
 			}
 		} catch (RuntimeException ignored) {
 			// best effort only — never convert 409 into 500
 		}
-		return new ApiException(ErrorCode.CONTENT_NOT_READY, "All copies of this title are on loan." + detail);
+		return new ApiException(ErrorCode.NO_COPIES_AVAILABLE, "All copies of this title are on loan." + detail);
 	}
 
 	private byte[] decodeDeviceKey(String base64) {
