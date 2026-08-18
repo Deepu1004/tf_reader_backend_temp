@@ -1,11 +1,13 @@
 package com.tf.reader.auth;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.saml2.provider.service.registration.RelyingPartyRegistrationRepository;
 import org.springframework.security.saml2.provider.service.web.authentication.OpenSaml5AuthenticationRequestResolver;
 import org.springframework.security.saml2.provider.service.web.authentication.Saml2AuthenticationRequestResolver;
@@ -102,8 +104,10 @@ public class UserSecurityConfig {
 	@Order(2)
 	SecurityFilterChain apiFilterChain(HttpSecurity http,
 			ApiAuthenticationEntryPoint apiEntryPoint,
-			CurrentUserJwtConverter currentUserConverter) throws Exception {
+			CurrentUserJwtConverter currentUserConverter,
+			@Qualifier("jwtDecoder") JwtDecoder jwtDecoder) throws Exception {
 		return http
+				.securityMatcher("/api/v1/**")
 				// The API is bearer-token based: there is no cookie-authorised state-changing
 				// endpoint for CSRF protection to protect.
 				.csrf(csrf -> csrf.disable())
@@ -123,7 +127,7 @@ public class UserSecurityConfig {
 				// requests that carry a token.
 				.oauth2ResourceServer(oauth2 -> oauth2
 						.authenticationEntryPoint(apiEntryPoint)
-						.jwt(jwt -> jwt.jwtAuthenticationConverter(currentUserConverter)))
+						.jwt(jwt -> jwt.decoder(jwtDecoder).jwtAuthenticationConverter(currentUserConverter)))
 				// The app needs a 401 it can act on, not HTML it cannot parse.
 				.exceptionHandling(exceptions -> exceptions
 						.authenticationEntryPoint(apiEntryPoint))
