@@ -18,6 +18,9 @@ public enum ErrorCode {
 	CODE_TAKEN(HttpStatus.CONFLICT),
 	CONTENT_NOT_READY(HttpStatus.CONFLICT),
 	STALE_VERSION(HttpStatus.CONFLICT),
+	// Added by Deepak (reading) — the read broker refuses a full elite title with this
+	// code. Raise with Haripriya (common/error owner) rather than treating as settled.
+	NO_COPIES_AVAILABLE(HttpStatus.CONFLICT),
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);
 
 	private final HttpStatus status;
