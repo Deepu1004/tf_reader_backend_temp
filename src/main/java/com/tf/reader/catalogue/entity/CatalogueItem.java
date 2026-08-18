@@ -57,6 +57,12 @@ public class CatalogueItem {
 	private List<String> subjects;
 
 	private LocalDate publishedAt;
+
+
+	private Integer numberOfPages;
+
+	private Integer duration;
+
 	private String coverUrl;
 	private ContentType contentType;
 	private AccessTier accessTier;
