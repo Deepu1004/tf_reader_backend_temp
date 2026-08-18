@@ -1,19 +1,21 @@
 package com.tf.reader.hold.api;
 
-// Published contract: promote the next person when a copy frees up. Loan
-// calls this on every return and every expiry.
-//
-// PROPOSAL: the published shape (per the contract draft) is
-// promoteNext(scope, itemId) with no fromUserId. With five copies out, the
-// lease set has five rows and nothing says which one to rename — reassigning
-// without a "from" can't avoid a release-then-acquire gap where the copy
-// reads as free. Raise this before relying on it; until then this is the
-// signature hold's own code calls.
+/**
+ * Published contract: notify the hold module that a copy slot has been freed so it can
+ * promote the next waiter. Owned by the {@code hold} module; the {@code loan} module
+ * calls this after every return and after every expiry-sweep ending.
+ *
+ * <p>Promotion is best-effort from the loan module's perspective — if there is nobody
+ * waiting the hold module simply does nothing. Failures must not abort the return or
+ * sweep that triggered them.
+ */
 public interface HoldPromotion {
 
-    // fromUserId is the reader who just gave the copy back — null for a
-    // copy nobody currently holds (e.g. the very first grant). False means
-    // nobody was waiting, the copy is genuinely free. True means it has
-    // already been handed to the next reader in line.
-    boolean promoteNext(String scope, String itemId, String fromUserId);
+	/**
+	 * Signal that one copy slot for {@code itemId} is now free. The hold module will
+	 * promote the head of the wait queue (if any) into that slot and create their loan.
+	 *
+	 * @param itemId the title whose slot was just freed
+	 */
+	void promote(String itemId);
 }
