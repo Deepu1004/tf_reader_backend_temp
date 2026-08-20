@@ -3,6 +3,8 @@ package com.tf.reader.admin;
 import com.tf.reader.admin.dto.AdminInstitution;
 import com.tf.reader.admin.dto.InstitutionWrite;
 import com.tf.reader.admin.dto.SignInWrite;
+import com.tf.reader.admin.entity.AdminRole;
+import com.tf.reader.admin.security.AdminScopeAuthorizer;
 import com.tf.reader.admin.service.InstitutionAdminService;
 import com.tf.reader.catalogue.dto.BrandingView;
 import com.tf.reader.catalogue.entity.Branding;
@@ -19,11 +21,16 @@ import com.tf.reader.common.audit.AuditLog;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.common.model.RecordStatus;
+import com.tf.reader.common.security.TokenClaims;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 import java.time.Instant;
 import java.util.List;
@@ -71,7 +78,28 @@ class InstitutionAdminServiceTest {
 
         service = new InstitutionAdminService(
                 institutions, adminRepository, entitlements, summaryService, urlBuilder,
-                auditWriter, versionBumper);
+                auditWriter, versionBumper, new AdminScopeAuthorizer());
+
+        actingAs(AdminRole.SUPER_ADMIN, null);
+    }
+
+    @AfterEach
+    void clearContext() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private static void actingAs(AdminRole role, String institutionId) {
+        Jwt.Builder tokenBuilder = Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .subject("adm_test")
+                .claim(TokenClaims.ROLE, role.name())
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(3600));
+        if (institutionId != null) {
+            tokenBuilder.claim(TokenClaims.SCOPE_INSTITUTION_ID, institutionId);
+        }
+        SecurityContextHolder.getContext()
+                .setAuthentication(new TestingAuthenticationToken(tokenBuilder.build(), null, "ROLE_ADMIN"));
     }
 
     // ------------------------------------------------------------------------------------ create
@@ -96,7 +124,8 @@ class InstitutionAdminServiceTest {
         ArgumentCaptor<Map<String, Object>> before = ArgumentCaptor.forClass(Map.class);
         ArgumentCaptor<Map<String, Object>> after = ArgumentCaptor.forClass(Map.class);
         verify(auditWriter, times(1))
-                .record(eq(AuditLog.Action.CREATE), eq("INSTITUTION"), anyString(), before.capture(), after.capture());
+                .record(any(), eq(AuditLog.Action.CREATE), eq("INSTITUTION"), anyString(), before.capture(),
+                        after.capture());
 
         assertThat(before.getValue()).isEmpty();
         assertThat(after.getValue()).containsEntry("code", "oxford");
@@ -160,7 +189,7 @@ class InstitutionAdminServiceTest {
 
         ArgumentCaptor<Map<String, Object>> before = ArgumentCaptor.forClass(Map.class);
         ArgumentCaptor<Map<String, Object>> after = ArgumentCaptor.forClass(Map.class);
-        verify(auditWriter).record(eq(AuditLog.Action.UPDATE), eq("INSTITUTION"), eq("inst_ox"),
+        verify(auditWriter).record(any(), eq(AuditLog.Action.UPDATE), eq("INSTITUTION"), eq("inst_ox"),
                 before.capture(), after.capture());
 
         assertThat(before.getValue()).containsEntry("name", "Old Name");
@@ -186,7 +215,7 @@ class InstitutionAdminServiceTest {
 
         ArgumentCaptor<Map<String, Object>> before = ArgumentCaptor.forClass(Map.class);
         ArgumentCaptor<Map<String, Object>> after = ArgumentCaptor.forClass(Map.class);
-        verify(auditWriter).record(eq(AuditLog.Action.UPDATE), eq("INSTITUTION"), eq("inst_ox"),
+        verify(auditWriter).record(any(), eq(AuditLog.Action.UPDATE), eq("INSTITUTION"), eq("inst_ox"),
                 before.capture(), after.capture());
 
         assertThat(after.getValue()).containsEntry("brandingLogoUrl", "https://cdn.tf/logos/new.png");
@@ -206,7 +235,7 @@ class InstitutionAdminServiceTest {
 
         service.setStatus("inst_ox", RecordStatus.SUSPENDED, "budget review");
 
-        verify(auditWriter).record(
+        verify(auditWriter).record(any(),
                 eq(AuditLog.Action.STATUS), eq("INSTITUTION"), eq("inst_ox"),
                 eq(Map.of("status", RecordStatus.ACTIVE)),
                 eq(Map.of("status", RecordStatus.SUSPENDED, "reason", "budget review")));
@@ -222,7 +251,7 @@ class InstitutionAdminServiceTest {
 
         service.setStatus("inst_ox", RecordStatus.ACTIVE, null);
 
-        verify(auditWriter).record(
+        verify(auditWriter).record(any(),
                 eq(AuditLog.Action.STATUS), eq("INSTITUTION"), eq("inst_ox"),
                 eq(Map.of("status", RecordStatus.SUSPENDED)),
                 eq(Map.of("status", RecordStatus.ACTIVE)));

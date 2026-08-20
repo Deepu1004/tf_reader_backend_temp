@@ -15,12 +15,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+
+import com.tf.reader.TestcontainersConfiguration;
 
 /**
  * Deny-by-default, asserted over <b>every route the application maps</b> rather than over a list
@@ -39,6 +42,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  */
 @SpringBootTest(properties = "tnf.auth.jwt.secret=" + AuthorizationCoverageTest.SECRET)
 @AutoConfigureMockMvc
+@Import(TestcontainersConfiguration.class)
 class AuthorizationCoverageTest {
 
 	static final String SECRET = "a-test-only-signing-secret-of-sufficient-length-0123456789";
@@ -51,7 +55,17 @@ class AuthorizationCoverageTest {
 	 */
 	private static final Set<String> PUBLIC_ROUTES = Set.of(
 			// You cannot present a token before you have signed in.
-			"POST /api/v1/auth/saml/start");
+			"POST /api/v1/auth/saml/start",
+			// Admin login is how an operator obtains a token in the first place.
+			"POST /api/admin/v1/auth/login",
+			// Refresh and logout prefer the adminRefresh cookie over a bearer token, and must
+			// still work with a stale or absent Authorization header - see shared.md.
+			"POST /api/admin/v1/auth/refresh",
+			"POST /api/admin/v1/auth/logout",
+			// Public institution discovery, so a reader can choose where to sign in before they
+			// hold a token - see shared.md.
+			"GET /api/v1/institutions",
+			"GET /api/v1/institutions/{institutionId}");
 
 	/** Only our own controllers. Spring's {@code /error} forward target is not ours to protect. */
 	private static final String OUR_PACKAGE = "com.tf.reader";

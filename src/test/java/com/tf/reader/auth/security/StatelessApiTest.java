@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -25,6 +26,7 @@ import org.springframework.security.saml2.provider.service.authentication.Saml2R
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import com.tf.reader.TestcontainersConfiguration;
 import com.tf.reader.auth.model.TnfUser;
 import com.tf.reader.auth.model.UserType;
 import com.tf.reader.auth.token.JwtProperties;
@@ -47,6 +49,7 @@ import com.tf.reader.auth.token.JwtTokenService;
  */
 @SpringBootTest(properties = "tnf.auth.jwt.secret=" + StatelessApiTest.SECRET)
 @AutoConfigureMockMvc
+@Import(TestcontainersConfiguration.class)
 class StatelessApiTest {
 
 	static final String SECRET = "a-test-only-signing-secret-of-sufficient-length-0123456789";
@@ -69,12 +72,15 @@ class StatelessApiTest {
 
 	@Test
 	void aSamlSessionCannotReachAnyOtherProtectedRouteEither() throws Exception {
-		// The rule has to hold for routes nobody has written yet - this filter chain goes in front
-		// of three other modules, and their endpoints will not each re-check how identity arrived.
+		// The rule has to hold for routes nobody has written yet. These three sit under
+		// common.security.SecurityConfig's own app-api chain, not this module's, so the refusal
+		// carries that chain's code (UNAUTHENTICATED) rather than this one's finer-grained
+		// TOKEN_MISSING - the property under test is that the session cannot substitute for a
+		// bearer token anywhere, not which chain's vocabulary the 401 uses.
 		for (String path : List.of("/api/v1/loans", "/api/v1/library", "/api/v1/admin/reconcile")) {
 			mockMvc.perform(get(path).session(sessionAuthenticatedBySaml()))
 					.andExpect(status().isUnauthorized())
-					.andExpect(jsonPath("$.code").value("TOKEN_MISSING"));
+					.andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
 		}
 	}
 

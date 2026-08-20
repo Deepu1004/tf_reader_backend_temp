@@ -27,8 +27,8 @@ import com.tf.reader.auth.token.JwtProperties;
 import com.tf.reader.auth.token.JwtTokenService;
 import com.tf.reader.auth.transaction.AuthTransaction;
 import com.tf.reader.auth.transaction.AuthTransactionStore;
-import com.tf.reader.shared.error.ApiException;
-import com.tf.reader.shared.error.ErrorCode;
+import com.tf.reader.common.error.ApiException;
+import com.tf.reader.common.error.ErrorCode;
 
 /**
  * The join between a validated SAML identity and the institution our backend chose.
@@ -87,7 +87,7 @@ class SamlAuthenticationServiceTest {
 		assertThatThrownBy(() -> service.complete(samlAuthentication("john.doe@example.com"),
 				"authTxn_invented"))
 				.isInstanceOf(ApiException.class)
-				.extracting(thrown -> ((ApiException) thrown).code())
+				.extracting(thrown -> ((ApiException) thrown).getCode())
 				.isEqualTo(ErrorCode.SAML_AUTHENTICATION_FAILED);
 	}
 
@@ -99,7 +99,7 @@ class SamlAuthenticationServiceTest {
 
 		assertThatThrownBy(() -> service.complete(authentication, null))
 				.isInstanceOf(ApiException.class)
-				.extracting(thrown -> ((ApiException) thrown).code())
+				.extracting(thrown -> ((ApiException) thrown).getCode())
 				.isEqualTo(ErrorCode.SAML_AUTHENTICATION_FAILED);
 	}
 
@@ -111,7 +111,7 @@ class SamlAuthenticationServiceTest {
 
 		assertThatThrownBy(() -> service.complete(authentication, transaction.id()))
 				.isInstanceOf(ApiException.class)
-				.extracting(thrown -> ((ApiException) thrown).code())
+				.extracting(thrown -> ((ApiException) thrown).getCode())
 				.isEqualTo(ErrorCode.SAML_AUTHENTICATION_FAILED);
 	}
 
@@ -122,7 +122,7 @@ class SamlAuthenticationServiceTest {
 
 		assertThatThrownBy(() -> service.complete(notSaml, relayState))
 				.isInstanceOf(ApiException.class)
-				.extracting(thrown -> ((ApiException) thrown).code())
+				.extracting(thrown -> ((ApiException) thrown).getCode())
 				.isEqualTo(ErrorCode.SAML_AUTHENTICATION_FAILED);
 	}
 
@@ -133,7 +133,7 @@ class SamlAuthenticationServiceTest {
 
 		assertThatThrownBy(() -> service.complete(jane, dsu))
 				.isInstanceOf(ApiException.class)
-				.extracting(thrown -> ((ApiException) thrown).code())
+				.extracting(thrown -> ((ApiException) thrown).getCode())
 				.isEqualTo(ErrorCode.USER_NOT_PROVISIONED);
 	}
 

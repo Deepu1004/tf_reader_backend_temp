@@ -3,6 +3,8 @@ package com.tf.reader.admin;
 import com.tf.reader.admin.dto.PublisherView;
 import com.tf.reader.admin.dto.PublisherWrite;
 import com.tf.reader.admin.dto.StatusChange;
+import com.tf.reader.admin.entity.AdminRole;
+import com.tf.reader.admin.security.AdminScopeAuthorizer;
 import com.tf.reader.admin.service.PublisherAdminService;
 import com.tf.reader.catalogue.entity.Publisher;
 import com.tf.reader.catalogue.repository.BookCollectionRepository;
@@ -14,14 +16,20 @@ import com.tf.reader.common.audit.AuditLog;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.common.model.RecordStatus;
+import com.tf.reader.common.page.PageQuery;
 import com.tf.reader.common.page.PageResponse;
+import com.tf.reader.common.security.TokenClaims;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 import java.time.Instant;
 import java.util.List;
@@ -63,7 +71,28 @@ class PublisherAdminServiceTest {
 		mongo = mock(MongoTemplate.class);
 
 		service = new PublisherAdminService(publisherRepository, catalogueItemRepository, bookCollectionRepository,
-				versionBumper, auditWriter, mongo);
+				versionBumper, auditWriter, mongo, new AdminScopeAuthorizer());
+
+		actingAs(AdminRole.SUPER_ADMIN, null);
+	}
+
+	@AfterEach
+	void clearContext() {
+		SecurityContextHolder.clearContext();
+	}
+
+	private static void actingAs(AdminRole role, String publisherId) {
+		Jwt.Builder tokenBuilder = Jwt.withTokenValue("token")
+				.header("alg", "none")
+				.subject("adm_test")
+				.claim(TokenClaims.ROLE, role.name())
+				.issuedAt(Instant.now())
+				.expiresAt(Instant.now().plusSeconds(3600));
+		if (publisherId != null) {
+			tokenBuilder.claim(TokenClaims.SCOPE_PUBLISHER_ID, publisherId);
+		}
+		SecurityContextHolder.getContext()
+				.setAuthentication(new TestingAuthenticationToken(tokenBuilder.build(), null, "ROLE_ADMIN"));
 	}
 
 	private static Publisher routledge() {
@@ -104,7 +133,7 @@ class PublisherAdminServiceTest {
 		assertThat(view.code()).isEqualTo("ROUTLEDGE");
 
 		ArgumentCaptor<AuditLog.Action> actionCaptor = ArgumentCaptor.forClass(AuditLog.Action.class);
-		verify(auditWriter).record(actionCaptor.capture(), eq("PUBLISHER"), any(), eq(null), any());
+		verify(auditWriter).record(any(), actionCaptor.capture(), eq("PUBLISHER"), any(), eq(null), any());
 		assertThat(actionCaptor.getValue()).isEqualTo(AuditLog.Action.CREATE);
 	}
 
@@ -161,7 +190,7 @@ class PublisherAdminServiceTest {
 
 		assertThat(view.name()).isEqualTo("Routledge Ltd");
 
-		verify(auditWriter).record(eq(AuditLog.Action.UPDATE), eq("PUBLISHER"), any(), any(), any());
+		verify(auditWriter).record(any(), eq(AuditLog.Action.UPDATE), eq("PUBLISHER"), any(), any(), any());
 	}
 
 	// ---------------------------------------------------------------- status
@@ -177,7 +206,7 @@ class PublisherAdminServiceTest {
 		service.changeStatus("pub_r1", new StatusChange(RecordStatus.SUSPENDED, "contract under review"));
 
 		ArgumentCaptor<java.util.Map<String, Object>> metaCaptor = ArgumentCaptor.forClass(java.util.Map.class);
-		verify(auditWriter).record(eq(AuditLog.Action.STATUS), eq("PUBLISHER"), any(), any(), any(),
+		verify(auditWriter).record(any(), eq(AuditLog.Action.STATUS), eq("PUBLISHER"), any(), any(), any(),
 				metaCaptor.capture());
 		assertThat(metaCaptor.getValue()).containsEntry("reason", "contract under review");
 
@@ -214,20 +243,19 @@ class PublisherAdminServiceTest {
 
 	// ---------------------------------------------------------------- list
 
-	@Test
-	@DisplayName("list page=-1 throws VALIDATION_FAILED")
-	void listNegativePageThrows() {
-		assertThatThrownBy(() -> service.list(null, null, -1, null)).isInstanceOf(ApiException.class)
-				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
-	}
+	// Page/size bounds are validated at the edge by PageQueryArgumentResolver, not here -
+	// see PageQueryArgumentResolverTest.
 
 	@Test
-	@DisplayName("list size=0 throws VALIDATION_FAILED")
-	void listSizeZeroThrows() {
-		when(mongo.count(any(Query.class), eq(Publisher.class))).thenReturn(0L);
-		when(mongo.find(any(Query.class), eq(Publisher.class))).thenReturn(List.of());
+	@DisplayName("list returns the page and size it was asked for")
+	void listReturnsThePageRequested() {
+		when(mongo.count(any(Query.class), eq(Publisher.class))).thenReturn(1L);
+		when(mongo.find(any(Query.class), eq(Publisher.class))).thenReturn(List.of(routledge()));
 
-		assertThatThrownBy(() -> service.list(null, null, null, 0)).isInstanceOf(ApiException.class)
-				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+		PageResponse<PublisherView> result = service.list(null, null, new PageQuery(0, 20));
+
+		assertThat(result.page()).isEqualTo(0);
+		assertThat(result.size()).isEqualTo(20);
+		assertThat(result.total()).isEqualTo(1);
 	}
 }

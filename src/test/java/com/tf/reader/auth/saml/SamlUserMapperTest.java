@@ -13,8 +13,8 @@ import org.springframework.security.saml2.provider.service.authentication.Saml2R
 import com.tf.reader.auth.model.TnfUser;
 import com.tf.reader.auth.model.UserType;
 import com.tf.reader.auth.repository.MockUserRepository;
-import com.tf.reader.shared.error.ApiException;
-import com.tf.reader.shared.error.ErrorCode;
+import com.tf.reader.common.error.ApiException;
+import com.tf.reader.common.error.ErrorCode;
 
 /**
  * The mapper is where "one IdP, many institutions" is actually decided, so these tests are
@@ -71,7 +71,7 @@ class SamlUserMapperTest {
 		// Jane exists, but only at Imperial. Authenticated is not the same as provisioned.
 		assertThatThrownBy(() -> mapper.map(assertion("jane.roe@example.com"), "inst_dsu"))
 				.isInstanceOf(ApiException.class)
-				.extracting(thrown -> ((ApiException) thrown).code())
+				.extracting(thrown -> ((ApiException) thrown).getCode())
 				.isEqualTo(ErrorCode.USER_NOT_PROVISIONED);
 	}
 
@@ -81,7 +81,7 @@ class SamlUserMapperTest {
 		// vouching for an identity does not make it one of our users.
 		assertThatThrownBy(() -> mapper.map(assertion("stranger@example.com"), "inst_imperial"))
 				.isInstanceOf(ApiException.class)
-				.extracting(thrown -> ((ApiException) thrown).code())
+				.extracting(thrown -> ((ApiException) thrown).getCode())
 				.isEqualTo(ErrorCode.USER_NOT_PROVISIONED);
 	}
 
@@ -89,7 +89,7 @@ class SamlUserMapperTest {
 	void refusesAnUnknownInstitution() {
 		assertThatThrownBy(() -> mapper.map(assertion("john.doe@example.com"), "inst_nowhere"))
 				.isInstanceOf(ApiException.class)
-				.extracting(thrown -> ((ApiException) thrown).code())
+				.extracting(thrown -> ((ApiException) thrown).getCode())
 				.isEqualTo(ErrorCode.USER_NOT_PROVISIONED);
 	}
 
@@ -97,7 +97,7 @@ class SamlUserMapperTest {
 	void refusesAnAssertionWithNoIdentityAttributeAtAll() {
 		assertThatThrownBy(() -> mapper.map(new StubAssertion("", Map.of()), "inst_imperial"))
 				.isInstanceOf(ApiException.class)
-				.extracting(thrown -> ((ApiException) thrown).code())
+				.extracting(thrown -> ((ApiException) thrown).getCode())
 				.isEqualTo(ErrorCode.SAML_AUTHENTICATION_FAILED);
 	}
 

@@ -36,8 +36,8 @@ import com.tf.reader.common.audit.AdminAuditWriter;
 import com.tf.reader.common.audit.AuditLog;
 import com.tf.reader.common.security.TokenClaims;
 import com.tf.reader.admin.service.CatalogueItemAdminService;
-import com.tf.reader.shared.error.ApiException;
-import com.tf.reader.shared.error.ErrorCode;
+import com.tf.reader.common.error.ApiException;
+import com.tf.reader.common.error.ErrorCode;
 
 /** Business rules for the four catalogue item admin operations, tested without a servlet or a database. */
 class CatalogueItemAdminServiceTest {
@@ -102,14 +102,14 @@ class CatalogueItemAdminServiceTest {
 
 		assertThat(view.contentState()).isEqualTo(ContentState.NONE);
 		assertThat(view.status()).isEqualTo(ItemStatus.DRAFT);
-		verify(auditWriter).record(eq(AuditLog.Action.CREATE), eq("CATALOGUE_ITEM"), any(), eq(null), any());
+		verify(auditWriter).record(any(), eq(AuditLog.Action.CREATE), eq("CATALOGUE_ITEM"), any(), eq(null), any());
 	}
 
 	@Test
 	@DisplayName("create AUDIO without duration throws VALIDATION_FAILED")
 	void createAudioWithoutDurationThrows() {
 		assertThatThrownBy(() -> service.create(audioWrite("pub_rtlg", null))).isInstanceOf(ApiException.class)
-				.satisfies(e -> assertThat(((ApiException) e).code()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
 		verify(catalogueItemRepository, never()).save(any());
 	}
 
@@ -120,7 +120,7 @@ class CatalogueItemAdminServiceTest {
 				List.of(), null, ContentType.PDF, AccessTier.ELITE, List.of(), "en", null, null, 100, null, null);
 
 		assertThatThrownBy(() -> service.create(write)).isInstanceOf(ApiException.class)
-				.satisfies(e -> assertThat(((ApiException) e).code()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
 	}
 
 	@Test
@@ -130,7 +130,7 @@ class CatalogueItemAdminServiceTest {
 				.thenThrow(new IllegalArgumentException("CatalogueItem.publisherId does not reference an existing publisher"));
 
 		assertThatThrownBy(() -> service.create(pdfWrite("does-not-exist"))).isInstanceOf(ApiException.class)
-				.satisfies(e -> assertThat(((ApiException) e).code()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
 	}
 
 	@Test
@@ -152,7 +152,7 @@ class CatalogueItemAdminServiceTest {
 		actingAs(AdminRole.PUBLISHER_ADMIN, "pub_mine");
 
 		assertThatThrownBy(() -> service.create(pdfWrite("pub_other"))).isInstanceOf(ApiException.class)
-				.satisfies(e -> assertThat(((ApiException) e).code()).isEqualTo(ErrorCode.FORBIDDEN_ROLE));
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.FORBIDDEN_ROLE));
 		verify(catalogueItemRepository, never()).save(any());
 	}
 
@@ -164,7 +164,7 @@ class CatalogueItemAdminServiceTest {
 		when(catalogueItemRepository.findById("item_nope")).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> service.get("item_nope")).isInstanceOf(ApiException.class)
-				.satisfies(e -> assertThat(((ApiException) e).code()).isEqualTo(ErrorCode.NOT_FOUND));
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.NOT_FOUND));
 	}
 
 	@Test
@@ -192,7 +192,7 @@ class CatalogueItemAdminServiceTest {
 		when(catalogueItemRepository.findById("item_42")).thenReturn(Optional.of(pdfItem("item_42", "pub_other")));
 
 		assertThatThrownBy(() -> service.get("item_42")).isInstanceOf(ApiException.class)
-				.satisfies(e -> assertThat(((ApiException) e).code()).isEqualTo(ErrorCode.FORBIDDEN_ROLE));
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.FORBIDDEN_ROLE));
 	}
 
 	// ---------------------------------------------------------------- update
@@ -210,7 +210,7 @@ class CatalogueItemAdminServiceTest {
 
 		assertThat(view.numberOfPages()).isEqualTo(240);
 		assertThat(view.contentState()).isEqualTo(ContentState.READY);
-		verify(auditWriter).record(eq(AuditLog.Action.UPDATE), eq("CATALOGUE_ITEM"), any(), any(), any());
+		verify(auditWriter).record(any(), eq(AuditLog.Action.UPDATE), eq("CATALOGUE_ITEM"), any(), any(), any());
 	}
 
 	@Test
@@ -246,7 +246,7 @@ class CatalogueItemAdminServiceTest {
 		when(catalogueItemRepository.findById("item_nope")).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> service.update("item_nope", pdfWrite("pub_rtlg"))).isInstanceOf(ApiException.class)
-				.satisfies(e -> assertThat(((ApiException) e).code()).isEqualTo(ErrorCode.NOT_FOUND));
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.NOT_FOUND));
 	}
 
 	// ---------------------------------------------------------------- list
@@ -256,7 +256,7 @@ class CatalogueItemAdminServiceTest {
 	void listNegativePageThrows() {
 		assertThatThrownBy(() -> service.list(null, null, null, null, null, null, -1, null))
 				.isInstanceOf(ApiException.class)
-				.satisfies(e -> assertThat(((ApiException) e).code()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
 	}
 
 	@Test
@@ -275,7 +275,7 @@ class CatalogueItemAdminServiceTest {
 	void publisherAdminAskingForAnotherPublisherIsDenied() {
 		assertThatThrownBy(() -> service.list("pub_mine", "pub_other", null, null, null, null, null, null))
 				.isInstanceOf(ApiException.class)
-				.satisfies(e -> assertThat(((ApiException) e).code()).isEqualTo(ErrorCode.FORBIDDEN_ROLE));
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.FORBIDDEN_ROLE));
 	}
 
 	// ---------------------------------------------------------------- fixtures

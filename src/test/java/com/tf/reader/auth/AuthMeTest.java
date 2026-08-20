@@ -17,12 +17,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.tf.reader.TestcontainersConfiguration;
 import com.tf.reader.auth.model.TnfUser;
 import com.tf.reader.auth.model.UserType;
 import com.tf.reader.auth.security.TnfJwtValidator;
@@ -37,6 +39,7 @@ import com.tf.reader.auth.token.JwtTokenService;
  */
 @SpringBootTest(properties = "tnf.auth.jwt.secret=" + AuthMeTest.SECRET)
 @AutoConfigureMockMvc
+@Import(TestcontainersConfiguration.class)
 class AuthMeTest {
 
 	static final String SECRET = "a-test-only-signing-secret-of-sufficient-length-0123456789";
