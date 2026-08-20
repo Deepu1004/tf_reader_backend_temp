@@ -3,8 +3,8 @@ package com.tf.reader.reading.service;
 import org.springframework.stereotype.Service;
 
 import com.tf.reader.catalogue.api.AccessLevel;
-import com.tf.reader.shared.error.ApiException;
-import com.tf.reader.shared.error.ErrorCode;
+import com.tf.reader.common.error.ApiException;
+import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.content.api.Format;
 import com.tf.reader.content.api.Intent;
 
