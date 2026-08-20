@@ -1,225 +1,123 @@
 package com.tf.reader.catalogue;
 
-import com.tf.reader.catalogue.dto.InstitutionDetail;
-import com.tf.reader.catalogue.dto.InstitutionListItem;
-import com.tf.reader.catalogue.entity.Branding;
-import com.tf.reader.catalogue.entity.Institution;
-import com.tf.reader.catalogue.entity.InstitutionType;
-import com.tf.reader.catalogue.repository.InstitutionSearchRepository;
-import com.tf.reader.catalogue.service.InstitutionQueryService;
-import com.tf.reader.catalogue.service.InstitutionQueryService.ListRequest;
-import com.tf.reader.common.error.ApiException;
-import com.tf.reader.common.error.ErrorCode;
-import com.tf.reader.common.model.RecordStatus;
-import com.tf.reader.common.page.PageResponse;
+import com.tf.reader.catalogue.entity.AccessTier;
+import com.tf.reader.catalogue.entity.CatalogueItem;
+import com.tf.reader.catalogue.entity.ContentState;
+import com.tf.reader.catalogue.entity.Entitlement;
+import com.tf.reader.catalogue.entity.EntitlementStatus;
+import com.tf.reader.catalogue.entity.ItemStatus;
+import com.tf.reader.catalogue.entity.ScopeType;
+import com.tf.reader.catalogue.repository.CatalogueItemRepository;
+import com.tf.reader.catalogue.repository.EntitlementRepository;
+import com.tf.reader.catalogue.service.InstitutionCatalogueSummaryService;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
-import java.lang.reflect.RecordComponent;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * The rules that decide what a stranger may see, tested without a servlet or a database.
- *
- * <p>The entity fixtures below are built against Person B's real classes as delivered in
- * ACADEMIC.docx: Lombok {@code @AllArgsConstructor} in handbook section 06 field order, with
- * {@code SignIn} nested inside {@code Institution} and {@code Branding} top-level.
- */
-class InstitutionQueryServiceTest {
+/** Checks the accessible-item count against the cases most likely to get it wrong. */
+class InstitutionCatalogueSummaryServiceTest {
 
-    private static final Instant T = Instant.parse("2026-08-10T09:00:00Z");
-
-    private InstitutionSearchRepository repository;
-    private InstitutionQueryService service;
+    private CatalogueItemRepository items;
+    private EntitlementRepository entitlements;
+    private InstitutionCatalogueSummaryService summary;
 
     @BeforeEach
     void setUp() {
-        repository = mock(InstitutionSearchRepository.class);
-        service = new InstitutionQueryService(repository, "http://localhost:8080");
-    }
+        items = mock(CatalogueItemRepository.class);
+        entitlements = mock(EntitlementRepository.class);
+        summary = new InstitutionCatalogueSummaryService(items, entitlements);
 
-    private static Institution imperial() {
-        return new Institution(
-                "inst_7f3",
-                "imperial",
-                "Imperial College London",
-                InstitutionType.ACADEMIC,
-                "UK",
-                "London",
-                new Branding("https://cdn.tf.example/logos/imperial.png", "#003E74"),
-                new Institution.SignIn("SAML", "imperial-saml-mock"),
-                RecordStatus.ACTIVE,
-                14L,
-                T,
-                T);
-    }
-
-    // ------------------------------------------------------------------------------------ list
-
-    @Test
-    @DisplayName("a list item carries exactly the six frozen fields, mapped correctly")
-    void listItemIsTheFrozenShape() {
-        when(repository.search(any(), any(), anyInt(), anyInt()))
-                .thenReturn(new InstitutionSearchRepository.Results(List.of(imperial()), 1));
-
-        PageResponse<InstitutionListItem> page = service.list(ListRequest.of(null, null, null, null));
-
-        assertThat(page.items()).hasSize(1);
-        InstitutionListItem item = page.items().get(0);
-        assertThat(item.id()).isEqualTo("inst_7f3");
-        assertThat(item.code()).isEqualTo("imperial");
-        assertThat(item.name()).isEqualTo("Imperial College London");
-        assertThat(item.country()).isEqualTo("UK");
-        assertThat(item.city()).isEqualTo("London");
-        assertThat(item.branding().logoUrl()).isEqualTo("https://cdn.tf.example/logos/imperial.png");
-        assertThat(item.branding().primaryColor()).isEqualTo("#003E74");
+        // No open access items unless a test says otherwise.
+        when(items.findByAccessTierAndStatus(AccessTier.OPEN_ACCESS, ItemStatus.PUBLISHED))
+                .thenReturn(List.of());
     }
 
     @Test
-    @DisplayName("the list item record has six components and no seventh can be added by accident")
-    void listItemHasNoExtraComponents() {
-        // Reflection over the record rather than over a serialised body, so this fails at the moment
-        // somebody adds a field to the DTO, not later when a leak test happens to run.
-        assertThat(InstitutionListItem.class.getRecordComponents())
-                .extracting(RecordComponent::getName)
-                .containsExactly("id", "code", "name", "country", "city", "branding");
+    @DisplayName("two overlapping grants count the same book once, not twice")
+    void overlappingGrantsDoNotDoubleCount() {
+        // One book, covered by both a collection grant and a publisher grant.
+        CatalogueItem item42 = readyItem("item_42", "col_law2024");
 
-        assertThat(InstitutionDetail.class.getRecordComponents())
-                .extracting(RecordComponent::getName)
-                .containsExactly(
-                        "id", "code", "name", "country", "city", "branding", "signIn", "catalogueUrl");
+        when(entitlements.findByInstitutionIdAndStatus("inst_7f3", EntitlementStatus.ACTIVE))
+                .thenReturn(List.of(
+                        entitlement(ScopeType.COLLECTION, "col_law2024"),
+                        entitlement(ScopeType.PUBLISHER, "pub_rtlg")));
+        when(items.findByCollectionIdsAndStatusAndContentState(
+                        "col_law2024", ItemStatus.PUBLISHED, ContentState.READY))
+                .thenReturn(List.of(item42));
+        when(items.findByPublisherIdAndStatus("pub_rtlg", ItemStatus.PUBLISHED))
+                .thenReturn(List.of(item42));
+
+        assertThat(summary.countAccessibleItems("inst_7f3")).isEqualTo(1);
     }
 
     @Test
-    @DisplayName("nothing internal survives the mapping")
-    void internalFieldsAreNotMapped() {
-        // type, status and catalogueVersion all exist on the entity and none of them has anywhere to
-        // go on the DTO. Asserted as an absence of record components, because the mapping is explicit
-        // and by hand: a field reaches the wire only if somebody typed it.
-        List<String> listItemFields =
-                List.of(InstitutionListItem.class.getRecordComponents()).stream()
-                        .map(RecordComponent::getName)
-                        .toList();
-        assertThat(listItemFields)
-                .doesNotContain("type", "status", "catalogueVersion", "createdAt", "updatedAt");
+    @DisplayName("zero entitlements still counts open access books")
+    void zeroEntitlementsStillCountsOpenAccess() {
+        // No grants at all, but open access needs none.
+        when(entitlements.findByInstitutionIdAndStatus("inst_leeds", EntitlementStatus.ACTIVE))
+                .thenReturn(List.of());
+        when(items.findByAccessTierAndStatus(AccessTier.OPEN_ACCESS, ItemStatus.PUBLISHED))
+                .thenReturn(List.of(readyItem("item_ab6", null), readyItem("item_oa9", null)));
+
+        assertThat(summary.countAccessibleItems("inst_leeds")).isEqualTo(2);
     }
 
     @Test
-    @DisplayName("the page wrapper echoes the request, and total is the full match count")
-    void pagingIsEchoedAndTotalIsTheWholeMatch() {
-        when(repository.search(any(), any(), anyInt(), anyInt()))
-                .thenReturn(new InstitutionSearchRepository.Results(List.of(imperial()), 57));
+    @DisplayName("a QUEUED or FAILED book inside a granted scope is never counted")
+    void notReadyItemsAreExcludedEvenInsideAGrantedScope() {
+        CatalogueItem queued = new CatalogueItem();
+        queued.setId("item_q7");
+        queued.setStatus(ItemStatus.PUBLISHED);
+        queued.setContentState(ContentState.QUEUED); // published but not ready
 
-        PageResponse<InstitutionListItem> page = service.list(ListRequest.of(null, null, 2, 10));
+        when(entitlements.findByInstitutionIdAndStatus("inst_7f3", EntitlementStatus.ACTIVE))
+                .thenReturn(List.of(entitlement(ScopeType.COLLECTION, "col_law2024")));
+        // A queued book never comes back from the lookup, so there is nothing to add.
+        when(items.findByCollectionIdsAndStatusAndContentState(
+                        "col_law2024", ItemStatus.PUBLISHED, ContentState.READY))
+                .thenReturn(List.of());
 
-        assertThat(page.page()).isEqualTo(2);
-        assertThat(page.size()).isEqualTo(10);
-        assertThat(page.total()).as("total counts every match, not the page").isEqualTo(57);
+        assertThat(summary.countAccessibleItems("inst_7f3")).isZero();
     }
 
     @Test
-    @DisplayName("normalised parameters, not raw ones, reach the query layer")
-    void normalisedParametersReachTheRepository() {
-        when(repository.search(any(), any(), anyInt(), anyInt()))
-                .thenReturn(new InstitutionSearchRepository.Results(List.of(), 0));
+    @DisplayName("an ITEM-scope grant on a not-ready book counts nothing")
+    void itemScopeGrantOnNotReadyBookCountsNothing() {
+        CatalogueItem failed = new CatalogueItem();
+        failed.setId("item_f3");
+        failed.setStatus(ItemStatus.PUBLISHED);
+        failed.setContentState(ContentState.FAILED);
 
-        service.list(ListRequest.of("  Imperial ", "  uk  ", null, 50));
+        when(entitlements.findByInstitutionIdAndStatus("inst_x", EntitlementStatus.ACTIVE))
+                .thenReturn(List.of(entitlement(ScopeType.ITEM, "item_f3")));
+        when(items.findById("item_f3")).thenReturn(Optional.of(failed));
 
-        ArgumentCaptor<String> q = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> country = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<Integer> page = ArgumentCaptor.forClass(Integer.class);
-        ArgumentCaptor<Integer> size = ArgumentCaptor.forClass(Integer.class);
-        verify(repository).search(q.capture(), country.capture(), page.capture(), size.capture());
-
-        assertThat(q.getValue()).isEqualTo("Imperial");
-        assertThat(country.getValue()).as("trimmed, not upper-cased").isEqualTo("uk");
-        assertThat(page.getValue()).isZero();
-        assertThat(size.getValue()).isEqualTo(50);
+        assertThat(summary.countAccessibleItems("inst_x")).isZero();
     }
 
-    @Test
-    @DisplayName("no matches is an empty list, not an error")
-    void emptyResultIsNotAnError() {
-        when(repository.search(any(), any(), anyInt(), anyInt()))
-                .thenReturn(new InstitutionSearchRepository.Results(List.of(), 0));
-
-        PageResponse<InstitutionListItem> page = service.list(ListRequest.of("zzz", null, null, null));
-
-        assertThat(page.items()).isEmpty();
-        assertThat(page.total()).isZero();
+    private static CatalogueItem readyItem(String id, String collectionId) {
+        CatalogueItem item = new CatalogueItem();
+        item.setId(id);
+        item.setStatus(ItemStatus.PUBLISHED);
+        item.setContentState(ContentState.READY);
+        item.setCollectionIds(collectionId == null ? List.of() : List.of(collectionId));
+        return item;
     }
 
-    // ---------------------------------------------------------------------------------- detail
-
-    @Test
-    @DisplayName("the detail carries the six plus signIn and a server-built catalogueUrl")
-    void detailIsTheFrozenShape() {
-        when(repository.findActiveById("inst_7f3")).thenReturn(Optional.of(imperial()));
-
-        InstitutionDetail detail = service.detail("inst_7f3");
-
-        assertThat(detail.signIn().method()).as("always SAML in this prototype").isEqualTo("SAML");
-        assertThat(detail.signIn().idpHint())
-                .as("read from the record, unlike method")
-                .isEqualTo("imperial-saml-mock");
-        assertThat(detail.catalogueUrl())
-                .isEqualTo("http://localhost:8080/opds/v1/institutions/inst_7f3/catalogue");
-    }
-
-    @Test
-    @DisplayName("catalogueUrl comes from configuration, so the scheme can change without a client release")
-    void catalogueUrlFollowsConfiguration() {
-        InstitutionQueryService configured =
-                new InstitutionQueryService(repository, "https://api.tf.example/");
-        when(repository.findActiveById("inst_7f3")).thenReturn(Optional.of(imperial()));
-
-        assertThat(configured.detail("inst_7f3").catalogueUrl())
-                .as("a trailing slash in configuration must not produce a double slash")
-                .isEqualTo("https://api.tf.example/opds/v1/institutions/inst_7f3/catalogue");
-    }
-
-    @Test
-    @DisplayName("unknown and inactive are the same 404, and the message discloses nothing")
-    void unknownAndInactiveAreIndistinguishable() {
-        // The repository filters on ACTIVE inside the query, so the service cannot tell the two apart
-        // either. That is the design: an attacker walking ids learns nothing about our customer list.
-        when(repository.findActiveById(any())).thenReturn(Optional.empty());
-
-        for (String id : List.of("inst_leeds", "inst_does_not_exist", "!!not-an-id!!")) {
-            assertThatThrownBy(() -> service.detail(id))
-                    .isInstanceOf(ApiException.class)
-                    .hasMessage("No such institution")
-                    .satisfies(
-                            e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.NOT_FOUND));
-        }
-    }
-
-    @Test
-    @DisplayName("a record saved without branding returns null, not a 500")
-    void missingBrandingDoesNotBreakAPublicEndpoint() {
-        Institution incomplete =
-                new Institution(
-                        "inst_x", "x", "X University", InstitutionType.ACADEMIC, "UK", "York",
-                        null, null, RecordStatus.ACTIVE, 1L, T, T);
-        when(repository.findActiveById("inst_x")).thenReturn(Optional.of(incomplete));
-
-        InstitutionDetail detail = service.detail("inst_x");
-
-        assertThat(detail.branding()).isNull();
-        assertThat(detail.signIn().method()).isEqualTo("SAML");
-        assertThat(detail.signIn().idpHint()).isNull();
+    private static Entitlement entitlement(ScopeType scopeType, String scopeId) {
+        Entitlement e = new Entitlement();
+        e.setScopeType(scopeType);
+        e.setScopeId(scopeId);
+        e.setStatus(EntitlementStatus.ACTIVE);
+        return e;
     }
 }

@@ -18,10 +18,16 @@ public interface CatalogueItemRepository extends MongoRepository<CatalogueItem, 
 	List<CatalogueItem> findByCollectionIdsAndStatusAndContentState(String collectionId, ItemStatus status,
 			ContentState contentState);
 
+	List<CatalogueItem> findByCollectionIds(String collectionId);
+
 	List<CatalogueItem> findByAccessTierAndStatus(AccessTier accessTier, ItemStatus status);
 
 	Optional<CatalogueItem> findByIsbn(String isbn);
 
 	List<CatalogueItem> findAllBy(TextCriteria criteria);
+
+	long countByPublisherId(String publisherId);
+
+	long countByCollectionIds(String collectionId);
 
 }

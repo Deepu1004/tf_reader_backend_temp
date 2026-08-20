@@ -11,9 +11,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 
-import com.tf.reader.shared.error.ApiError;
-import com.tf.reader.shared.error.ApiException;
-import com.tf.reader.shared.error.TraceId;
+import com.tf.reader.common.error.ApiException;
+import com.tf.reader.common.error.ErrorResponse;
+import com.tf.reader.common.error.TraceIds;
 
 import tools.jackson.databind.json.JsonMapper;
 
@@ -53,8 +53,9 @@ public class SamlAuthenticationSuccessHandler implements AuthenticationSuccessHa
 		catch (ApiException failure) {
 			// A valid assertion can still fail to become a sign-in - an expired transaction, or
 			// an identity with no membership at the institution it was started for.
-			writeBody(response, failure.code().status().value(),
-					ApiError.of(failure.code(), failure.getMessage(), TraceId.next()));
+			writeBody(response, failure.getCode().getStatus().value(),
+					ErrorResponse.of(failure.getCode(), failure.getMessage(), request.getRequestURI(),
+							TraceIds.newTraceId()));
 		}
 		finally {
 			discardTheSignInSession(request);

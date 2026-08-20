@@ -15,7 +15,7 @@ import lombok.Setter;
 
 /**
  * A single loan — our record that a reader holds a title, under some model, until some time.
- * One uniform shape for every {@link LicenseModel}; unused fields stay {@code null} (D-017/D-018).
+ * One uniform shape for every {@link LicenceModel}; unused fields stay {@code null} (D-017/D-018).
  *
  * <p>Two invariants are enforced by the store, never by read-then-write application code:
  * <ul>
@@ -55,7 +55,7 @@ public class Loan {
 	private String institutionId;
 
 	/** How access is bounded. From entitlement, not the client (D-009). */
-	private LicenseModel licenseModel;
+	private LicenceModel licenceModel;
 
 	/** Lifecycle state; drives the partial unique index. */
 	private LoanStatus status;
@@ -64,7 +64,7 @@ public class Loan {
 	private boolean canPersist;
 
 	/**
-	 * Handle to the Redis lease this loan holds. Only ever populated for {@link LicenseModel#ELITE},
+	 * Handle to the Redis lease this loan holds. Only ever populated for {@link LicenceModel#ELITE},
 	 * and even then it starts {@code null} on our create — Deepak's lease service fills it in (D-018).
 	 */
 	private String leaseId;

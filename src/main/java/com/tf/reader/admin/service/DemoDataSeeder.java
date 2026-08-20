@@ -388,6 +388,8 @@ public class DemoDataSeeder implements ApplicationRunner {
                 s.description(),
                 s.subjects(),
                 s.publishedAt(),
+                null, // numberOfPages: not carried by the seed dataset yet, ingest's territory
+                null, // duration: not carried by the seed dataset yet
                 s.coverUrl(),
                 ContentType.valueOf(s.contentType()),
                 AccessTier.valueOf(s.accessTier()),

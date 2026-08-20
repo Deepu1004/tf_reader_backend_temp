@@ -2,6 +2,7 @@ package com.tf.reader.auth;
 
 import java.time.Clock;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 import jakarta.validation.Valid;
 
@@ -10,19 +11,22 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import com.tf.reader.auth.model.CurrentUser;
 import com.tf.reader.auth.model.Institution;
 import com.tf.reader.auth.model.TnfUser;
+import com.tf.reader.auth.model.UserType;
 import com.tf.reader.auth.repository.MockInstitutionRepository;
+import com.tf.reader.auth.security.UserSecurityConfig;
 import com.tf.reader.auth.token.IssuedToken;
 import com.tf.reader.auth.token.TokenService;
 import com.tf.reader.auth.transaction.AuthTransaction;
 import com.tf.reader.auth.transaction.AuthTransactionStore;
-import com.tf.reader.shared.error.ApiException;
-import com.tf.reader.shared.error.ErrorCode;
+import com.tf.reader.common.error.ApiException;
+import com.tf.reader.common.error.ErrorCode;
 
 /**
  * The auth group: starting institutional sign-in, and reporting who is signed in.
@@ -121,6 +125,14 @@ public class AuthController {
 				transaction.createdAt().truncatedTo(ChronoUnit.SECONDS));
 	}
 
+	@PostMapping("/dev-token")
+	public IssuedToken generateDevToken(
+			@RequestParam(defaultValue = "usr_dev123") String userId,
+			@RequestParam(defaultValue = "inst_imperial") String institutionId) {
+		TnfUser user = new TnfUser(userId, UserType.INSTITUTION, institutionId, List.of("MEMBER"), List.of("col_medicine"));
+		return tokenService.issue(user);
+	}
+
 	/**
 	 * The Spring Security entry point that builds the AuthnRequest, carrying our transaction id
 	 * so it becomes the RelayState.
@@ -128,7 +140,7 @@ public class AuthController {
 	private String authorizationUrl(AuthTransaction transaction) {
 		return UriComponentsBuilder.fromPath("/saml2/authenticate")
 				.queryParam("registrationId", REGISTRATION_ID)
-				.queryParam(SecurityConfig.AUTH_TRANSACTION_PARAM, transaction.id())
+				.queryParam(UserSecurityConfig.AUTH_TRANSACTION_PARAM, transaction.id())
 				.build()
 				.toUriString();
 	}

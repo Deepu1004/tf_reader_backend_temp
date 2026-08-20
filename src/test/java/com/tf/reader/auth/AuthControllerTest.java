@@ -25,11 +25,11 @@ import com.tf.reader.auth.token.JwtProperties;
 import com.tf.reader.auth.token.JwtTokenService;
 import com.tf.reader.auth.token.TokenService;
 import com.tf.reader.auth.transaction.AuthTransactionStore;
-import com.tf.reader.shared.error.GlobalExceptionHandler;
+import com.tf.reader.common.error.GlobalExceptionHandler;
 
 /**
  * Slice test of the endpoint that starts SAML. Spring Security's SAML filters are not in this
- * slice - {@link com.tf.reader.auth.SecurityConfig} needs a relying party registration
+ * slice - {@link UserSecurityConfig} needs a relying party registration
  * and is covered by {@code SamlRelyingPartyRegistrationTest} instead.
  */
 @WebMvcTest(AuthController.class)

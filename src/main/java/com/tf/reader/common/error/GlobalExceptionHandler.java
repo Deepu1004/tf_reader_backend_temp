@@ -5,6 +5,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -20,8 +21,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 
-// @RestControllerAdvice disabled — shared.error.GlobalExceptionHandler is the canonical one (D-019).
 @Slf4j
+@RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
 	@ExceptionHandler(ApiException.class)
@@ -34,6 +35,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 	@ExceptionHandler(AccessDeniedException.class)
 	public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
 		return respond(ErrorCode.FORBIDDEN_SCOPE, "You do not have permission to perform this action.", request, ex);
+	}
+
+	/** Raised by a unique index, e.g. two progress records for the same user + book. */
+	@ExceptionHandler(DuplicateKeyException.class)
+	public ResponseEntity<ErrorResponse> handleDuplicateKey(DuplicateKeyException ex, HttpServletRequest request) {
+		return respond(ErrorCode.CODE_TAKEN, "A record already exists for this scope.", request, ex);
 	}
 
 	@ExceptionHandler(ConstraintViolationException.class)

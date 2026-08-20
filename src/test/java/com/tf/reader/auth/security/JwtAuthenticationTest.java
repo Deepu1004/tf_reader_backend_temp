@@ -14,8 +14,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.tf.reader.TestcontainersConfiguration;
 import com.tf.reader.auth.model.TnfUser;
 import com.tf.reader.auth.model.UserType;
 import com.tf.reader.auth.token.JwtProperties;
@@ -31,6 +33,7 @@ import com.tf.reader.auth.token.JwtTokenService;
  */
 @SpringBootTest(properties = "tnf.auth.jwt.secret=" + JwtAuthenticationTest.SECRET)
 @AutoConfigureMockMvc
+@Import(TestcontainersConfiguration.class)
 class JwtAuthenticationTest {
 
 	static final String SECRET = "a-test-only-signing-secret-of-sufficient-length-0123456789";

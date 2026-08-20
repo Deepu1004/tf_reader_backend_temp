@@ -16,7 +16,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DuplicateKeyException;
 
 import com.tf.reader.TestcontainersConfiguration;
-import com.tf.reader.loan.entity.LicenseModel;
+import com.tf.reader.loan.entity.LicenceModel;
 import com.tf.reader.loan.entity.Loan;
 import com.tf.reader.loan.entity.LoanStatus;
 import com.tf.reader.loan.repository.LoanRepository;
@@ -113,7 +113,7 @@ class LoanRepositoryTest {
 				.loanId(loanId)
 				.userId(userId)
 				.itemId(itemId)
-				.licenseModel(LicenseModel.ELITE)
+				.licenceModel(LicenceModel.ELITE)
 				.status(LoanStatus.ACTIVE)
 				.canPersist(false)
 				.borrowedAt(Instant.now())

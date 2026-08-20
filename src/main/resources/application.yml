@@ -1,4 +1,6 @@
 spring:
+  config:
+    import: "optional:file:.env[.properties]"
   application:
     name: reader
   data:
@@ -6,7 +8,6 @@ spring:
       auto-index-creation: true
 
   security:
-  
     saml2:
       relyingparty:
         registration:
@@ -57,23 +58,22 @@ spring:
 #  Generate one:  openssl rand -base64 48
 # -----------------------------------------------------------------------------
 tnf:
+  catalogue:
+    base-url: http://localhost:8080
   auth:
     jwt:
       secret: ${TNF_JWT_SECRET}
       ttl: 1h
-  config:
-    import: "optional:file:.env[.properties]"
   mongodb:
     uri: ${MONGODB_URI:}
-  catalogue:
-    base-url: http://localhost:8080
+
 tf:
   security:
     jwt:
       issuer: tf-reader
       # No default. Startup fails fast when this is missing or shorter than 32 bytes.
       # Supply it via the TF_JWT_SECRET environment variable in every deployed environment.
-      secret: ${TF_JWT_SECRET:}
+      secret: ${TF_JWT_SECRET}
       access-token-ttl: 15m
       # Twelve hours: one working day needs one sign in. This is the absolute session
       # lifetime too, since rotation never extends it.

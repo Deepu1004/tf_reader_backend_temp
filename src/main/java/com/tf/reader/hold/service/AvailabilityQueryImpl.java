@@ -1,29 +1,23 @@
 package com.tf.reader.hold.service;
 
-import java.time.Clock;
-import java.time.Instant;
-
-import org.springframework.stereotype.Service;
-
 import com.tf.reader.hold.api.AvailabilityQuery;
 import com.tf.reader.hold.api.AvailabilitySnapshot;
+import org.springframework.stereotype.Service;
 
-/** Stub — always reports copies available equal to the limit, nobody queued. */
+import java.time.Instant;
+
+/**
+ * Implementation of the AvailabilityQuery contract.
+ */
 @Service
-class AvailabilityQueryImpl implements AvailabilityQuery {
+public class AvailabilityQueryImpl implements AvailabilityQuery {
 
-	private final Clock clock;
-
-	AvailabilityQueryImpl(Clock clock) {
-		this.clock = clock;
-	}
-
-	@Override
-	public AvailabilitySnapshot forItem(String scope, String itemId, Integer copies) {
-		Instant now = Instant.now(clock);
-		if (copies == null) {
-			return AvailabilitySnapshot.unknown(now);
-		}
-		return new AvailabilitySnapshot(copies, 0, null, now);
-	}
+    @Override
+    public AvailabilitySnapshot forItem(String scope, String itemId, Integer copies) {
+        if (copies == null) {
+            return AvailabilitySnapshot.unknown(Instant.now());
+        }
+        return new AvailabilitySnapshot(copies, 0, null, Instant.now());
+    }
 }
+

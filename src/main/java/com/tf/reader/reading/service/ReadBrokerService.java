@@ -21,8 +21,8 @@ import com.tf.reader.content.api.ContentGrantRequest;
 import com.tf.reader.content.api.LoanProof;
 import com.tf.reader.hold.api.AvailabilityQuery;
 import com.tf.reader.hold.api.AvailabilitySnapshot;
-import com.tf.reader.loan.api.LicenseView;
-import com.tf.reader.loan.api.LicenseCommand;
+import com.tf.reader.loan.api.LicenceCommand;
+import com.tf.reader.loan.api.LicenceView;
 import com.tf.reader.reading.api.CopyLease;
 import com.tf.reader.reading.api.LeaseHandle;
 import com.tf.reader.reading.dto.ReadingSessionRequest;
@@ -40,7 +40,7 @@ public class ReadBrokerService {
 
 	private final EntitlementQuery entitlements;
 	private final ContentAccessGrant content;
-	private final LicenseCommand licenses;
+	private final LicenceCommand licences;
 	private final CopyLease lease;
 	private final AvailabilityQuery availability;
 	private final ReconcilerService reconciler;
@@ -51,7 +51,7 @@ public class ReadBrokerService {
 	public ReadBrokerService(
 			EntitlementQuery entitlements,
 			ContentAccessGrant content,
-			LicenseCommand licenses,
+			LicenceCommand licences,
 			CopyLease lease,
 			AvailabilityQuery availability,
 			ReconcilerService reconciler,
@@ -60,7 +60,7 @@ public class ReadBrokerService {
 			Clock clock) {
 		this.entitlements = entitlements;
 		this.content = content;
-		this.licenses = licenses;
+		this.licences = licences;
 		this.lease = lease;
 		this.availability = availability;
 		this.reconciler = reconciler;
@@ -82,7 +82,7 @@ public class ReadBrokerService {
 
 		// ── Step 3: Device cap check ──
 		if (subject != null && subject.userId() != null && !devices.admit(subject.userId(), deviceKey)) {
-			throw new ApiException(ErrorCode.FORBIDDEN_SCOPE, "This account is already reading on the maximum number of devices.");
+			throw new ApiException(ErrorCode.DEVICE_LIMIT_REACHED, "This account is already reading on the maximum number of devices.");
 		}
 
 		// ── Step 4: Rights check ──
@@ -99,8 +99,8 @@ public class ReadBrokerService {
 		}
 
 		try {
-			// ── Step 6: Create license ──
-			LicenseView license = licenses.create(
+			// ── Step 6: Create licence ──
+			LicenceView licence = licences.create(
 					subject,
 					request.itemId(),
 					decision.accessLevel(),
@@ -115,13 +115,13 @@ public class ReadBrokerService {
 					request.intent(),
 					deviceKey,
 					subject,
-					new LoanProof(license.licenseId(), license.expiresAt()),
+					new LoanProof(licence.licenceId(), licence.expiresAt()),
 					request.wantSearchIndex()
 			));
 
 			// ── Step 8: Extend claim to loan due date ──
-			if (copyLimited && !lease.extend(held, license.expiresAt())) {
-				if (!lease.extend(held, license.expiresAt())) {
+			if (copyLimited && !lease.extend(held, licence.expiresAt())) {
+				if (!lease.extend(held, licence.expiresAt())) {
 					reconciler.reconcile(request.itemId());
 				}
 			}
@@ -130,11 +130,11 @@ public class ReadBrokerService {
 			Instant now = clock.instant();
 			return new ReadingSessionResponse(
 					"sess_" + UUID.randomUUID().toString().substring(0, 8),
-					license.licenseId(),
+					licence.licenceId(),
 					request.itemId(),
 					decision.accessLevel().name(),
-					licenseModelOf(decision.accessLevel()),
-					license.canPersist(),
+					licenceModelOf(decision.accessLevel()),
+					licence.canPersist(),
 					null,
 					grant.content(),
 					grant.index(),
@@ -180,7 +180,7 @@ public class ReadBrokerService {
 			}
 			return raw;
 		} catch (IllegalArgumentException e) {
-			throw new ApiException(ErrorCode.VALIDATION_FAILED, "devicePublicKey must be valid base64 of the raw public key bytes.");
+			throw new ApiException(ErrorCode.INVALID_DEVICE_PUBLIC_KEY, "devicePublicKey must be valid base64 of the raw public key bytes.");
 		}
 	}
 
@@ -188,15 +188,15 @@ public class ReadBrokerService {
 		if (reason == null) return ErrorCode.NO_ENTITLEMENT;
 		return switch (reason) {
 			case NO_ENTITLEMENT -> ErrorCode.NO_ENTITLEMENT;
-			case ENTITLEMENT_EXPIRED -> ErrorCode.NO_ENTITLEMENT;
-			case ENTITLEMENT_SUSPENDED -> ErrorCode.NO_ENTITLEMENT;
-			case INSTITUTION_INACTIVE -> ErrorCode.FORBIDDEN_INSTITUTION_MISMATCH;
+			case ENTITLEMENT_EXPIRED -> ErrorCode.ENTITLEMENT_EXPIRED;
+			case ENTITLEMENT_SUSPENDED -> ErrorCode.ENTITLEMENT_SUSPENDED;
+			case INSTITUTION_INACTIVE -> ErrorCode.INSTITUTION_INACTIVE;
 			case CONTENT_NOT_READY -> ErrorCode.CONTENT_NOT_READY;
 			case NOT_FOUND -> ErrorCode.NOT_FOUND;
 		};
 	}
 
-	private static String licenseModelOf(AccessLevel level) {
+	private static String licenceModelOf(AccessLevel level) {
 		if (level == null) return "SUBSCRIPTION";
 		return switch (level) {
 			case OPEN_ACCESS -> "OPEN_ACCESS";

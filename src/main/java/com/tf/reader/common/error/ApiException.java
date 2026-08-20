@@ -12,4 +12,11 @@ public class ApiException extends RuntimeException {
 		this.code = code;
 	}
 
+	public ErrorCode getCode() {
+		return code;
+	}
+
+	public ErrorCode code() {
+		return code;
+	}
 }

@@ -5,7 +5,6 @@ import java.io.IOException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-import org.springframework.http.MediaType;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.jwt.JwtValidationException;
@@ -13,11 +12,8 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
 
 import com.tf.reader.auth.security.TnfJwtValidator;
-import com.tf.reader.shared.error.ApiError;
-import com.tf.reader.shared.error.ErrorCode;
-import com.tf.reader.shared.error.TraceId;
-
-import tools.jackson.databind.json.JsonMapper;
+import com.tf.reader.common.error.ErrorCode;
+import com.tf.reader.common.error.ErrorResponseWriter;
 
 /**
  * How an unauthenticated call to the JSON API is refused.
@@ -39,21 +35,17 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 public class ApiAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
-	private final JsonMapper jsonMapper;
+	private final ErrorResponseWriter errorResponseWriter;
 
-	public ApiAuthenticationEntryPoint(JsonMapper jsonMapper) {
-		this.jsonMapper = jsonMapper;
+	public ApiAuthenticationEntryPoint(ErrorResponseWriter errorResponseWriter) {
+		this.errorResponseWriter = errorResponseWriter;
 	}
 
 	@Override
 	public void commence(HttpServletRequest request, HttpServletResponse response,
 			AuthenticationException authException) throws IOException {
 		ErrorCode code = classify(authException);
-		ApiError body = ApiError.of(code, messageFor(code), TraceId.next());
-
-		response.setStatus(code.status().value());
-		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-		response.getWriter().write(jsonMapper.writeValueAsString(body));
+		this.errorResponseWriter.write(request, response, code, messageFor(code));
 	}
 
 	/**

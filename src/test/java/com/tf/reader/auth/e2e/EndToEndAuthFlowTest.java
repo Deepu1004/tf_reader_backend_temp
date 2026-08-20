@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -32,6 +33,7 @@ import org.springframework.security.saml2.provider.service.authentication.Saml2R
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import com.tf.reader.TestcontainersConfiguration;
 import com.tf.reader.auth.authorization.AuthorizationService;
 import com.tf.reader.auth.model.CurrentUser;
 import com.tf.reader.auth.model.Role;
@@ -41,8 +43,8 @@ import com.tf.reader.auth.saml.SamlAuthenticationService.SamlLoginResult;
 import com.tf.reader.auth.token.JwtProperties;
 import com.tf.reader.auth.transaction.AuthTransaction;
 import com.tf.reader.auth.transaction.AuthTransactionStore;
-import com.tf.reader.shared.error.ApiException;
-import com.tf.reader.shared.error.ErrorCode;
+import com.tf.reader.common.error.ApiException;
+import com.tf.reader.common.error.ErrorCode;
 
 /**
  * Steps 1–7 as <b>one</b> flow, not seven independently-passing units.
@@ -55,6 +57,7 @@ import com.tf.reader.shared.error.ErrorCode;
  */
 @SpringBootTest(properties = "tnf.auth.jwt.secret=" + EndToEndAuthFlowTest.SECRET)
 @AutoConfigureMockMvc
+@Import(TestcontainersConfiguration.class)
 class EndToEndAuthFlowTest {
 
 	static final String SECRET = "a-test-only-signing-secret-of-sufficient-length-0123456789";
@@ -160,7 +163,7 @@ class EndToEndAuthFlowTest {
 			assertThatThrownBy(() -> samlAuthentication.complete(
 					samlAuthentication("stranger@example.com"), relayState))
 					.isInstanceOf(ApiException.class)
-					.extracting(thrown -> ((ApiException) thrown).code())
+					.extracting(thrown -> ((ApiException) thrown).getCode())
 					.isEqualTo(ErrorCode.USER_NOT_PROVISIONED);
 		}
 
@@ -180,9 +183,9 @@ class EndToEndAuthFlowTest {
 					List.of("MEMBER"), List.of("col_medicine"));
 
 			assertThatThrownBy(() -> authorization.requireRole(member, Role.ADMIN))
-					.extracting(t -> ((ApiException) t).code()).isEqualTo(ErrorCode.FORBIDDEN_ROLE);
+					.extracting(t -> ((ApiException) t).getCode()).isEqualTo(ErrorCode.FORBIDDEN_ROLE);
 			assertThatThrownBy(() -> authorization.requireSameInstitution(member, "inst_dsu"))
-					.extracting(t -> ((ApiException) t).code()).isEqualTo(ErrorCode.WRONG_INSTITUTION);
+					.extracting(t -> ((ApiException) t).getCode()).isEqualTo(ErrorCode.WRONG_INSTITUTION);
 		}
 
 		@Test
@@ -193,7 +196,7 @@ class EndToEndAuthFlowTest {
 			// Including against an unscoped resource, where null == null would have said yes.
 			for (String resource : List.of("inst_imperial", "inst_dsu", "inst_xyz")) {
 				assertThatThrownBy(() -> authorization.requireSameInstitution(individual, resource))
-						.extracting(t -> ((ApiException) t).code())
+						.extracting(t -> ((ApiException) t).getCode())
 						.isEqualTo(ErrorCode.WRONG_INSTITUTION);
 			}
 			assertThatThrownBy(() -> authorization.requireSameInstitution(individual, null))
@@ -238,7 +241,7 @@ class EndToEndAuthFlowTest {
 			samlAuthentication.complete(identity, transaction.id());
 
 			assertThatThrownBy(() -> samlAuthentication.complete(identity, transaction.id()))
-					.extracting(t -> ((ApiException) t).code())
+					.extracting(t -> ((ApiException) t).getCode())
 					.isEqualTo(ErrorCode.SAML_AUTHENTICATION_FAILED);
 		}
 
@@ -248,7 +251,7 @@ class EndToEndAuthFlowTest {
 
 			for (String relayState : List.of("authTxn_invented", "", "   ")) {
 				assertThatThrownBy(() -> samlAuthentication.complete(identity, relayState))
-						.extracting(t -> ((ApiException) t).code())
+						.extracting(t -> ((ApiException) t).getCode())
 						.isEqualTo(ErrorCode.SAML_AUTHENTICATION_FAILED);
 			}
 			assertThatThrownBy(() -> samlAuthentication.complete(identity, null))

@@ -14,11 +14,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-import com.tf.reader.auth.SecurityConfig;
+import com.tf.reader.TestcontainersConfiguration;
+import com.tf.reader.auth.security.UserSecurityConfig;
 import com.tf.reader.auth.transaction.AuthTransaction;
 import com.tf.reader.auth.transaction.AuthTransactionStore;
 
@@ -35,6 +37,7 @@ import com.tf.reader.auth.transaction.AuthTransactionStore;
 // throwaway one. No secret is committed for any real environment.
 @SpringBootTest(properties = "tnf.auth.jwt.secret=a-test-only-signing-secret-of-sufficient-length-0123456789")
 @AutoConfigureMockMvc
+@Import(TestcontainersConfiguration.class)
 class SamlLoginFlowTest {
 
 	@Autowired
@@ -49,7 +52,7 @@ class SamlLoginFlowTest {
 
 		MvcResult result = mockMvc.perform(get("/saml2/authenticate")
 						.queryParam("registrationId", "tf-reader")
-						.queryParam(SecurityConfig.AUTH_TRANSACTION_PARAM, transaction.id()))
+						.queryParam(UserSecurityConfig.AUTH_TRANSACTION_PARAM, transaction.id()))
 				.andExpect(status().is3xxRedirection())
 				.andReturn();
 
@@ -112,10 +115,12 @@ class SamlLoginFlowTest {
 				.andExpect(status().isOk());
 
 		// Deny by default, and refused as JSON the app can read rather than a redirect to the
-		// IdP, which is what saml2Login would do on its own.
+		// IdP, which is what saml2Login would do on its own. /api/v1/loans sits under
+		// common.security.SecurityConfig's own app-api chain, not this module's, hence
+		// UNAUTHENTICATED rather than this module's finer-grained TOKEN_MISSING.
 		mockMvc.perform(get("/api/v1/loans"))
 				.andExpect(status().isUnauthorized())
-				.andExpect(jsonPath("$.code").value("TOKEN_MISSING"));
+				.andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
 	}
 
 	@Test
@@ -129,7 +134,7 @@ class SamlLoginFlowTest {
 		AuthTransaction transaction = transactions.open(institutionId);
 		String redirect = mockMvc.perform(get("/saml2/authenticate")
 						.queryParam("registrationId", "tf-reader")
-						.queryParam(SecurityConfig.AUTH_TRANSACTION_PARAM, transaction.id()))
+						.queryParam(UserSecurityConfig.AUTH_TRANSACTION_PARAM, transaction.id()))
 				.andReturn()
 				.getResponse()
 				.getRedirectedUrl();
