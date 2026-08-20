@@ -25,15 +25,16 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.tf.reader.admin.controller.CatalogueItemAdminController;
 import com.tf.reader.admin.dto.CatalogueItemView;
+import com.tf.reader.admin.security.AdminScopeAuthorizer;
 import com.tf.reader.admin.service.CatalogueItemAdminService;
 import com.tf.reader.catalogue.entity.AccessTier;
 import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.ContentType;
 import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.common.page.PageResponse;
-import com.tf.reader.shared.error.ApiException;
-import com.tf.reader.shared.error.ErrorCode;
-import com.tf.reader.shared.error.GlobalExceptionHandler;
+import com.tf.reader.common.error.ApiException;
+import com.tf.reader.common.error.ErrorCode;
+import com.tf.reader.common.error.GlobalExceptionHandler;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -45,7 +46,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @WebMvcTest(controllers = CatalogueItemAdminController.class)
 @AutoConfigureMockMvc(addFilters = false)
-@Import(GlobalExceptionHandler.class)
+@Import({ GlobalExceptionHandler.class, AdminScopeAuthorizer.class })
 class CatalogueItemAdminControllerTest {
 
 	@Autowired

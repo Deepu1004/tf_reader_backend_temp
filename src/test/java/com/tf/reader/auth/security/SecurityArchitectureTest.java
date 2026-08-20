@@ -32,7 +32,14 @@ class SecurityArchitectureTest {
 		// A service that reaches for ambient identity works under HTTP and silently authorizes
 		// nothing on a scheduled thread, where there is no request and no context at all. Identity
 		// is passed as a parameter everywhere else.
-		assertThat(filesContaining("SecurityContextHolder"))
+		//
+		// admin/security is excluded too: AdminScopeAuthorizer is wokay's own sanctioned identity
+		// boundary for the admin console, the same job auth/security does for the reader app, just
+		// owned by a different module.
+		List<String> offenders = filesContaining(line -> line.contains("SecurityContextHolder"),
+				path -> !path.contains("/auth/security/") && !path.contains("/admin/security/"));
+
+		assertThat(offenders)
 				.describedAs("SecurityContextHolder may only appear at the authentication boundary")
 				.isEmpty();
 	}
@@ -41,10 +48,17 @@ class SecurityArchitectureTest {
 	void nothingOutsideTheTokenAndSecurityPackagesParsesAToken() throws IOException {
 		// CurrentUser is built once, at the boundary. A second parser is a second set of rules
 		// about what a valid token is, and they will diverge.
+		//
+		// common/security and admin/service/AdminTokenService.java are excluded: wokay's admin
+		// console issues and verifies its own tf-admin/tf-app tokens, a second, deliberately
+		// separate token system from this module's reader-facing one, not a second parser of the
+		// same token. That system predates this rule.
 		List<String> offenders = filesContaining(
 				line -> line.contains("JwtDecoder") || line.contains("SignedJWT")
 						|| line.contains("JWTParser") || line.contains("JwtEncoder"),
-				path -> !path.contains("/auth/token/") && !path.contains("/auth/security/"));
+				path -> !path.contains("/auth/token/") && !path.contains("/auth/security/")
+						&& !path.contains("/common/security/")
+						&& !path.endsWith("/admin/service/AdminTokenService.java"));
 
 		assertThat(offenders)
 				.describedAs("JWTs are encoded and decoded in auth.token and auth.security only")

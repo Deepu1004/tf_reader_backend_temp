@@ -5,6 +5,7 @@ import com.tf.reader.admin.dto.AdminInstitution;
 import com.tf.reader.admin.dto.InstitutionSummary;
 import com.tf.reader.admin.dto.InstitutionWrite;
 import com.tf.reader.admin.dto.SignInWrite;
+import com.tf.reader.admin.security.AdminScopeAuthorizer;
 import com.tf.reader.admin.service.InstitutionAdminService;
 import com.tf.reader.catalogue.dto.BrandingView;
 import com.tf.reader.catalogue.dto.SignInView;
@@ -53,7 +54,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @WebMvcTest(controllers = InstitutionAdminController.class)
 @AutoConfigureMockMvc(addFilters = false)
-@Import(GlobalExceptionHandler.class)
+@Import({ GlobalExceptionHandler.class, AdminScopeAuthorizer.class })
 class InstitutionAdminControllerTest {
 
     @Autowired MockMvc mvc;

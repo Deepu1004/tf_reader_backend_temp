@@ -74,7 +74,7 @@ class PublisherAdminControllerTest {
 	@DisplayName("list returns 200 with the four page keys and correct item shape")
 	@SuppressWarnings("unchecked")
 	void listReturns200WithPageShape() throws Exception {
-		when(service.list(any(), any(), any(), any()))
+		when(service.list(any(), any(), any()))
 				.thenReturn(new PageResponse<>(List.of(routledgeView()), 0, 20, 1));
 
 		String body = mvc.perform(get("/api/admin/v1/publishers")).andExpect(status().isOk())
