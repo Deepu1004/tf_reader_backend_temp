@@ -1,4 +1,4 @@
-package com.tf.reader.auth;
+package com.tf.reader.auth.security;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
@@ -13,9 +13,9 @@ import org.springframework.security.saml2.provider.service.web.authentication.Op
 import org.springframework.security.saml2.provider.service.web.authentication.Saml2AuthenticationRequestResolver;
 import org.springframework.security.web.SecurityFilterChain;
 
+import com.tf.reader.auth.ApiAuthenticationEntryPoint;
 import com.tf.reader.auth.saml.SamlAuthenticationFailureHandler;
 import com.tf.reader.auth.saml.SamlAuthenticationSuccessHandler;
-import com.tf.reader.auth.security.CurrentUserJwtConverter;
 
 /**
  * The Service Provider side of the SAML integration, and the filter chains in front of the API.
@@ -91,7 +91,16 @@ public class UserSecurityConfig {
 	}
 
 	/**
-	 * Everything else: the JSON API and the actuator. Bearer tokens only.
+	 * This module's own two endpoints: {@code /api/v1/auth/me} and {@code /api/v1/auth/saml/start}.
+	 * Bearer tokens only.
+	 *
+	 * <p><b>Scoped to {@code /api/v1/auth/**}, not the whole app API.</b> {@code
+	 * common.security.SecurityConfig} already binds the rest of {@code /api/v1/**} to its own
+	 * audience, including the paths it deliberately leaves public, like {@code
+	 * /api/v1/institutions} - a public path still runs its resource server filter for any bearer
+	 * token that IS presented, garbage or not, so a wider matcher here would make a stale or
+	 * foreign header 401 a path that is supposed to ignore it. Since only the first chain whose
+	 * matcher matches ever runs, this chain has to stay out of the way of the rest of the surface.
 	 *
 	 * <p><b>Stateless on purpose, and it is a security property rather than a performance one.</b>
 	 * A stateless chain never reads the HTTP session, so no session - including the one the SAML
@@ -107,7 +116,7 @@ public class UserSecurityConfig {
 			CurrentUserJwtConverter currentUserConverter,
 			@Qualifier("jwtDecoder") JwtDecoder jwtDecoder) throws Exception {
 		return http
-				.securityMatcher("/api/v1/**")
+				.securityMatcher("/api/v1/auth/**")
 				// The API is bearer-token based: there is no cookie-authorised state-changing
 				// endpoint for CSRF protection to protect.
 				.csrf(csrf -> csrf.disable())

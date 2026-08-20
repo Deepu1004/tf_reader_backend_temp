@@ -8,8 +8,8 @@ import org.springframework.util.StringUtils;
 
 import com.tf.reader.auth.model.CurrentUser;
 import com.tf.reader.auth.model.Role;
-import com.tf.reader.shared.error.ApiException;
-import com.tf.reader.shared.error.ErrorCode;
+import com.tf.reader.common.error.ApiException;
+import com.tf.reader.common.error.ErrorCode;
 
 /**
  * The two authorization decisions every capability shares: does this caller hold a role, and

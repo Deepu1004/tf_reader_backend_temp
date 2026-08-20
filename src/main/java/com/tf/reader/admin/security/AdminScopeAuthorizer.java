@@ -6,6 +6,8 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
 import com.tf.reader.admin.entity.AdminRole;
+import com.tf.reader.common.error.ApiException;
+import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.common.security.TokenClaims;
 
 /**
@@ -39,6 +41,56 @@ public class AdminScopeAuthorizer {
 
 	public boolean canAccessInstitution(String institutionId) {
 		return canAccess(AdminRole.INSTITUTION_ADMIN, TokenClaims.SCOPE_INSTITUTION_ID, institutionId);
+	}
+
+	/** @throws ApiException 403 {@code FORBIDDEN_ROLE} unless the caller is a super admin */
+	public void requireSuperAdmin() {
+		if (!isSuperAdmin()) {
+			throw new ApiException(ErrorCode.FORBIDDEN_ROLE, "This operation requires SUPER_ADMIN.");
+		}
+	}
+
+	/** The subject of the current admin's token, for an audit trail entry. Null when unauthenticated. */
+	public String currentAdminId() {
+		Jwt jwt = currentAdminJwt();
+		return jwt == null ? null : jwt.getSubject();
+	}
+
+	/** The current admin's role, or null when unauthenticated or the claim is not a known role. */
+	public AdminRole currentRole() {
+		Jwt jwt = currentAdminJwt();
+		return jwt == null ? null : AdminRoles.parse(jwt.getClaimAsString(TokenClaims.ROLE));
+	}
+
+	/**
+	 * Null means unfiltered (a super admin); otherwise the one institution id a list endpoint
+	 * should restrict to. For a list, where there is no already-known target id for
+	 * {@link #canAccessInstitution} to check against, so any other role or a missing scope claim
+	 * narrows to a sentinel that matches nothing rather than to everything.
+	 */
+	public String currentInstitutionScope() {
+		return currentScope(AdminRole.INSTITUTION_ADMIN, TokenClaims.SCOPE_INSTITUTION_ID, "no-institution-claim");
+	}
+
+	/** Same as {@link #currentInstitutionScope()}, scoped to a publisher admin instead. */
+	public String currentPublisherScope() {
+		return currentScope(AdminRole.PUBLISHER_ADMIN, TokenClaims.SCOPE_PUBLISHER_ID, "no-publisher-claim");
+	}
+
+	private String currentScope(AdminRole scopedRole, String scopeClaim, String noClaimSentinel) {
+		Jwt jwt = currentAdminJwt();
+		if (jwt == null) {
+			return noClaimSentinel;
+		}
+		AdminRole role = AdminRoles.parse(jwt.getClaimAsString(TokenClaims.ROLE));
+		if (role == AdminRole.SUPER_ADMIN) {
+			return null;
+		}
+		if (role != scopedRole) {
+			return noClaimSentinel;
+		}
+		String scope = jwt.getClaimAsString(scopeClaim);
+		return isBlank(scope) ? noClaimSentinel : scope;
 	}
 
 	private boolean canAccess(AdminRole scopedRole, String scopeClaim, String targetId) {

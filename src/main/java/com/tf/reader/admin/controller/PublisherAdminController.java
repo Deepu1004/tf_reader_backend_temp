@@ -1,7 +1,6 @@
 package com.tf.reader.admin.controller;
 
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,6 +17,7 @@ import com.tf.reader.admin.dto.PublisherWrite;
 import com.tf.reader.admin.dto.StatusChange;
 import com.tf.reader.admin.service.PublisherAdminService;
 import com.tf.reader.common.model.RecordStatus;
+import com.tf.reader.common.page.PageQuery;
 import com.tf.reader.common.page.PageResponse;
 
 import jakarta.validation.Valid;
@@ -40,7 +40,9 @@ import jakarta.validation.Valid;
  * {@link com.tf.reader.admin.security.AdminScopeAuthorizer#canAccessPublisher}.
  *
  * <p>
- * HTTP only. All rules live in {@link PublisherAdminService}.
+ * HTTP only. All rules, including who may call what, live in
+ * {@link PublisherAdminService} - a controller-only check is bypassed the
+ * moment a second entry point calls the same service.
  */
 @RestController("publisherAdminController")
 @RequestMapping("/api/admin/v1/publishers")
@@ -53,11 +55,9 @@ public class PublisherAdminController {
 	}
 
 	@GetMapping
-	@PreAuthorize("@adminScope.isSuperAdmin()")
 	public PageResponse<PublisherView> list(@RequestParam(required = false) String q,
-			@RequestParam(required = false) RecordStatus status, @RequestParam(required = false) Integer page,
-			@RequestParam(required = false) Integer size) {
-		return publishers.list(q, status, page, size);
+			@RequestParam(required = false) RecordStatus status, PageQuery pageQuery) {
+		return publishers.list(q, status, pageQuery);
 	}
 
 	@PostMapping
@@ -67,19 +67,16 @@ public class PublisherAdminController {
 	}
 
 	@GetMapping("/{publisherId}")
-	@PreAuthorize("@adminScope.canAccessPublisher(#publisherId)")
 	public PublisherView get(@PathVariable String publisherId) {
 		return publishers.get(publisherId);
 	}
 
 	@PutMapping("/{publisherId}")
-	@PreAuthorize("@adminScope.canAccessPublisher(#publisherId)")
 	public PublisherView update(@PathVariable String publisherId, @Valid @RequestBody PublisherWrite body) {
 		return publishers.update(publisherId, body);
 	}
 
 	@PatchMapping("/{publisherId}/status")
-	@PreAuthorize("@adminScope.canAccessPublisher(#publisherId)")
 	public PublisherView changeStatus(@PathVariable String publisherId, @Valid @RequestBody StatusChange body) {
 		return publishers.changeStatus(publisherId, body);
 	}

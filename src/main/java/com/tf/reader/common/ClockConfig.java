@@ -1,4 +1,4 @@
-package com.tf.reader.shared;
+package com.tf.reader.common;
 
 import java.time.Clock;
 

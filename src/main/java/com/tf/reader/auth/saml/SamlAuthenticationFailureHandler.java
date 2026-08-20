@@ -10,9 +10,9 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.stereotype.Component;
 
-import com.tf.reader.shared.error.ApiError;
-import com.tf.reader.shared.error.ErrorCode;
-import com.tf.reader.shared.error.TraceId;
+import com.tf.reader.common.error.ErrorCode;
+import com.tf.reader.common.error.ErrorResponse;
+import com.tf.reader.common.error.TraceIds;
 
 import tools.jackson.databind.json.JsonMapper;
 
@@ -41,12 +41,12 @@ public class SamlAuthenticationFailureHandler implements AuthenticationFailureHa
 	@Override
 	public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response,
 			AuthenticationException exception) throws IOException {
-		String traceId = TraceId.next();
+		String traceId = TraceIds.newTraceId();
 		log.warn("SAML authentication rejected [traceId={}]: {}", traceId, exception.getMessage());
 
-		ApiError body = ApiError.of(ErrorCode.SAML_AUTHENTICATION_FAILED,
-				"The SAML response could not be validated.", traceId);
-		response.setStatus(ErrorCode.SAML_AUTHENTICATION_FAILED.status().value());
+		ErrorResponse body = ErrorResponse.of(ErrorCode.SAML_AUTHENTICATION_FAILED,
+				"The SAML response could not be validated.", request.getRequestURI(), traceId);
+		response.setStatus(ErrorCode.SAML_AUTHENTICATION_FAILED.getStatus().value());
 		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
 		response.getWriter().write(jsonMapper.writeValueAsString(body));
 	}

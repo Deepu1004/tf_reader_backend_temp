@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import com.tf.reader.admin.dto.PublisherView;
 import com.tf.reader.admin.dto.PublisherWrite;
 import com.tf.reader.admin.dto.StatusChange;
+import com.tf.reader.admin.security.AdminScopeAuthorizer;
 import com.tf.reader.catalogue.entity.Publisher;
 import com.tf.reader.catalogue.repository.BookCollectionRepository;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
@@ -24,6 +25,7 @@ import com.tf.reader.common.audit.AuditLog;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.common.model.RecordStatus;
+import com.tf.reader.common.page.PageQuery;
 import com.tf.reader.common.page.PageResponse;
 
 import lombok.RequiredArgsConstructor;
@@ -44,29 +46,18 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class PublisherAdminService {
 
-	private static final int DEFAULT_SIZE = 20;
-	private static final int MIN_SIZE = 1;
-	private static final int MAX_SIZE = 100;
-
 	private final PublisherRepository publisherRepository;
 	private final CatalogueItemRepository catalogueItemRepository;
 	private final BookCollectionRepository bookCollectionRepository;
 	private final CatalogueVersionBumper catalogueVersionBumper;
 	private final AdminAuditWriter auditWriter;
 	private final MongoTemplate mongo;
+	private final AdminScopeAuthorizer adminScope;
 
 	// ---------------------------------------------------------------- list
 
-	public PageResponse<PublisherView> list(String q, RecordStatus status, Integer page, Integer size) {
-		int resolvedPage = page == null ? 0 : page;
-		if (resolvedPage < 0) {
-			throw new ApiException(ErrorCode.VALIDATION_FAILED, "page must be zero or greater");
-		}
-		int resolvedSize = size == null ? DEFAULT_SIZE : size;
-		if (resolvedSize < MIN_SIZE || resolvedSize > MAX_SIZE) {
-			throw new ApiException(ErrorCode.VALIDATION_FAILED,
-					"size must be between " + MIN_SIZE + " and " + MAX_SIZE);
-		}
+	public PageResponse<PublisherView> list(String q, RecordStatus status, PageQuery pageQuery) {
+		adminScope.requireSuperAdmin();
 
 		List<Criteria> parts = new ArrayList<>();
 		if (status != null) {
@@ -85,11 +76,11 @@ public class PublisherAdminService {
 		query.with(Sort.by(Sort.Direction.ASC, "name"));
 
 		long total = mongo.count(Query.of(query).limit(0).skip(0), Publisher.class);
-		query.skip((long) resolvedPage * resolvedSize).limit(resolvedSize);
+		query.skip((long) pageQuery.page() * pageQuery.size()).limit(pageQuery.size());
 		List<Publisher> items = mongo.find(query, Publisher.class);
 
 		List<PublisherView> views = items.stream().map(this::toView).toList();
-		return new PageResponse<>(views, resolvedPage, resolvedSize, total);
+		return new PageResponse<>(views, pageQuery.page(), pageQuery.size(), total);
 	}
 
 	// ---------------------------------------------------------------- create
@@ -112,7 +103,8 @@ public class PublisherAdminService {
 
 		publisher = publisherRepository.save(publisher);
 
-		auditWriter.record(AuditLog.Action.CREATE, "PUBLISHER", publisher.getId(), null, afterMap(publisher));
+		auditWriter.record(adminScope.currentAdminId(), AuditLog.Action.CREATE, "PUBLISHER", publisher.getId(), null,
+				afterMap(publisher));
 
 		return toView(publisher);
 	}
@@ -120,6 +112,7 @@ public class PublisherAdminService {
 	// ---------------------------------------------------------------- get
 
 	public PublisherView get(String publisherId) {
+		requireAccess(publisherId);
 		return publisherRepository.findById(publisherId).map(this::toView)
 				.orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "No such publisher"));
 	}
@@ -127,6 +120,7 @@ public class PublisherAdminService {
 	// ---------------------------------------------------------------- update
 
 	public PublisherView update(String publisherId, PublisherWrite write) {
+		requireAccess(publisherId);
 		Publisher publisher = publisherRepository.findById(publisherId)
 				.orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "No such publisher"));
 
@@ -140,7 +134,8 @@ public class PublisherAdminService {
 
 		publisher = publisherRepository.save(publisher);
 
-		auditWriter.record(AuditLog.Action.UPDATE, "PUBLISHER", publisher.getId(), before, afterMap(publisher));
+		auditWriter.record(adminScope.currentAdminId(), AuditLog.Action.UPDATE, "PUBLISHER", publisher.getId(), before,
+				afterMap(publisher));
 
 		return toView(publisher);
 	}
@@ -148,6 +143,7 @@ public class PublisherAdminService {
 	// ---------------------------------------------------------------- status
 
 	public PublisherView changeStatus(String publisherId, StatusChange change) {
+		requireAccess(publisherId);
 		Publisher publisher = publisherRepository.findById(publisherId)
 				.orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "No such publisher"));
 
@@ -164,7 +160,7 @@ public class PublisherAdminService {
 				? Map.of("reason", change.reason())
 				: null;
 
-		auditWriter.record(AuditLog.Action.STATUS, "PUBLISHER", publisher.getId(), before,
+		auditWriter.record(adminScope.currentAdminId(), AuditLog.Action.STATUS, "PUBLISHER", publisher.getId(), before,
 				Map.of("status", String.valueOf(newStatus)), meta);
 
 		// Suspending or reactivating affects what feeds serve — bump catalogue version.
@@ -174,6 +170,12 @@ public class PublisherAdminService {
 		}
 
 		return toView(publisher);
+	}
+
+	private void requireAccess(String publisherId) {
+		if (!adminScope.canAccessPublisher(publisherId)) {
+			throw new ApiException(ErrorCode.FORBIDDEN_ROLE, "Not permitted to access this publisher");
+		}
 	}
 
 	// ---------------------------------------------------------------- mapping
