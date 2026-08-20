@@ -89,6 +89,38 @@ public enum ErrorCode {
 	 */
 	LOAN_NOT_ACTIVE(HttpStatus.CONFLICT),
 
+	// Added by Deepak (reading) for the read broker — see ReadBrokerService, RightsService,
+	// DeviceCapService. Same DenyReason family as NO_ENTITLEMENT above.
+
+	/** 403. The entitlement that once covered this title has lapsed. */
+	ENTITLEMENT_EXPIRED(HttpStatus.FORBIDDEN),
+
+	/** 403. The entitlement covering this title has been suspended, not merely expired. */
+	ENTITLEMENT_SUSPENDED(HttpStatus.FORBIDDEN),
+
+	/** 403. The institution itself is inactive; distinct from a per-title entitlement problem. */
+	INSTITUTION_INACTIVE(HttpStatus.FORBIDDEN),
+
+	/** 409. Ingest for this title has not finished, or failed. Retryable later. */
+	CONTENT_NOT_READY(HttpStatus.CONFLICT),
+
+	/**
+	 * 400. The device's public key did not decode as base64 of raw key bytes. Distinct from
+	 * {@link #VALIDATION_FAILED} because the app does something different with it: this is a
+	 * key-generation bug on the device, not a malformed request body.
+	 */
+	INVALID_DEVICE_PUBLIC_KEY(HttpStatus.BAD_REQUEST),
+
+	/** 403. This reader is already reading on the maximum number of devices allowed. */
+	DEVICE_LIMIT_REACHED(HttpStatus.FORBIDDEN),
+
+	/**
+	 * 403. A download was requested on a title whose tier is read-online-only (Elite), or on an
+	 * audio title, which is streamed on every tier. Refused server-side regardless of what the
+	 * client interface offered.
+	 */
+	DOWNLOAD_NOT_PERMITTED(HttpStatus.FORBIDDEN),
+
 	/** 500. An unexpected internal failure. The traceId in the body links to the server log. */
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);
 
