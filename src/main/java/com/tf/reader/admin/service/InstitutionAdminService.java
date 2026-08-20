@@ -4,6 +4,8 @@ import com.tf.reader.admin.dto.AdminInstitution;
 import com.tf.reader.admin.dto.InstitutionSummary;
 import com.tf.reader.admin.dto.InstitutionWrite;
 import com.tf.reader.admin.dto.SignInWrite;
+import com.tf.reader.admin.entity.AdminRole;
+import com.tf.reader.admin.security.AdminScopeAuthorizer;
 import com.tf.reader.catalogue.dto.BrandingView;
 import com.tf.reader.catalogue.dto.SignInView;
 import com.tf.reader.catalogue.entity.Branding;
@@ -46,6 +48,7 @@ public class InstitutionAdminService {
     private final CatalogueUrlBuilder catalogueUrlBuilder;
     private final AdminAuditWriter auditWriter;
     private final CatalogueVersionBumper versionBumper;
+    private final AdminScopeAuthorizer adminScope;
 
     public InstitutionAdminService(
             InstitutionRepository institutions,
@@ -54,7 +57,8 @@ public class InstitutionAdminService {
             InstitutionCatalogueSummaryService summaryService,
             CatalogueUrlBuilder catalogueUrlBuilder,
             AdminAuditWriter auditWriter,
-            CatalogueVersionBumper versionBumper) {
+            CatalogueVersionBumper versionBumper,
+            AdminScopeAuthorizer adminScope) {
         this.institutions = institutions;
         this.adminRepository = adminRepository;
         this.entitlements = entitlements;
@@ -62,6 +66,7 @@ public class InstitutionAdminService {
         this.catalogueUrlBuilder = catalogueUrlBuilder;
         this.auditWriter = auditWriter;
         this.versionBumper = versionBumper;
+        this.adminScope = adminScope;
     }
 
     // -------------------------------------------------------------------------------------- list
@@ -74,6 +79,11 @@ public class InstitutionAdminService {
      */
     public PageResponse<AdminInstitution> list(
             String q, RecordStatus status, String institutionIdScope, int page, int size) {
+        AdminRole role = adminScope.currentRole();
+        if (role != AdminRole.SUPER_ADMIN && role != AdminRole.INSTITUTION_ADMIN) {
+            throw new ApiException(ErrorCode.FORBIDDEN_ROLE,
+                    "This operation requires SUPER_ADMIN or INSTITUTION_ADMIN.");
+        }
         InstitutionAdminRepository.Results results =
                 adminRepository.search(q, status, institutionIdScope, page, size);
         List<AdminInstitution> items = results.items().stream().map(this::toAdminInstitution).toList();
@@ -83,6 +93,7 @@ public class InstitutionAdminService {
     // ------------------------------------------------------------------------------------ create
 
     public AdminInstitution create(InstitutionWrite request) {
+        adminScope.requireSuperAdmin();
         InstitutionWrite validated = request.validate();
 
         institutions
@@ -110,7 +121,8 @@ public class InstitutionAdminService {
 
         Institution saved = institutions.save(created);
 
-        auditWriter.record(AuditLog.Action.CREATE, "INSTITUTION", saved.getId(), Map.of(), fieldsOf(saved));
+        auditWriter.record(adminScope.currentAdminId(), AuditLog.Action.CREATE, "INSTITUTION", saved.getId(),
+                Map.of(), fieldsOf(saved));
 
         return toAdminInstitution(saved);
     }
@@ -118,6 +130,9 @@ public class InstitutionAdminService {
     // --------------------------------------------------------------------------------------- get
 
     public AdminInstitution get(String institutionId) {
+        if (!adminScope.canAccessInstitution(institutionId)) {
+            throw new ApiException(ErrorCode.FORBIDDEN_ROLE, "Not permitted to access this institution");
+        }
         return toAdminInstitution(findOrThrow(institutionId));
     }
 
@@ -125,6 +140,7 @@ public class InstitutionAdminService {
 
     /** Replaces the editable fields on an institution. Does not change its status or version. */
     public AdminInstitution update(String institutionId, InstitutionWrite request) {
+        adminScope.requireSuperAdmin();
         InstitutionWrite validated = request.validate();
         Institution existing = findOrThrow(institutionId);
 
@@ -161,7 +177,8 @@ public class InstitutionAdminService {
             }
         }
 
-        auditWriter.record(AuditLog.Action.UPDATE, "INSTITUTION", institutionId, before, after);
+        auditWriter.record(adminScope.currentAdminId(), AuditLog.Action.UPDATE, "INSTITUTION", institutionId, before,
+                after);
 
         return toAdminInstitution(saved);
     }
@@ -170,6 +187,7 @@ public class InstitutionAdminService {
 
     /** Activates or suspends an institution and refreshes its catalogue version. */
     public AdminInstitution setStatus(String institutionId, RecordStatus newStatus, String reason) {
+        adminScope.requireSuperAdmin();
         Institution existing = findOrThrow(institutionId);
         RecordStatus oldStatus = existing.getStatus();
 
@@ -182,7 +200,7 @@ public class InstitutionAdminService {
         if (reason != null) {
             after.put("reason", reason);
         }
-        auditWriter.record(
+        auditWriter.record(adminScope.currentAdminId(),
                 AuditLog.Action.STATUS, "INSTITUTION", institutionId, Map.of("status", oldStatus), after);
 
         // Suspending or reactivating an institution changes what its own members can see, so it

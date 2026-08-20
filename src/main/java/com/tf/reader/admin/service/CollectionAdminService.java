@@ -76,8 +76,8 @@ public class CollectionAdminService {
 			}
 		}
 
-		auditWriter.record(AuditLog.Action.UPDATE, "COLLECTION", collectionId, Map.of("itemIds", beforeIds),
-				Map.of("itemIds", List.copyOf(requestedIds)));
+		auditWriter.record(adminScope.currentAdminId(), AuditLog.Action.UPDATE, "COLLECTION", collectionId,
+				Map.of("itemIds", beforeIds), Map.of("itemIds", List.copyOf(requestedIds)));
 
 		List<String> affectedInstitutions = catalogueVersionBumper.bump(CatalogueVersionBumper.Scope.COLLECTION,
 				collectionId);

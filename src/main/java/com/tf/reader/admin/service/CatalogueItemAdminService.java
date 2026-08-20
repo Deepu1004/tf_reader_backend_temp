@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import com.tf.reader.admin.dto.CatalogueItemView;
 import com.tf.reader.admin.dto.CatalogueItemWrite;
+import com.tf.reader.admin.entity.AdminRole;
 import com.tf.reader.admin.security.AdminScopeAuthorizer;
 import com.tf.reader.catalogue.entity.AccessTier;
 import com.tf.reader.catalogue.entity.CatalogueItem;
@@ -23,9 +24,9 @@ import com.tf.reader.catalogue.repository.PublisherRepository;
 import com.tf.reader.catalogue.service.CatalogueVersionBumper;
 import com.tf.reader.common.audit.AdminAuditWriter;
 import com.tf.reader.common.audit.AuditLog;
+import com.tf.reader.common.error.ApiException;
+import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.common.page.PageResponse;
-import com.tf.reader.shared.error.ApiException;
-import com.tf.reader.shared.error.ErrorCode;
 
 import lombok.RequiredArgsConstructor;
 
@@ -48,6 +49,10 @@ public class CatalogueItemAdminService {
 
 	public PageResponse<CatalogueItemView> list(String publisherIdScope, String publisherId, String collectionId,
 			ContentType contentType, AccessTier accessTier, String q, Integer page, Integer size) {
+		AdminRole role = adminScope.currentRole();
+		if (role != AdminRole.SUPER_ADMIN && role != AdminRole.PUBLISHER_ADMIN) {
+			throw new ApiException(ErrorCode.FORBIDDEN_ROLE, "This operation requires SUPER_ADMIN or PUBLISHER_ADMIN.");
+		}
 		int resolvedPage = page == null ? 0 : page;
 		if (resolvedPage < 0) {
 			throw new ApiException(ErrorCode.VALIDATION_FAILED, "page must be zero or greater");
@@ -90,7 +95,8 @@ public class CatalogueItemAdminService {
 
 		item = save(item);
 
-		auditWriter.record(AuditLog.Action.CREATE, "CATALOGUE_ITEM", item.getId(), null, afterMap(item));
+		auditWriter.record(adminScope.currentAdminId(), AuditLog.Action.CREATE, "CATALOGUE_ITEM", item.getId(), null,
+				afterMap(item));
 		bumpIfPublishedOrArchived(item);
 
 		return toFullView(item);
@@ -124,7 +130,8 @@ public class CatalogueItemAdminService {
 
 		item = save(item);
 
-		auditWriter.record(AuditLog.Action.UPDATE, "CATALOGUE_ITEM", item.getId(), before, afterMap(item));
+		auditWriter.record(adminScope.currentAdminId(), AuditLog.Action.UPDATE, "CATALOGUE_ITEM", item.getId(), before,
+				afterMap(item));
 		bumpIfPublishedOrArchived(item);
 
 		return toFullView(item);
