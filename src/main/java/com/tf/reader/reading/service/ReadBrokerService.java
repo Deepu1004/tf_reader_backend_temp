@@ -82,7 +82,7 @@ public class ReadBrokerService {
 
 		// ── Step 3: Device cap check ──
 		if (subject != null && subject.userId() != null && !devices.admit(subject.userId(), deviceKey)) {
-			throw new ApiException(ErrorCode.FORBIDDEN_SCOPE, "This account is already reading on the maximum number of devices.");
+			throw new ApiException(ErrorCode.DEVICE_LIMIT_REACHED, "This account is already reading on the maximum number of devices.");
 		}
 
 		// ── Step 4: Rights check ──
@@ -180,7 +180,7 @@ public class ReadBrokerService {
 			}
 			return raw;
 		} catch (IllegalArgumentException e) {
-			throw new ApiException(ErrorCode.VALIDATION_FAILED, "devicePublicKey must be valid base64 of the raw public key bytes.");
+			throw new ApiException(ErrorCode.INVALID_DEVICE_PUBLIC_KEY, "devicePublicKey must be valid base64 of the raw public key bytes.");
 		}
 	}
 
@@ -188,9 +188,9 @@ public class ReadBrokerService {
 		if (reason == null) return ErrorCode.NO_ENTITLEMENT;
 		return switch (reason) {
 			case NO_ENTITLEMENT -> ErrorCode.NO_ENTITLEMENT;
-			case ENTITLEMENT_EXPIRED -> ErrorCode.NO_ENTITLEMENT;
-			case ENTITLEMENT_SUSPENDED -> ErrorCode.NO_ENTITLEMENT;
-			case INSTITUTION_INACTIVE -> ErrorCode.FORBIDDEN_INSTITUTION_MISMATCH;
+			case ENTITLEMENT_EXPIRED -> ErrorCode.ENTITLEMENT_EXPIRED;
+			case ENTITLEMENT_SUSPENDED -> ErrorCode.ENTITLEMENT_SUSPENDED;
+			case INSTITUTION_INACTIVE -> ErrorCode.INSTITUTION_INACTIVE;
 			case CONTENT_NOT_READY -> ErrorCode.CONTENT_NOT_READY;
 			case NOT_FOUND -> ErrorCode.NOT_FOUND;
 		};

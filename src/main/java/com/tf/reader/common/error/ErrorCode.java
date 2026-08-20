@@ -66,4 +66,11 @@ public enum ErrorCode {
 		this.status = status;
 	}
 
+	public HttpStatus getStatus() {
+		return status;
+	}
+
+	public HttpStatus status() {
+		return status;
+	}
 }
