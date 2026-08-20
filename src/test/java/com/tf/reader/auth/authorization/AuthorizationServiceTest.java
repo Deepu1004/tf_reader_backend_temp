@@ -12,8 +12,8 @@ import org.junit.jupiter.api.Test;
 import com.tf.reader.auth.model.CurrentUser;
 import com.tf.reader.auth.model.Role;
 import com.tf.reader.auth.model.UserType;
-import com.tf.reader.shared.error.ApiException;
-import com.tf.reader.shared.error.ErrorCode;
+import com.tf.reader.common.error.ApiException;
+import com.tf.reader.common.error.ErrorCode;
 
 /**
  * The two authorization decisions, unit tested. No HTTP: these run from a service layer, and
@@ -51,7 +51,7 @@ class AuthorizationServiceTest {
 		void aMemberIsRefusedAnAdminCheck() {
 			assertThatThrownBy(() -> authorization.requireRole(MEMBER, Role.ADMIN))
 					.isInstanceOf(ApiException.class)
-					.extracting(thrown -> ((ApiException) thrown).code())
+					.extracting(thrown -> ((ApiException) thrown).getCode())
 					.isEqualTo(ErrorCode.FORBIDDEN_ROLE);
 		}
 
@@ -59,7 +59,7 @@ class AuthorizationServiceTest {
 		void aSubscriberIsRefusedAnAdminCheck() {
 			assertThatThrownBy(() -> authorization.requireRole(SUBSCRIBER, Role.ADMIN))
 					.isInstanceOf(ApiException.class)
-					.extracting(thrown -> ((ApiException) thrown).code())
+					.extracting(thrown -> ((ApiException) thrown).getCode())
 					.isEqualTo(ErrorCode.FORBIDDEN_ROLE);
 		}
 
@@ -69,7 +69,7 @@ class AuthorizationServiceTest {
 			// tell "you are in the wrong tenant" from "you lack a role" - they read differently
 			// to a user and are fixed differently.
 			assertThatThrownBy(() -> authorization.requireRole(MEMBER, Role.ADMIN))
-					.extracting(thrown -> ((ApiException) thrown).code())
+					.extracting(thrown -> ((ApiException) thrown).getCode())
 					.isNotEqualTo(ErrorCode.WRONG_INSTITUTION);
 		}
 
@@ -120,7 +120,7 @@ class AuthorizationServiceTest {
 		void aMemberIsRefusedAnotherInstitutionsResource() {
 			assertThatThrownBy(() -> authorization.requireSameInstitution(MEMBER, "inst_dsu"))
 					.isInstanceOf(ApiException.class)
-					.extracting(thrown -> ((ApiException) thrown).code())
+					.extracting(thrown -> ((ApiException) thrown).getCode())
 					.isEqualTo(ErrorCode.WRONG_INSTITUTION);
 		}
 
@@ -132,7 +132,7 @@ class AuthorizationServiceTest {
 				assertThatThrownBy(() -> authorization.requireSameInstitution(SUBSCRIBER, institution))
 						.describedAs("an individual must not reach %s", institution)
 						.isInstanceOf(ApiException.class)
-						.extracting(thrown -> ((ApiException) thrown).code())
+						.extracting(thrown -> ((ApiException) thrown).getCode())
 						.isEqualTo(ErrorCode.WRONG_INSTITUTION);
 			}
 		}
@@ -144,7 +144,7 @@ class AuthorizationServiceTest {
 			// anything that happens to arrive without an institution on it.
 			assertThatThrownBy(() -> authorization.requireSameInstitution(SUBSCRIBER, null))
 					.isInstanceOf(ApiException.class)
-					.extracting(thrown -> ((ApiException) thrown).code())
+					.extracting(thrown -> ((ApiException) thrown).getCode())
 					.isEqualTo(ErrorCode.WRONG_INSTITUTION);
 		}
 

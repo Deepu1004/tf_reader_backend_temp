@@ -10,6 +10,23 @@ public enum ErrorCode {
 	VALIDATION_FAILED(HttpStatus.BAD_REQUEST),
 	TOO_MANY_IDS(HttpStatus.BAD_REQUEST),
 	UNAUTHENTICATED(HttpStatus.UNAUTHORIZED),
+	// No bearer token was presented at all on a route that requires one.
+	TOKEN_MISSING(HttpStatus.UNAUTHORIZED),
+	// A token was presented and is not usable: bad signature, malformed, or missing a claim we
+	// require. Deliberately one code for all three - which part of a rejected token failed is
+	// useful to somebody probing us and to nobody else.
+	TOKEN_INVALID(HttpStatus.UNAUTHORIZED),
+	// The SAML response did not validate, or the sign-in transaction it referred to was unknown,
+	// already used or expired. Deliberately one code for all of those.
+	SAML_AUTHENTICATION_FAILED(HttpStatus.UNAUTHORIZED),
+	// The SAML assertion was valid, but that identity holds no membership at the institution the
+	// sign-in was started for. Authenticated is not the same as provisioned.
+	USER_NOT_PROVISIONED(HttpStatus.FORBIDDEN),
+	// The resource belongs to another institution. Distinct from FORBIDDEN_ROLE: one is the wrong
+	// tenant, the other is the right tenant without the role, and those need different messages.
+	WRONG_INSTITUTION(HttpStatus.FORBIDDEN),
+	// The caller is authenticated but does not hold a role this operation requires.
+	FORBIDDEN_ROLE(HttpStatus.FORBIDDEN),
 	FORBIDDEN_SCOPE(HttpStatus.FORBIDDEN),
 	FORBIDDEN_INSTITUTION_MISMATCH(HttpStatus.FORBIDDEN),
 	NO_ENTITLEMENT(HttpStatus.FORBIDDEN),

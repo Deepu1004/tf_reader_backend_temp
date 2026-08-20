@@ -6,9 +6,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
@@ -22,15 +19,15 @@ public class AdminAuditWriter {
 
 	private final AuditLogRepository auditLogRepository;
 
-	public void record(AuditLog.Action action, String entityType, String entityId, Map<String, Object> before,
-			Map<String, Object> after) {
-		record(action, entityType, entityId, before, after, null);
+	public void record(String actorId, AuditLog.Action action, String entityType, String entityId,
+			Map<String, Object> before, Map<String, Object> after) {
+		record(actorId, action, entityType, entityId, before, after, null);
 	}
 
-	public void record(AuditLog.Action action, String entityType, String entityId, Map<String, Object> before,
-			Map<String, Object> after, Map<String, Object> meta) {
+	public void record(String actorId, AuditLog.Action action, String entityType, String entityId,
+			Map<String, Object> before, Map<String, Object> after, Map<String, Object> meta) {
 		AuditLog log = new AuditLog();
-		log.setActorId(currentAdminId());
+		log.setActorId(actorId);
 		log.setActorEmail(null);
 		log.setAction(action);
 		log.setEntityType(entityType);
@@ -50,14 +47,6 @@ public class AdminAuditWriter {
 		Map<String, Object> copy = new LinkedHashMap<>(fields);
 		copy.keySet().removeIf(key -> SENSITIVE_KEYS.contains(key.toLowerCase(Locale.ROOT)));
 		return copy;
-	}
-
-	private static String currentAdminId() {
-		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-		if (authentication == null || !authentication.isAuthenticated()) {
-			return null;
-		}
-		return (authentication.getPrincipal() instanceof Jwt jwt) ? jwt.getSubject() : null;
 	}
 
 }

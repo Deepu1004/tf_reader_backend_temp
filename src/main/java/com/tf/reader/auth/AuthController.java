@@ -20,12 +20,13 @@ import com.tf.reader.auth.model.Institution;
 import com.tf.reader.auth.model.TnfUser;
 import com.tf.reader.auth.model.UserType;
 import com.tf.reader.auth.repository.MockInstitutionRepository;
+import com.tf.reader.auth.security.UserSecurityConfig;
 import com.tf.reader.auth.token.IssuedToken;
 import com.tf.reader.auth.token.TokenService;
 import com.tf.reader.auth.transaction.AuthTransaction;
 import com.tf.reader.auth.transaction.AuthTransactionStore;
-import com.tf.reader.shared.error.ApiException;
-import com.tf.reader.shared.error.ErrorCode;
+import com.tf.reader.common.error.ApiException;
+import com.tf.reader.common.error.ErrorCode;
 
 /**
  * The auth group: starting institutional sign-in, and reporting who is signed in.

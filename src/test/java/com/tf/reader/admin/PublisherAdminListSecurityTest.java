@@ -19,11 +19,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Unit tests for {@link AdminScopeAuthorizer#isSuperAdmin()}.
  *
  * <p>
- * Tests the role-check logic directly on the authorizer without a servlet. The
- * {@code @PreAuthorize} binding is verified by the method's own behaviour:
- * Spring evaluates {@code @adminScope.isSuperAdmin()} and the return value
- * decides whether the request is allowed. If this method returns the correct
- * value, the annotation works correctly.
+ * Tests the role-check logic directly on the authorizer without a servlet.
+ * {@code PublisherAdminService.list()} calls {@code adminScope.requireSuperAdmin()}, which is
+ * built on this same method - if it returns the correct value, the list guard is correct.
  */
 class PublisherAdminListSecurityTest {
 
