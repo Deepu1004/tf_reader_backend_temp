@@ -38,7 +38,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * <p>Each surface gets its own resource server and decoder, so audience separation is enforced by the
  * filter chain rather than by anything a controller has to remember.
  */
-@Configuration(value = "commonSecurityConfig", proxyBeanMethods = false)
+@Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
 public class SecurityConfig {
 

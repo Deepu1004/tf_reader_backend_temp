@@ -39,7 +39,7 @@ ContentGrant grant(ContentGrantRequest request);
 ## Three kinds of book, one set of words
 
 `OPEN_ACCESS`, `SUBSCRIPTION`, `ELITE`. The same three values appear as `accessTier` on the book, as
-`licenseModel` in a feed, and in the `?accessTier=` filter. **There is nothing to translate.**
+`licenceModel` in a feed, and in the `?accessTier=` filter. **There is nothing to translate.**
 
 | Tier | Encrypted | Download | Copy limit |
 |---|---|---|---|

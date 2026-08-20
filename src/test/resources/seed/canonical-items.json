@@ -10,7 +10,7 @@
     "originalLength is the plaintext byte length. The entity calls the same number sizeBytes.",
     "cipherLength = 12 (nonce) + originalLength + 16 (GCM tag), and exists only where encrypted.",
     "",
-    "opdsForImperial is institution-specific on purpose: license model and copy count come from the",
+    "opdsForImperial is institution-specific on purpose: licence model and copy count come from the",
     "entitlement, not the book. Imperial is the only seeded institution with grants, so it is the",
     "reference. null means that institution gets no acquisition link, either because nothing entitles",
     "it or because the book is not both PUBLISHED and READY."
@@ -99,7 +99,7 @@
       ],
       "opdsForImperial": {
         "rel": "borrow",
-        "licenseModel": "CONCURRENT",
+        "licenceModel": "CONCURRENT",
         "copiesTotal": 2,
         "canPersist": false
       },
@@ -131,7 +131,7 @@
       ],
       "opdsForImperial": {
         "rel": "acquisition",
-        "licenseModel": "UNLIMITED",
+        "licenceModel": "UNLIMITED",
         "copiesTotal": null,
         "canPersist": true
       },
@@ -167,7 +167,7 @@
       ],
       "opdsForImperial": {
         "rel": "open-access",
-        "licenseModel": null,
+        "licenceModel": null,
         "copiesTotal": null,
         "canPersist": true
       },
@@ -235,7 +235,7 @@
       ],
       "opdsForImperial": {
         "rel": "acquisition",
-        "licenseModel": "UNLIMITED",
+        "licenceModel": "UNLIMITED",
         "copiesTotal": null,
         "canPersist": true
       },
@@ -271,7 +271,7 @@
       ],
       "opdsForImperial": {
         "rel": "open-access",
-        "licenseModel": null,
+        "licenceModel": null,
         "copiesTotal": null,
         "canPersist": true
       },

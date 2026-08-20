@@ -20,7 +20,7 @@ the file never conflicts on a merge.
 |---|---|
 | What we own | CAP-4 and CAP-6. Modules `auth/ loan/ hold/ reading/ library/` |
 | Do not edit | `catalogue/ admin/ content/ crypto/ ingest/` are wokay's |
-| Collections | flambeau's own, including `users`, `loans`, `licenses`, `holds`, `deviceFingerprints` |
+| Collections | flambeau's own, including `users`, `loans`, `licences`, `holds`, `deviceFingerprints` |
 | Things that bite | the Redis lease and hold queue, token audiences, the weekly fork sync |
 | Branch naming | `<firstname>/flambeau/<feature>` |
 
