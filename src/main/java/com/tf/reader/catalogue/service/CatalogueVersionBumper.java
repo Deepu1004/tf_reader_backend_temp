@@ -13,12 +13,7 @@ import com.tf.reader.catalogue.repository.InstitutionRepository;
 
 import lombok.RequiredArgsConstructor;
 
-/**
- * Bumps Institution.catalogueVersion so a cached catalogue is known to be stale.
- *
- * <p>Only the scope that actually changed is bumped: no cascading collection to items or item to
- * collection, because only one thing changes per call this week.
- */
+
 @Service
 @RequiredArgsConstructor
 public class CatalogueVersionBumper {
@@ -33,7 +28,7 @@ public class CatalogueVersionBumper {
         ITEM
     }
 
-    public void bump(Scope scope, String scopeId) {
+    public List<String> bump(Scope scope, String scopeId) {
         List<String> institutionIds = switch (scope) {
             case INSTITUTION -> List.of(scopeId);
             case PUBLISHER -> entitledInstitutionIds(ScopeType.PUBLISHER, scopeId);
@@ -42,6 +37,7 @@ public class CatalogueVersionBumper {
         };
 
         institutionIds.forEach(this::bumpOne);
+        return institutionIds;
     }
 
     private List<String> entitledInstitutionIds(ScopeType scopeType, String scopeId) {
