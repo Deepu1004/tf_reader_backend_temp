@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.HexFormat;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -78,7 +79,12 @@ public class DeviceCapService {
 						.set(UPDATED_AT, now),
 				DeviceFingerprint.class);
 
-		if (touched.getModifiedCount() > 0) {
+		// MATCHED, not modified. Mongo reports modifiedCount=0 for a no-op $set — which is
+		// exactly what happens whenever two reads land in the same millisecond, and ALWAYS
+		// happens with a fixed Clock, which is this codebase's own convention for testability.
+		// Reading modifiedCount here treated an already-known device as unseen, sent it down
+		// the upsert-as-new path below, and that failed on the unique index on userId.
+		if (touched.getMatchedCount() > 0) {
 			return true;
 		}
 
@@ -90,18 +96,37 @@ public class DeviceCapService {
 		// most N-1 entries, so pushing leaves at most N.
 		//
 		// The fingerprint-absent clause makes this safe against a race with the touch above.
-		UpdateResult appended = mongo.upsert(
-				Query.query(Criteria.where(USER_ID).is(userId)
-						.and(DEVICES + "." + (maxDevices - 1)).exists(false)
-						.and(FINGERPRINT).ne(fingerprint)),
-				new Update()
-						.push(DEVICES, new DeviceFingerprint.Device(fingerprint, now, now))
-						.setOnInsert(USER_ID, userId)
-						.setOnInsert("createdAt", now)
-						.set(UPDATED_AT, now),
-				DeviceFingerprint.class);
+		try {
+			UpdateResult appended = mongo.upsert(
+					Query.query(Criteria.where(USER_ID).is(userId)
+							.and(DEVICES + "." + (maxDevices - 1)).exists(false)
+							.and(FINGERPRINT).ne(fingerprint)),
+					new Update()
+							.push(DEVICES, new DeviceFingerprint.Device(fingerprint, now, now))
+							.setOnInsert(USER_ID, userId)
+							.setOnInsert("createdAt", now)
+							.set(UPDATED_AT, now),
+					DeviceFingerprint.class);
 
-		return appended.getModifiedCount() > 0 || appended.getUpsertedId() != null;
+			return appended.getModifiedCount() > 0 || appended.getUpsertedId() != null;
+
+		}
+		catch (DuplicateKeyException fullOrRaced) {
+			// The filter above only matches "no document for this user yet" OR "a document that
+			// still has room". Once a document exists AND is full, neither clause matches — but
+			// upsert(true) still tries to INSERT a fresh one seeded from the equality part of the
+			// filter (userId alone), which collides with the unique index we rely on for exactly
+			// this reason. A duplicate-key here is not a bug, it is the cap working; it just needs
+			// translating back into "refused" rather than surfacing as a database error.
+			//
+			// One exception: if a concurrent call for this SAME new device won the push first,
+			// the fingerprint is now present and this device should be admitted, not refused.
+			UpdateResult recheck = mongo.updateFirst(
+					Query.query(Criteria.where(USER_ID).is(userId).and(FINGERPRINT).is(fingerprint)),
+					new Update().set("devices.$.lastSeenAt", now).set(UPDATED_AT, now),
+					DeviceFingerprint.class);
+			return recheck.getMatchedCount() > 0;
+		}
 	}
 
 	/**
