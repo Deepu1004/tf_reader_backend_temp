@@ -5,7 +5,12 @@ spring:
     name: reader
   data:
     mongodb:
-      auto-index-creation: true
+      # matches docker-compose.yml — run `docker-compose up -d` before starting locally
+      uri: mongodb://root:secret@localhost:27017/tnfreader?authSource=admin
+      auto-index-creation: true     # the four @CompoundIndex declarations on Hold, among others
+    redis:
+      host: localhost
+      port: 6379
 
   security:
     saml2:
