@@ -1,4 +1,4 @@
-package com.tf.reader.auth;
+package com.tf.reader.auth.security;
 
 import java.io.IOException;
 

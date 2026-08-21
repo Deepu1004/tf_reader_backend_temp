@@ -1,4 +1,4 @@
-package com.tf.reader.auth.transaction;
+package com.tf.reader.auth.saml.transaction;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -14,6 +14,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
@@ -46,6 +48,37 @@ class AuthTransactionStoreTest {
 
 		assertThat(transaction.id()).startsWith("authTxn_").doesNotContain("imperial");
 		assertThat(transaction.id()).isNotEqualTo(store.open("inst_imperial").id());
+	}
+
+	@Test
+	void everyIdIsUniqueAndCarriesRealEntropy() {
+		// "the last two differ" would pass against a counter, and a counter is a RelayState an
+		// attacker can predict - which is a sign-in they can land on somebody else's institution.
+		// 24 bytes of SecureRandom, base64url encoded, is 32 characters after the prefix.
+		Set<String> ids = new HashSet<>();
+		for (int i = 0; i < 1_000; i++) {
+			ids.add(store.open("inst_imperial").id());
+		}
+
+		assertThat(ids).hasSize(1_000);
+		assertThat(ids).allSatisfy(id ->
+				assertThat(id.substring("authTxn_".length())).hasSize(32));
+	}
+
+	@Test
+	void aTransactionCannotBeAlteredAfterItIsCreated() {
+		// The institution is decided once, at /saml/start, and read back at the ACS. If anything
+		// could change it in between, the server-side store would stop being the answer to "which
+		// institution is this sign-in for". A record has no setters; this fails if that changes.
+		AuthTransaction transaction = store.open("inst_dsu");
+
+		assertThat(AuthTransaction.class.getMethods())
+				.describedAs("AuthTransaction must stay immutable")
+				.noneMatch(method -> method.getName().startsWith("set"));
+
+		AuthTransaction consumed = store.consume(transaction.id()).orElseThrow();
+		assertThat(consumed).isEqualTo(transaction);
+		assertThat(consumed.institutionId()).isEqualTo("inst_dsu");
 	}
 
 	@Test

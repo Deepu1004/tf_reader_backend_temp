@@ -1,4 +1,4 @@
-package com.tf.reader.auth;
+package com.tf.reader.auth.saml;
 
 import jakarta.validation.constraints.NotBlank;
 

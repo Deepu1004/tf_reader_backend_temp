@@ -1,96 +1,103 @@
+server:
+  port: 8080
+
 spring:
   config:
     import: "optional:file:.env[.properties]"
   application:
     name: reader
+  profiles:
+    active: local
   data:
     mongodb:
-      # matches docker-compose.yml — run `docker-compose up -d` before starting locally
-      uri: mongodb://root:secret@localhost:27017/tnfreader?authSource=admin
-      auto-index-creation: true     # the four @CompoundIndex declarations on Hold, among others
+      uri: ${MONGODB_URI}
+      auto-index-creation: true
     redis:
       host: localhost
       port: 6379
+      timeout: 200ms
 
   security:
     saml2:
       relyingparty:
         registration:
           tf-reader:
-            # --- our side (the Service Provider) ---
-            # Audience the IdP must address the assertion to. Must match the aud= below.
             entity-id: tf-reader-sp
             acs:
-              # Where the IdP POSTs the SAMLResponse. Must match the acs_url= below.
               location: "{baseUrl}/login/saml2/sso/{registrationId}"
-
-            # --- the IdP side (the Asserting Party) ---
             assertingparty:
-              # The Issuer value samlmock.dev puts in the response. It defaults to
-              # "saml-mock" in their UI; leave that field alone or this will not match.
               entity-id: saml-mock
               singlesignon:
-                # The SSO endpoint. The aud and acs_url query parameters pre-fill the mock
-                # IdP's form so a human does not have to retype them; Spring appends
-                # SAMLRequest and RelayState to this URL. Changing the port means changing
-                # acs_url here too.
-                url: "https://samlmock.dev/idp?aud=tf-reader-sp&acs_url=http%3A%2F%2Flocalhost%3A8080%2Flogin%2Fsaml2%2Fsso%2Ftf-reader"
+                url: ${SAML_URL}
                 binding: redirect
-                # We do not sign the AuthnRequest. Spring defaults this to true, which would
-                # demand an SP private key committed to the repository - and samlmock.dev never
-                # verifies AuthnRequest signatures (there is no verification code in its request
-                # parser), so it would buy nothing. This does NOT affect validation of the
-                # response, which stays fully enabled below.
                 sign-request: false
               verification:
-                # SIGNATURE VERIFICATION. The IdP's public certificate, downloaded from
-                # https://samlmock.dev/api/downloadCert - static, self-signed CN=thameera.com,
-                # valid until 2044-06-08. Every assertion is verified against it. Remove this
-                # and the application refuses to start rather than trusting unsigned assertions.
                 credentials:
                   - certificate-location: classpath:saml/samlmock-idp.crt
 
-# =============================================================================
-#  JWT signing
-# =============================================================================
-#  HS256, one secret, one hour - the PRD's whole token design.
-#
-#  There is NO DEFAULT SECRET, on purpose. The placeholder below has no fallback
-#  value, so the application fails to start unless TNF_JWT_SECRET is set in the
-#  environment. A default would mean every forgetful deployment shared a publicly
-#  known signing key, and anything that can verify an HS256 token can mint one.
-#
-#  Generate one:  openssl rand -base64 48
-# -----------------------------------------------------------------------------
-tnf:
+tf:
   catalogue:
-    base-url: http://localhost:8080
+    base-url: ${BASE_URL}
+  security:
+    jwt:
+      issuer: tf-reader
+      secret: ${TF_JWT_SECRET}
+      access-token-ttl: 15m
+      refresh-token-ttl: 12h
+
+tnf:
+  seed:
+    enabled: true
   auth:
     jwt:
       secret: ${TNF_JWT_SECRET}
       ttl: 1h
-  mongodb:
-    uri: ${MONGODB_URI:}
+    oidc:
+      client-id: ${OIDC_CLIENT_ID:mock-client-id}
+      client-secret: ${OIDC_CLIENT_SECRET:mock-client-secret}
+      issuer: ${OIDC_ISSUER:http://localhost:8080}
+      authorization-uri: ${OIDC_AUTHORIZATION_URI:http://localhost:8080/oauth2/v2.0/authorize}
+      token-uri: ${OIDC_TOKEN_URI:http://localhost:8080/oauth2/v2.0/token}
+      jwk-set-uri: ${OIDC_JWK_SET_URI:http://localhost:8080/oauth2/v2.0/jwks}
+      redirect-uri: ${OIDC_REDIRECT_URI:http://localhost:8080/api/v1/auth/oidc/callback}
 
-tf:
-  security:
-    jwt:
-      issuer: tf-reader
-      # No default. Startup fails fast when this is missing or shorter than 32 bytes.
-      # Supply it via the TF_JWT_SECRET environment variable in every deployed environment.
-      secret: ${TF_JWT_SECRET}
-      access-token-ttl: 15m
-      # Twelve hours: one working day needs one sign in. This is the absolute session
-      # lifetime too, since rotation never extends it.
-      refresh-token-ttl: 12h
-
-# API documentation is off by default and enabled only by the dev profile.
 springdoc:
   api-docs:
     enabled: false
   swagger-ui:
     enabled: false
+
 management:
   health:
     redis:
       enabled: false
+
+
+mock-oidc:
+  enabled: false
+  
+---
+spring:
+  config:
+    activate:
+      on-profile: b2c
+
+# Belt and braces: the mock is already false by default, and stating it here
+# means "b2c" switches it off even if the profile list also carries "local".
+mock-oidc:
+  enabled: false
+
+tnf:
+  auth:
+    oidc:
+      client-id: ${OIDC_CLIENT_ID}
+      client-secret: ${OIDC_CLIENT_SECRET}
+      # The "issuer" field of the metadata document. NOT the discovery url.
+      issuer: ${OIDC_ISSUER}
+      authorization-uri: ${OIDC_AUTHORIZATION_URI}
+      token-uri: ${OIDC_TOKEN_URI}
+      # SIGNATURE VERIFICATION. Every ID token is verified against the keys
+      # published here. Point this anywhere else and sign-in stops working
+      # rather than trusting an unverified token.
+      jwk-set-uri: ${OIDC_JWK_SET_URI}
+      redirect-uri: ${OIDC_REDIRECT_URI:http://localhost:8080/api/v1/auth/oidc/callback}

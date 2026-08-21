@@ -1,4 +1,4 @@
-package com.tf.reader.auth;
+package com.tf.reader.auth.dto;
 
 import java.time.Instant;
 import java.util.List;
