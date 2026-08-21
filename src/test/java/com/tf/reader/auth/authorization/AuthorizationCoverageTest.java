@@ -65,7 +65,18 @@ class AuthorizationCoverageTest {
 			// Public institution discovery, so a reader can choose where to sign in before they
 			// hold a token - see shared.md.
 			"GET /api/v1/institutions",
-			"GET /api/v1/institutions/{institutionId}");
+			"GET /api/v1/institutions/{institutionId}",
+			// The OIDC counterpart, open for exactly the same reason. Like its SAML twin it
+			// authenticates nobody and mints no token: it resolves an institution and opens a
+			// server-side transaction, so the worst an anonymous caller gets is a URL to open and
+			// an entry the store sweeps.
+			"POST /api/v1/auth/oidc/start",
+			// The OIDC callback, entered by a browser redirect from the identity provider. It
+			// carries no bearer token and never will - requiring one would mean requiring a
+			// session before sign-in could finish. It is not unprotected for being open: it
+			// accepts a code and a state, and both are worthless unless they match a sign-in this
+			// backend started. See OidcTransactionStore.
+			"GET /api/v1/auth/oidc/callback");
 
 	/** Only our own controllers. Spring's {@code /error} forward target is not ours to protect. */
 	private static final String OUR_PACKAGE = "com.tf.reader";
@@ -118,7 +129,8 @@ class AuthorizationCoverageTest {
 		// package filter - the test above would pass vacuously while protecting nothing.
 		assertThat(mappedRoutes())
 				.isNotEmpty()
-				.contains("GET /api/v1/auth/me", "POST /api/v1/auth/saml/start");
+				.contains("GET /api/v1/auth/me", "POST /api/v1/auth/saml/start",
+						"POST /api/v1/auth/oidc/start", "GET /api/v1/auth/oidc/callback");
 	}
 
 	@Test

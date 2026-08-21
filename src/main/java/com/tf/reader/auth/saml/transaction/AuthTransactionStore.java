@@ -1,4 +1,4 @@
-package com.tf.reader.auth.transaction;
+package com.tf.reader.auth.saml.transaction;
 
 import java.security.SecureRandom;
 import java.time.Clock;
