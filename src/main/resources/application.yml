@@ -1,18 +1,19 @@
+server:
+  port: 8080
+
 spring:
   config:
     import: "optional:file:.env[.properties]"
   application:
     name: reader
-  mongodb:
-    uri: ${MONGODB_URI}
   data:
     mongodb:
-      # matches docker-compose.yml — run `docker-compose up -d` before starting locally
-      uri: mongodb://root:secret@localhost:27017/tnfreader?authSource=admin
-      auto-index-creation: true     # the four @CompoundIndex declarations on Hold, among others
+      uri: ${MONGODB_URI:mongodb://localhost:27017/tnfreader}
+      auto-index-creation: true
     redis:
       host: localhost
       port: 6379
+      timeout: 200ms
 
   security:
     saml2:
@@ -22,12 +23,10 @@ spring:
             entity-id: tf-reader-sp
             acs:
               location: "{baseUrl}/login/saml2/sso/{registrationId}"
-
-            # --- the IdP side (the Asserting Party) ---
             assertingparty:
               entity-id: saml-mock
               singlesignon:
-                url: ${SAML_URL}
+                url: ${SAML_URL:https://samlmock.dev/idp?aud=tf-reader-sp&acs_url=http%3A%2F%2Flocalhost%3A8080%2Flogin%2Fsaml2%2Fsso%2Ftf-reader}
                 binding: redirect
                 sign-request: false
               verification:
@@ -36,28 +35,26 @@ spring:
 
 tf:
   catalogue:
-    # Base URL used to build absolute OPDS links. Renamed from tnf.catalogue.base-url;
-    # see CatalogueUrlBuilder.
-    base-url: ${BASE_URL}
-
+    base-url: ${BASE_URL:http://localhost:8080}
   security:
     jwt:
       issuer: tf-reader
       secret: ${TF_JWT_SECRET}
       access-token-ttl: 15m
       refresh-token-ttl: 12h
+
 tnf:
   auth:
     jwt:
       secret: ${TNF_JWT_SECRET}
       ttl: 1h
 
-# API documentation is off by default and enabled only by the dev profile.
 springdoc:
   api-docs:
     enabled: false
   swagger-ui:
     enabled: false
+
 management:
   health:
     redis:
