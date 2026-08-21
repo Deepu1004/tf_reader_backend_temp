@@ -31,7 +31,7 @@ import com.tf.reader.loan.service.BorrowService;
 /**
  * The create-flow paths of the roadmap's Days 6–7, at the service level.
  *
- * <p>In the adopted design (D-016) the entitlement (→403) and copy-lease (→409) decisions live in
+ * <p>In the adopted design (D-020) the entitlement (→403) and copy-lease (→409) decisions live in
  * the read broker, whose refusals and lease-release-on-failure are covered by
  * {@code ReadBrokerServiceTest}. What remains here — and what these tests pin — is the persistence
  * core: the AccessLevel→LicenceModel translation, the three tiers' persist/expiry shape, and the

@@ -24,7 +24,7 @@ import com.tf.reader.loan.service.LoanListService;
  * turning the {@code ?status=} string into an enum (a bad value is a {@code 400}, not a {@code 500}).
  *
  * <p>No borrow/return endpoints: in the adopted design a licence is created when a reading session
- * opens (D-016), not by a call to this controller.
+ * opens (D-020), not by a call to this controller.
  */
 @RestController
 @RequestMapping("/api/v1/loans")
