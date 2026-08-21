@@ -10,24 +10,27 @@ import org.springframework.stereotype.Service;
 import com.tf.reader.library.dto.LibraryHold;
 import com.tf.reader.library.dto.LibraryLoan;
 import com.tf.reader.library.dto.LibraryResponse;
+import com.tf.reader.library.repository.MockLibraryRepository;
 import com.tf.reader.library.support.ReaderIdentity;
 
 /**
  * Builds the library response from loans, holds and the change feed.
  *
- * <p><b>Currently a read model over one source.</b> The cursor and {@code serverTime} are real;
- * {@code loans} and {@code holds} are empty arrays. That is forced rather than deferred — see
- * {@link #loansFor} and {@link #holdsFor} — and the response shape is what unblocks the app either
- * way, so the screen gets built once instead of twice.
+ * <p><b>The cursor and {@code serverTime} are real; the shelves are seeded.</b> {@code loans} and
+ * {@code holds} come from {@link MockLibraryRepository} until the loan and hold seams publish a
+ * list — see {@link #loansFor} and {@link #holdsFor} for what each is waiting on. The response shape
+ * is the same either way, so the screen gets built once instead of twice.
  */
 @Service
 public class LibraryAssembler {
 
 	private final ChangeFeedService changeFeed;
+	private final MockLibraryRepository shelves;
 	private final Clock clock;
 
-	public LibraryAssembler(ChangeFeedService changeFeed, Clock clock) {
+	public LibraryAssembler(ChangeFeedService changeFeed, MockLibraryRepository shelves, Clock clock) {
 		this.changeFeed = changeFeed;
+		this.shelves = shelves;
 		this.clock = clock;
 	}
 
@@ -51,30 +54,36 @@ public class LibraryAssembler {
 	/**
 	 * The reader's active loans.
 	 *
-	 * <p><b>Empty because it has to be.</b> {@code loan.api.ActiveLoanQuery} is an empty interface
-	 * and {@code ActiveLoanQueryImpl} carries no {@code @Service}, so there is no bean —
-	 * constructor-injecting it would fail context startup rather than return an empty list.
+	 * <p><b>Seeded, because the seam is the wrong shape rather than missing.</b>
+	 * {@code loan.api.ActiveLoanQuery} does have a bean now — {@code ActiveLoanQueryImpl} is a real
+	 * {@code @Service} — but it publishes only {@code findActive(userId, itemId)}, a point query. A
+	 * shelf needs every active loan for one reader, and asking that seam for it would mean already
+	 * knowing the item ids, which is the thing being looked up.
 	 *
-	 * <p>When it lands, this maps its view onto {@link LibraryLoan} and is the only place the loan
-	 * enums become wire strings.
+	 * <p>Unblocking it is a list method on {@code loan/api}, which is the loan lane's file to change.
+	 * When it lands, this maps its view onto {@link LibraryLoan} and is the only place the loan enums
+	 * become wire strings.
 	 */
 	private List<LibraryLoan> loansFor(ReaderIdentity reader) {
-		return List.of();
+		return shelves.loansFor(reader.userId());
 	}
 
 	/**
 	 * The reader's holds, offered ones included.
 	 *
-	 * <p>Empty for the same reason: {@code hold.api.HoldSnapshotQuery} is published and real, but
-	 * {@code HoldSnapshotQueryImpl} is an empty shell with no {@code @Service}.
+	 * <p><b>Seeded, because the port has no bean.</b> {@code hold.api.HoldSnapshotQuery} is published
+	 * and real, but {@code HoldSnapshotQueryImpl} is an empty shell that neither implements it nor
+	 * carries {@code @Service} — injecting the port would fail context startup rather than return an
+	 * empty list.
 	 *
 	 * <p>When it lands, note that {@code position} and {@code queueLength} are computed there on
 	 * read — this assembler must not cache them, because a hold ahead of this one cancelling changes
 	 * both. Do not write a local {@code @Service} implementing that port either: the moment the hold
 	 * lane annotates theirs, the context has two candidates and fails for whoever merges second.
+	 * {@link MockLibraryRepository} is a plain component for exactly that reason.
 	 */
 	private List<LibraryHold> holdsFor(ReaderIdentity reader) {
-		return List.of();
+		return shelves.holdsFor(reader.userId());
 	}
 
 	/**
