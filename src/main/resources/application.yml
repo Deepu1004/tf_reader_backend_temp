@@ -3,6 +3,8 @@ spring:
     import: "optional:file:.env[.properties]"
   application:
     name: reader
+  mongodb:
+    uri: ${MONGODB_URI}
   data:
     mongodb:
       # matches docker-compose.yml — run `docker-compose up -d` before starting locally
@@ -17,150 +19,38 @@ spring:
       relyingparty:
         registration:
           tf-reader:
-            # --- our side (the Service Provider) ---
-            # Audience the IdP must address the assertion to. Must match the aud= below.
             entity-id: tf-reader-sp
             acs:
-              # Where the IdP POSTs the SAMLResponse. Must match the acs_url= below.
               location: "{baseUrl}/login/saml2/sso/{registrationId}"
 
             # --- the IdP side (the Asserting Party) ---
             assertingparty:
-              # The Issuer value samlmock.dev puts in the response. It defaults to
-              # "saml-mock" in their UI; leave that field alone or this will not match.
               entity-id: saml-mock
               singlesignon:
-                # The SSO endpoint. The aud and acs_url query parameters pre-fill the mock
-                # IdP's form so a human does not have to retype them; Spring appends
-                # SAMLRequest and RelayState to this URL. Changing the port means changing
-                # acs_url here too.
-                url: "https://samlmock.dev/idp?aud=tf-reader-sp&acs_url=http%3A%2F%2Flocalhost%3A8080%2Flogin%2Fsaml2%2Fsso%2Ftf-reader"
+                url: ${SAML_URL}
                 binding: redirect
-                # We do not sign the AuthnRequest. Spring defaults this to true, which would
-                # demand an SP private key committed to the repository - and samlmock.dev never
-                # verifies AuthnRequest signatures (there is no verification code in its request
-                # parser), so it would buy nothing. This does NOT affect validation of the
-                # response, which stays fully enabled below.
                 sign-request: false
               verification:
-                # SIGNATURE VERIFICATION. The IdP's public certificate, downloaded from
-                # https://samlmock.dev/api/downloadCert - static, self-signed CN=thameera.com,
-                # valid until 2044-06-08. Every assertion is verified against it. Remove this
-                # and the application refuses to start rather than trusting unsigned assertions.
                 credentials:
                   - certificate-location: classpath:saml/samlmock-idp.crt
 
-# =============================================================================
-#  JWT signing
-# =============================================================================
-#  HS256, one secret, one hour - the PRD's whole token design.
-#
-#  There is NO DEFAULT SECRET, on purpose. The placeholder below has no fallback
-#  value, so the application fails to start unless TNF_JWT_SECRET is set in the
-#  environment. A default would mean every forgetful deployment shared a publicly
-#  known signing key, and anything that can verify an HS256 token can mint one.
-#
-#  Generate one:  openssl rand -base64 48
-# -----------------------------------------------------------------------------
-tnf:
+tf:
   catalogue:
-    base-url: http://localhost:8080
+    # Base URL used to build absolute OPDS links. Renamed from tnf.catalogue.base-url;
+    # see CatalogueUrlBuilder.
+    base-url: ${BASE_URL}
+
+  security:
+    jwt:
+      issuer: tf-reader
+      secret: ${TF_JWT_SECRET}
+      access-token-ttl: 15m
+      refresh-token-ttl: 12h
+tnf:
   auth:
     jwt:
       secret: ${TNF_JWT_SECRET}
       ttl: 1h
-
-    # =========================================================================
-    #  OIDC relying party
-    # =========================================================================
-    #  The DEFAULTS BELOW POINT AT THE IN-PROCESS MOCK PROVIDER, so the project
-    #  runs and demonstrates OIDC out of the box. The mock itself is still off
-    #  unless mock-oidc.enabled=true - these are just the urls we would call.
-    #
-    #  Migrating to Azure AD B2C is these six values and nothing else. No Java
-    #  changes: not the user mapping, not the transaction logic, not the JWT,
-    #  not the security configuration. See the "b2c" profile document at
-    #  the bottom of this file.
-    #
-    #  issuer is configured SEPARATELY from the endpoints, deliberately. The url
-    #  a discovery document is fetched FROM is not necessarily the "iss" a
-    #  provider puts IN its tokens - for B2C they are reliably different, and
-    #  deriving one from the other is how the issuer check ends up skipped.
-    # -------------------------------------------------------------------------
-    oidc:
-      client-id: reader-local
-      # NO DEFAULT VALUE, on purpose. Set OIDC_CLIENT_SECRET in the environment,
-      # or in application-local.yml, which is gitignored. Empty is allowed only
-      # because the local mock validates against whatever this is set to; any
-      # real provider will refuse the exchange.
-      client-secret: ${OIDC_CLIENT_SECRET:}
-      issuer: http://localhost:8080
-      authorization-uri: http://localhost:8080/oauth2/authorize
-      token-uri: http://localhost:8080/oauth2/token
-      jwk-set-uri: http://localhost:8080/oauth2/jwks
-      # Must be registered at the provider character for character. Never taken
-      # from a request - it is the one parameter an attacker would most like to
-      # influence.
-      redirect-uri: http://localhost:8080/api/v1/auth/oidc/callback
-      # openid is what makes this OIDC rather than plain OAuth 2.0: without it
-      # there is no ID token at all.
-      scopes: [openid, profile, email]
-      # How long a sign-in may take before its transaction expires.
-      transaction-ttl: 10m
-
-      # =======================================================================
-      #  OIDC claim mapping
-      # =======================================================================
-      #  Which ID token claims we are willing to read. TWO, and only two: an
-      #  email to look a membership up by, and a subject for the audit trail.
-      #  Roles, collections, user type and institution are this application's
-      #  authorization model and come from our own user store - a provider
-      #  claim must never be able to grant an application role.
-      #
-      #  The values below are the defaults compiled into OidcProperties.Claims,
-      #  written out only so they are discoverable.
-      #
-      #  Why a list: there is no single claim every provider puts an email in.
-      #  Azure AD B2C emits "emails" as a JSON ARRAY; Entra External ID, the
-      #  Microsoft identity platform and our local mock emit "email"; work and
-      #  school accounts often carry only "preferred_username" or "upn".
-      #
-      #  "oid" before "sub": B2C's "sub" is pairwise - a different value per
-      #  application - whereas "oid" is the directory object id and is stable
-      #  across every app in the tenant. Our mock emits only "sub".
-      # -----------------------------------------------------------------------
-      claims:
-        email: [emails, email, preferred_username, upn]
-        subject: [oid, sub]
-
-# =============================================================================
-#  LOCAL MOCK OIDC PROVIDER  —  OFF BY DEFAULT, AND IT MUST STAY THAT WAY
-# =============================================================================
-#  A development fixture that pretends to be an identity provider: it mints
-#  real RS256-signed ID tokens for one hardcoded user. It exists so the whole
-#  OIDC flow can be run on a laptop with no tenant, no network and no
-#  credentials.
-#
-#  Nothing switches it on by accident: mock-oidc.enabled must be set
-#  explicitly, its beans are excluded from the component scan and created only
-#  by MockOidcConfig, and SecurityArchitectureTest asserts both of those.
-#
-#  To run the demo:  SPRING_PROFILES_ACTIVE=local  (see application-local.yml)
-# =============================================================================
-  mongodb:
-    uri: ${MONGODB_URI:}
-
-tf:
-  security:
-    jwt:
-      issuer: tf-reader
-      # No default. Startup fails fast when this is missing or shorter than 32 bytes.
-      # Supply it via the TF_JWT_SECRET environment variable in every deployed environment.
-      secret: ${TF_JWT_SECRET}
-      access-token-ttl: 15m
-      # Twelve hours: one working day needs one sign in. This is the absolute session
-      # lifetime too, since rotation never extends it.
-      refresh-token-ttl: 12h
 
 # API documentation is off by default and enabled only by the dev profile.
 springdoc:
