@@ -116,7 +116,12 @@ public class UserSecurityConfig {
 			CurrentUserJwtConverter currentUserConverter,
 			@Qualifier("jwtDecoder") JwtDecoder jwtDecoder) throws Exception {
 		return http
-				.securityMatcher("/api/v1/auth/**")
+				.securityMatcher("/api/v1/auth/**",
+				//"/api/v1/loans/**",
+    			//"/api/v1/library/**"
+				)
+				
+
 				// The API is bearer-token based: there is no cookie-authorised state-changing
 				// endpoint for CSRF protection to protect.
 				.csrf(csrf -> csrf.disable())
@@ -124,8 +129,11 @@ public class UserSecurityConfig {
 						.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(requests -> requests
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/saml/start").permitAll()
+						//.requestMatchers(HttpMethod.POST, "/api/v1/auth/dev-token").permitAll()
 						.requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
 						.anyRequest().authenticated())
+
+				
 				// Every request after sign-in presents the JWT that sign-in produced. Spring
 				// Security's own bearer-token filter does the header parsing and the decoding, so
 				// the only thing of ours in this path is the converter that turns verified claims
