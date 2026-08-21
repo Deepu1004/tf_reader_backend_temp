@@ -69,6 +69,84 @@ tnf:
     jwt:
       secret: ${TNF_JWT_SECRET}
       ttl: 1h
+
+    # =========================================================================
+    #  OIDC relying party
+    # =========================================================================
+    #  The DEFAULTS BELOW POINT AT THE IN-PROCESS MOCK PROVIDER, so the project
+    #  runs and demonstrates OIDC out of the box. The mock itself is still off
+    #  unless mock-oidc.enabled=true - these are just the urls we would call.
+    #
+    #  Migrating to Azure AD B2C is these six values and nothing else. No Java
+    #  changes: not the user mapping, not the transaction logic, not the JWT,
+    #  not the security configuration. See the "b2c" profile document at
+    #  the bottom of this file.
+    #
+    #  issuer is configured SEPARATELY from the endpoints, deliberately. The url
+    #  a discovery document is fetched FROM is not necessarily the "iss" a
+    #  provider puts IN its tokens - for B2C they are reliably different, and
+    #  deriving one from the other is how the issuer check ends up skipped.
+    # -------------------------------------------------------------------------
+    oidc:
+      client-id: reader-local
+      # NO DEFAULT VALUE, on purpose. Set OIDC_CLIENT_SECRET in the environment,
+      # or in application-local.yml, which is gitignored. Empty is allowed only
+      # because the local mock validates against whatever this is set to; any
+      # real provider will refuse the exchange.
+      client-secret: ${OIDC_CLIENT_SECRET:}
+      issuer: http://localhost:8080
+      authorization-uri: http://localhost:8080/oauth2/authorize
+      token-uri: http://localhost:8080/oauth2/token
+      jwk-set-uri: http://localhost:8080/oauth2/jwks
+      # Must be registered at the provider character for character. Never taken
+      # from a request - it is the one parameter an attacker would most like to
+      # influence.
+      redirect-uri: http://localhost:8080/api/v1/auth/oidc/callback
+      # openid is what makes this OIDC rather than plain OAuth 2.0: without it
+      # there is no ID token at all.
+      scopes: [openid, profile, email]
+      # How long a sign-in may take before its transaction expires.
+      transaction-ttl: 10m
+
+      # =======================================================================
+      #  OIDC claim mapping
+      # =======================================================================
+      #  Which ID token claims we are willing to read. TWO, and only two: an
+      #  email to look a membership up by, and a subject for the audit trail.
+      #  Roles, collections, user type and institution are this application's
+      #  authorization model and come from our own user store - a provider
+      #  claim must never be able to grant an application role.
+      #
+      #  The values below are the defaults compiled into OidcProperties.Claims,
+      #  written out only so they are discoverable.
+      #
+      #  Why a list: there is no single claim every provider puts an email in.
+      #  Azure AD B2C emits "emails" as a JSON ARRAY; Entra External ID, the
+      #  Microsoft identity platform and our local mock emit "email"; work and
+      #  school accounts often carry only "preferred_username" or "upn".
+      #
+      #  "oid" before "sub": B2C's "sub" is pairwise - a different value per
+      #  application - whereas "oid" is the directory object id and is stable
+      #  across every app in the tenant. Our mock emits only "sub".
+      # -----------------------------------------------------------------------
+      claims:
+        email: [emails, email, preferred_username, upn]
+        subject: [oid, sub]
+
+# =============================================================================
+#  LOCAL MOCK OIDC PROVIDER  —  OFF BY DEFAULT, AND IT MUST STAY THAT WAY
+# =============================================================================
+#  A development fixture that pretends to be an identity provider: it mints
+#  real RS256-signed ID tokens for one hardcoded user. It exists so the whole
+#  OIDC flow can be run on a laptop with no tenant, no network and no
+#  credentials.
+#
+#  Nothing switches it on by accident: mock-oidc.enabled must be set
+#  explicitly, its beans are excluded from the component scan and created only
+#  by MockOidcConfig, and SecurityArchitectureTest asserts both of those.
+#
+#  To run the demo:  SPRING_PROFILES_ACTIVE=local  (see application-local.yml)
+# =============================================================================
   mongodb:
     uri: ${MONGODB_URI:}
 
@@ -94,3 +172,91 @@ management:
   health:
     redis:
       enabled: false
+
+
+mock-oidc:
+  enabled: false
+
+# =============================================================================
+#  PROFILE: b2c  —  Azure AD B2C / Entra External ID
+# =============================================================================
+#  A profile DOCUMENT rather than a separate application-b2c.yml. Spring Boot
+#  activates everything below only when the "b2c" profile is on, so the whole
+#  OIDC story - the mock defaults above, and the real provider here - is
+#  readable in one file:
+#
+#      SPRING_PROFILES_ACTIVE=b2c ./mvnw spring-boot:run
+#
+#  THIS IS THE WHOLE MIGRATION. Six urls and an id, plus a secret from the
+#  environment. No Java changes: not the user mapping, not the transaction
+#  logic, not the ID token validation, not the JWT, not the security
+#  configuration. The mock provider is simply switched off and never loaded.
+#
+#  NO SECRETS HERE. Every value is an environment placeholder, and none of the
+#  mandatory ones has a fallback: an unset variable fails at startup naming the
+#  property, which is the intended behaviour.
+#
+#  Read all four endpoint values out of the tenant rather than assembling them:
+#
+#    curl -s "https://<tenant>.b2clogin.com/<tenant>.onmicrosoft.com/<policy>\
+#  /v2.0/.well-known/openid-configuration" | jq
+#
+#  ---------------------------------------------------------------------------
+#  THE ONE THING THAT CATCHES EVERYBODY
+#  ---------------------------------------------------------------------------
+#  A DISCOVERY URL IS NOT A TOKEN ISSUER.
+#
+#  OIDC_ISSUER must be the "issuer" FIELD INSIDE that document, not the url you
+#  fetched it from. For B2C they are reliably different:
+#
+#    fetched from : https://<tenant>.b2clogin.com/<tenant>.onmicrosoft.com/
+#                   <policy>/v2.0/.well-known/openid-configuration
+#    issuer field : https://<tenant>.b2clogin.com/<tenant-guid>/v2.0/
+#
+#  The url carries the tenant NAME and the policy; the issuer carries the
+#  directory GUID. That mismatch is also why this project never uses Spring's
+#  issuer-uri discovery, which requires the two to be equal and throws at
+#  startup for B2C. OidcIdTokenDecoder validates "iss" against OIDC_ISSUER
+#  explicitly, for the mock and for B2C alike.
+#  ---------------------------------------------------------------------------
+#
+#  In the tenant, before the first run:
+#
+#    1. An app registration, with a CLIENT SECRET (copy the value, shown once).
+#    2. Redirect URI registered as "Web", matching OIDC_REDIRECT_URI character
+#       for character.
+#    3. A sign-up/sign-in USER FLOW with "Email Addresses" ticked under
+#       Application claims - that is what produces the "emails" claim the
+#       mapper reads. Without it, sign-in reaches us and is refused with
+#       OIDC_AUTHENTICATION_FAILED ("no email address in any of the claims we
+#       read").
+#    4. A user whose email matches a row in MockUserRepository. A B2C account
+#       is not by itself an account here: authenticated is not provisioned, and
+#       an unknown address is a 403 USER_NOT_PROVISIONED.
+# =============================================================================
+
+---
+spring:
+  config:
+    activate:
+      on-profile: b2c
+
+# Belt and braces: the mock is already false by default, and stating it here
+# means "b2c" switches it off even if the profile list also carries "local".
+mock-oidc:
+  enabled: false
+
+tnf:
+  auth:
+    oidc:
+      client-id: ${OIDC_CLIENT_ID}
+      client-secret: ${OIDC_CLIENT_SECRET}
+      # The "issuer" field of the metadata document. NOT the discovery url.
+      issuer: ${OIDC_ISSUER}
+      authorization-uri: ${OIDC_AUTHORIZATION_URI}
+      token-uri: ${OIDC_TOKEN_URI}
+      # SIGNATURE VERIFICATION. Every ID token is verified against the keys
+      # published here. Point this anywhere else and sign-in stops working
+      # rather than trusting an unverified token.
+      jwk-set-uri: ${OIDC_JWK_SET_URI}
+      redirect-uri: ${OIDC_REDIRECT_URI:http://localhost:8080/api/v1/auth/oidc/callback}
