@@ -13,7 +13,6 @@ import org.springframework.security.saml2.provider.service.web.authentication.Op
 import org.springframework.security.saml2.provider.service.web.authentication.Saml2AuthenticationRequestResolver;
 import org.springframework.security.web.SecurityFilterChain;
 
-import com.tf.reader.auth.ApiAuthenticationEntryPoint;
 import com.tf.reader.auth.saml.SamlAuthenticationFailureHandler;
 import com.tf.reader.auth.saml.SamlAuthenticationSuccessHandler;
 
@@ -129,7 +128,20 @@ public class UserSecurityConfig {
 						.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(requests -> requests
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/saml/start").permitAll()
+<<<<<<< HEAD
 						//.requestMatchers(HttpMethod.POST, "/api/v1/auth/dev-token").permitAll()
+=======
+						.requestMatchers(HttpMethod.POST, "/api/v1/auth/dev-token").permitAll()
+						// The OIDC counterparts, open for the same reason: you cannot present a
+						// token before you have signed in. Both are declared a second time in
+						// AuthorizationCoverageTest.PUBLIC_ROUTES, deliberately - opening a route
+						// here without declaring it there fails that test.
+						.requestMatchers(HttpMethod.POST, "/api/v1/auth/oidc/start").permitAll()
+						// Entered by a browser redirect from the identity provider, which carries
+						// no bearer token and never will. It accepts only a code and a state, and
+						// both are worthless unless they match a sign-in this backend started.
+						.requestMatchers(HttpMethod.GET, "/api/v1/auth/oidc/callback").permitAll()
+>>>>>>> c5389d8f26d343a6e3c56e1b68de9b50285bf56e
 						.requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
 						.anyRequest().authenticated())
 
