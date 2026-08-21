@@ -115,12 +115,7 @@ public class UserSecurityConfig {
 			CurrentUserJwtConverter currentUserConverter,
 			@Qualifier("jwtDecoder") JwtDecoder jwtDecoder) throws Exception {
 		return http
-				.securityMatcher("/api/v1/auth/**",
-				//"/api/v1/loans/**",
-    			//"/api/v1/library/**"
-				)
-				
-
+				.securityMatcher("/api/v1/auth/**")
 				// The API is bearer-token based: there is no cookie-authorised state-changing
 				// endpoint for CSRF protection to protect.
 				.csrf(csrf -> csrf.disable())
@@ -128,9 +123,6 @@ public class UserSecurityConfig {
 						.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(requests -> requests
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/saml/start").permitAll()
-<<<<<<< HEAD
-						//.requestMatchers(HttpMethod.POST, "/api/v1/auth/dev-token").permitAll()
-=======
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/dev-token").permitAll()
 						// The OIDC counterparts, open for the same reason: you cannot present a
 						// token before you have signed in. Both are declared a second time in
@@ -141,11 +133,8 @@ public class UserSecurityConfig {
 						// no bearer token and never will. It accepts only a code and a state, and
 						// both are worthless unless they match a sign-in this backend started.
 						.requestMatchers(HttpMethod.GET, "/api/v1/auth/oidc/callback").permitAll()
->>>>>>> c5389d8f26d343a6e3c56e1b68de9b50285bf56e
 						.requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
 						.anyRequest().authenticated())
-
-				
 				// Every request after sign-in presents the JWT that sign-in produced. Spring
 				// Security's own bearer-token filter does the header parsing and the decoding, so
 				// the only thing of ours in this path is the converter that turns verified claims
