@@ -10,7 +10,7 @@ spring:
     active: local
   data:
     mongodb:
-      uri: ${MONGODB_URI:mongodb://localhost:27017/tnfreader}
+      uri: ${MONGODB_URI}
       auto-index-creation: true
     redis:
       host: localhost
@@ -28,7 +28,7 @@ spring:
             assertingparty:
               entity-id: saml-mock
               singlesignon:
-                url: ${SAML_URL:https://samlmock.dev/idp?aud=tf-reader-sp&acs_url=http%3A%2F%2Flocalhost%3A8080%2Flogin%2Fsaml2%2Fsso%2Ftf-reader}
+                url: ${SAML_URL}
                 binding: redirect
                 sign-request: false
               verification:
@@ -37,7 +37,7 @@ spring:
 
 tf:
   catalogue:
-    base-url: ${BASE_URL:http://localhost:8080}
+    base-url: ${BASE_URL}
   security:
     jwt:
       issuer: tf-reader
