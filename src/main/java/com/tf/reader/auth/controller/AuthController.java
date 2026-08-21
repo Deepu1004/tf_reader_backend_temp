@@ -132,8 +132,8 @@ public class AuthController {
 	@PostMapping("/dev-token")
 	public IssuedToken generateDevToken(
 			@RequestParam(defaultValue = "usr_dev123") String userId,
-			@RequestParam(defaultValue = "inst_imperial") String institutionId) {
-		TnfUser user = new TnfUser(userId, UserType.INSTITUTION, institutionId, List.of("MEMBER"), List.of("col_medicine"));
+			@RequestParam(defaultValue = "inst_7f3") String institutionId) {
+		TnfUser user = new TnfUser(userId, UserType.INSTITUTION, institutionId, List.of("MEMBER"), List.of("col_law2024"));
 		return tokenService.issue(user);
 	}
 

@@ -6,6 +6,8 @@ spring:
     import: "optional:file:.env[.properties]"
   application:
     name: reader
+  profiles:
+    active: local
   data:
     mongodb:
       uri: ${MONGODB_URI:mongodb://localhost:27017/tnfreader}
@@ -44,10 +46,20 @@ tf:
       refresh-token-ttl: 12h
 
 tnf:
+  seed:
+    enabled: true
   auth:
     jwt:
       secret: ${TNF_JWT_SECRET}
       ttl: 1h
+    oidc:
+      client-id: ${OIDC_CLIENT_ID:mock-client-id}
+      client-secret: ${OIDC_CLIENT_SECRET:mock-client-secret}
+      issuer: ${OIDC_ISSUER:http://localhost:8080}
+      authorization-uri: ${OIDC_AUTHORIZATION_URI:http://localhost:8080/oauth2/v2.0/authorize}
+      token-uri: ${OIDC_TOKEN_URI:http://localhost:8080/oauth2/v2.0/token}
+      jwk-set-uri: ${OIDC_JWK_SET_URI:http://localhost:8080/oauth2/v2.0/jwks}
+      redirect-uri: ${OIDC_REDIRECT_URI:http://localhost:8080/api/v1/auth/oidc/callback}
 
 springdoc:
   api-docs:
@@ -63,65 +75,7 @@ management:
 
 mock-oidc:
   enabled: false
-
-# =============================================================================
-#  PROFILE: b2c  —  Azure AD B2C / Entra External ID
-# =============================================================================
-#  A profile DOCUMENT rather than a separate application-b2c.yml. Spring Boot
-#  activates everything below only when the "b2c" profile is on, so the whole
-#  OIDC story - the mock defaults above, and the real provider here - is
-#  readable in one file:
-#
-#      SPRING_PROFILES_ACTIVE=b2c ./mvnw spring-boot:run
-#
-#  THIS IS THE WHOLE MIGRATION. Six urls and an id, plus a secret from the
-#  environment. No Java changes: not the user mapping, not the transaction
-#  logic, not the ID token validation, not the JWT, not the security
-#  configuration. The mock provider is simply switched off and never loaded.
-#
-#  NO SECRETS HERE. Every value is an environment placeholder, and none of the
-#  mandatory ones has a fallback: an unset variable fails at startup naming the
-#  property, which is the intended behaviour.
-#
-#  Read all four endpoint values out of the tenant rather than assembling them:
-#
-#    curl -s "https://<tenant>.b2clogin.com/<tenant>.onmicrosoft.com/<policy>\
-#  /v2.0/.well-known/openid-configuration" | jq
-#
-#  ---------------------------------------------------------------------------
-#  THE ONE THING THAT CATCHES EVERYBODY
-#  ---------------------------------------------------------------------------
-#  A DISCOVERY URL IS NOT A TOKEN ISSUER.
-#
-#  OIDC_ISSUER must be the "issuer" FIELD INSIDE that document, not the url you
-#  fetched it from. For B2C they are reliably different:
-#
-#    fetched from : https://<tenant>.b2clogin.com/<tenant>.onmicrosoft.com/
-#                   <policy>/v2.0/.well-known/openid-configuration
-#    issuer field : https://<tenant>.b2clogin.com/<tenant-guid>/v2.0/
-#
-#  The url carries the tenant NAME and the policy; the issuer carries the
-#  directory GUID. That mismatch is also why this project never uses Spring's
-#  issuer-uri discovery, which requires the two to be equal and throws at
-#  startup for B2C. OidcIdTokenDecoder validates "iss" against OIDC_ISSUER
-#  explicitly, for the mock and for B2C alike.
-#  ---------------------------------------------------------------------------
-#
-#  In the tenant, before the first run:
-#
-#    1. An app registration, with a CLIENT SECRET (copy the value, shown once).
-#    2. Redirect URI registered as "Web", matching OIDC_REDIRECT_URI character
-#       for character.
-#    3. A sign-up/sign-in USER FLOW with "Email Addresses" ticked under
-#       Application claims - that is what produces the "emails" claim the
-#       mapper reads. Without it, sign-in reaches us and is refused with
-#       OIDC_AUTHENTICATION_FAILED ("no email address in any of the claims we
-#       read").
-#    4. A user whose email matches a row in MockUserRepository. A B2C account
-#       is not by itself an account here: authenticated is not provisioned, and
-#       an unknown address is a 403 USER_NOT_PROVISIONED.
-# =============================================================================
-
+  
 ---
 spring:
   config:

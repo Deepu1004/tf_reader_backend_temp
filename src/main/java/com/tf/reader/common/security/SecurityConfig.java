@@ -22,6 +22,7 @@ import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import com.tf.reader.admin.security.AdminJwtAuthenticationConverter;
+import com.tf.reader.auth.security.CurrentUserJwtConverter;
 
 import java.io.IOException;
 
@@ -214,7 +215,8 @@ public class SecurityConfig {
 	@Bean
 	@Order(5)
 	SecurityFilterChain appApiFilterChain(HttpSecurity http,
-			@Qualifier(JwtConfig.APP_ACCESS_TOKEN_DECODER) JwtDecoder appAccessTokenDecoder) throws Exception {
+			@Qualifier("jwtDecoder") JwtDecoder jwtDecoder,
+			CurrentUserJwtConverter currentUserJwtConverter) throws Exception {
 
 		http.securityMatcher(APP_API_PATHS, APP_OPDS_PATHS)
 				.authorizeHttpRequests(authorize -> authorize
@@ -223,7 +225,7 @@ public class SecurityConfig {
 				.oauth2ResourceServer(oauth2 -> oauth2
 						.authenticationEntryPoint(this.authenticationEntryPoint)
 						.accessDeniedHandler(this.accessDeniedHandler)
-						.jwt(jwt -> jwt.decoder(appAccessTokenDecoder)));
+						.jwt(jwt -> jwt.decoder(jwtDecoder).jwtAuthenticationConverter(currentUserJwtConverter)));
 		return stateless(http).build();
 	}
 

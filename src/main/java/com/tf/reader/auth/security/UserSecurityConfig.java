@@ -123,6 +123,7 @@ public class UserSecurityConfig {
 						.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(requests -> requests
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/saml/start").permitAll()
+						.requestMatchers(HttpMethod.POST, "/api/v1/auth/dev-token").permitAll()
 						// The OIDC counterparts, open for the same reason: you cannot present a
 						// token before you have signed in. Both are declared a second time in
 						// AuthorizationCoverageTest.PUBLIC_ROUTES, deliberately - opening a route
