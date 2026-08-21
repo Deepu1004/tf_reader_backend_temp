@@ -1,13 +1,14 @@
 package com.tf.reader.loan.controller;
 
-import java.security.Principal;
 import java.util.Locale;
 
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.tf.reader.auth.model.CurrentUser;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.common.page.PageQuery;
@@ -18,8 +19,8 @@ import com.tf.reader.loan.service.LoanListService;
 /**
  * The reader's personal library: {@code GET /api/v1/loans}.
  *
- * <p>Thin by design. Identity is the authenticated principal's name — the token {@code sub} the
- * app resource-server chain already verified (invariant #5); we never read a userId from a query
+ * <p>Thin by design. Identity is the authenticated {@link CurrentUser} the app resource-server
+ * chain resolves from the verified token (invariant #5); we never read a userId from a query
  * param. Paging is resolved by the shared {@code PageQuery} resolver, and the only work here is
  * turning the {@code ?status=} string into an enum (a bad value is a {@code 400}, not a {@code 500}).
  *
@@ -38,11 +39,11 @@ public class LoanController {
 
 	@GetMapping
 	public LoanPage list(
-			Principal caller,
+			@AuthenticationPrincipal CurrentUser caller,
 			PageQuery page,
 			@RequestParam(name = "status", required = false) String status) {
 
-		return loanList.list(caller.getName(), parseStatus(status), page);
+		return loanList.list(caller.userId(), parseStatus(status), page);
 	}
 
 	/** {@code null}/blank → no filter; an unrecognised value → 400 rather than a silent empty page. */
