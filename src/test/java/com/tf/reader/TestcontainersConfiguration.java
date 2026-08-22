@@ -14,6 +14,5 @@ public class TestcontainersConfiguration {
 	MongoDBContainer mongoDbContainer() {
 		return new MongoDBContainer(DockerImageName.parse("mongo:latest"));
 	}
-	
 
 }
