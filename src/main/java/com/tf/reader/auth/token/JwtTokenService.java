@@ -66,7 +66,7 @@ public class JwtTokenService implements TokenService {
 		Instant expiresAt = issuedAt.plus(properties.ttl());
 
 		JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
-				.issuer("tf-reader")
+				.issuer(properties.issuer())
 				.subject(user.userId())
 				.audience(List.of(TokenAudience.APP))
 				.claim(TokenClaims.TOKEN_USE, TokenClaims.USE_ACCESS)

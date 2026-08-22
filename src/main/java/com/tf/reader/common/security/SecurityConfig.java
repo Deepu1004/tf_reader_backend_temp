@@ -221,6 +221,16 @@ public class SecurityConfig {
 		http.securityMatcher(APP_API_PATHS, APP_OPDS_PATHS)
 				.authorizeHttpRequests(authorize -> authorize
 						.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+						// ── Public auth endpoints ──
+						// Sign-in start points cannot require a token — a token is what sign-in
+						// produces. The OIDC callback is entered by a browser redirect from the IdP
+						// which carries no bearer token and never will.
+						.requestMatchers(HttpMethod.POST, "/api/v1/auth/saml/start").permitAll()
+						.requestMatchers(HttpMethod.POST, "/api/v1/auth/oidc/start").permitAll()
+						.requestMatchers(HttpMethod.GET,  "/api/v1/auth/oidc/callback").permitAll()
+						// Dev-only convenience token endpoint. No environment guard — see auth audit
+						// issue #1; this is a known risk documented separately.
+						.requestMatchers(HttpMethod.POST, "/api/v1/auth/dev-token").permitAll()
 						.anyRequest().authenticated())
 				.oauth2ResourceServer(oauth2 -> oauth2
 						.authenticationEntryPoint(this.authenticationEntryPoint)
