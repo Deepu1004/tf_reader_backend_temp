@@ -20,7 +20,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.tf.reader.TestcontainersConfiguration;
 import com.tf.reader.auth.model.TnfUser;
 import com.tf.reader.auth.model.UserType;
-import com.tf.reader.auth.token.JwtProperties;
 import com.tf.reader.auth.token.JwtTokenService;
 import com.tf.reader.loan.entity.LicenceModel;
 import com.tf.reader.loan.entity.Loan;
@@ -99,7 +98,7 @@ class LoanListEndpointTest {
 
 	/** A genuine reader-auth token for CALLER, signed with the same secret the app verifies with. */
 	private String token() {
-		return new JwtTokenService(new JwtProperties(SECRET, Duration.ofHours(1)), Clock.systemUTC())
+		return JwtTokenService.forTest(SECRET, Duration.ofHours(1), Clock.systemUTC())
 				.issue(CALLER).token();
 	}
 
