@@ -1,5 +1,6 @@
 package com.tf.reader.loan.api;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -17,4 +18,11 @@ public interface ActiveLoanQuery {
 	 *         already passed its due date.
 	 */
 	Optional<ActiveLoanView> findActive(String userId, String itemId);
+
+	/**
+	 * Every loan this reader holds that is still live right now — for building the library shelf
+	 * (Module E, D-025). Applies the same D-006 liveness rule as {@link #findActive}: a lapsed-but-
+	 * not-yet-swept row is excluded. Returned newest-first ({@code borrowedAt} descending).
+	 */
+	List<ActiveLoanView> findAllFor(String userId);
 }

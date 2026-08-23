@@ -2,6 +2,8 @@ package com.tf.reader.loan.service;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
@@ -35,6 +37,15 @@ public class ActiveLoanQueryImpl implements ActiveLoanQuery {
 		return loans.findByUserIdAndItemIdAndStatus(userId, itemId, LoanStatus.ACTIVE)
 				.filter(this::isLive)
 				.map(this::toView);
+	}
+
+	@Override
+	public List<ActiveLoanView> findAllFor(String userId) {
+		return loans.findByUserIdAndStatus(userId, LoanStatus.ACTIVE).stream()
+				.filter(this::isLive)
+				.sorted(Comparator.comparing(Loan::getBorrowedAt).reversed())
+				.map(this::toView)
+				.toList();
 	}
 
 	/** ACTIVE and either open-ended ({@code dueAt == null}) or not yet past its due date. */

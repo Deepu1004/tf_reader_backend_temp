@@ -34,6 +34,9 @@ public interface LoanRepository extends MongoRepository<Loan, String> {
 	 */
 	List<Loan> findByStatusAndDueAtLessThanEqual(LoanStatus status, Instant now);
 
+	/** All ACTIVE loans for one reader — used by {@code ActiveLoanQuery.findAllFor} (D-025). */
+	List<Loan> findByUserIdAndStatus(String userId, LoanStatus status);
+
 	/** The personal library listing, scoped to one reader (the token's user). */
 	Page<Loan> findByUserId(String userId, Pageable pageable);
 
