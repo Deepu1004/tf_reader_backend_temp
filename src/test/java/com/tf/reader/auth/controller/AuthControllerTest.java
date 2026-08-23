@@ -24,7 +24,7 @@ import com.tf.reader.auth.repository.MockInstitutionRepository;
 import com.tf.reader.auth.token.JwtProperties;
 import com.tf.reader.auth.token.JwtTokenService;
 import com.tf.reader.auth.token.TokenService;
-import com.tf.reader.auth.saml.transaction.AuthTransactionStore;
+import com.tf.reader.auth.transaction.AuthTransactionStore;
 import com.tf.reader.common.error.GlobalExceptionHandler;
 
 /**
@@ -62,10 +62,7 @@ class AuthControllerTest {
 		 */
 		@Bean
 		TokenService tokenService(Clock clock) {
-			return new JwtTokenService(
-					new JwtProperties("a-test-only-signing-secret-of-sufficient-length-0123456789",
-							Duration.ofHours(1)),
-					clock);
+			return JwtTokenService.forTest("a-test-only-signing-secret-of-sufficient-length-0123456789", Duration.ofHours(1), clock);
 		}
 	}
 

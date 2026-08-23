@@ -1,4 +1,4 @@
-package com.tf.reader.auth.saml.transaction;
+package com.tf.reader.auth.transaction;
 
 import java.time.Instant;
 

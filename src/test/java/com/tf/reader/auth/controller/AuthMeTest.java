@@ -36,7 +36,7 @@ import com.tf.reader.auth.token.JwtTokenService;
  * <p>The clock is fixed so {@code serverTime} and {@code expiresAt} can be asserted exactly
  * rather than approximately - the two fields the app counts down from.
  */
-@SpringBootTest(properties = "tnf.auth.jwt.secret=" + AuthMeTest.SECRET)
+@SpringBootTest(properties = {"tf.security.jwt.secret=" + AuthMeTest.SECRET, "tf.security.jwt.access-token-ttl=1h"})
 @AutoConfigureMockMvc
 class AuthMeTest extends ContainerisedInfrastructure {
 
@@ -220,8 +220,7 @@ class AuthMeTest extends ContainerisedInfrastructure {
 	@Test
 	void anExpiredTokenIsRefusedAndNoTokenIsIssued() throws Exception {
 		// Minted 90 minutes before the frozen clock, so it has expired by NOW.
-		String expired = new JwtTokenService(new JwtProperties(SECRET, Duration.ofHours(1)),
-				Clock.fixed(NOW.minus(Duration.ofMinutes(90)), ZoneOffset.UTC)).issue(MEMBER).token();
+		String expired = JwtTokenService.forTest(SECRET, Duration.ofHours(1), Clock.fixed(NOW.minus(Duration.ofMinutes(90)), ZoneOffset.UTC)).issue(MEMBER).token();
 
 		String body = mockMvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + expired))
 				.andExpect(status().isUnauthorized())
@@ -255,7 +254,6 @@ class AuthMeTest extends ContainerisedInfrastructure {
 	}
 
 	private String tokenFor(TnfUser user) {
-		return new JwtTokenService(new JwtProperties(SECRET, Duration.ofHours(1)),
-				Clock.fixed(NOW, ZoneOffset.UTC)).issue(user).token();
+		return JwtTokenService.forTest(SECRET, Duration.ofHours(1), Clock.fixed(NOW, ZoneOffset.UTC)).issue(user).token();
 	}
 }

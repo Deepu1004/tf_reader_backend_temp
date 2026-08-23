@@ -19,7 +19,7 @@ import com.tf.reader.auth.repository.MockInstitutionRepository;
 import com.tf.reader.auth.repository.MockUserRepository;
 import com.tf.reader.auth.token.JwtProperties;
 import com.tf.reader.auth.token.JwtTokenService;
-import com.tf.reader.auth.saml.transaction.AuthTransactionStore;
+import com.tf.reader.auth.transaction.AuthTransactionStore;
 
 import tools.jackson.databind.json.JsonMapper;
 
@@ -45,8 +45,7 @@ class SamlAuthenticationSuccessHandlerTest {
 	private final SamlAuthenticationSuccessHandler handler = new SamlAuthenticationSuccessHandler(
 			new SamlAuthenticationService(transactions, new MockInstitutionRepository(),
 					new SamlUserMapper(new MockUserRepository()),
-					new JwtTokenService(new JwtProperties(SECRET, Duration.ofHours(1)),
-							Clock.systemUTC()),
+					JwtTokenService.forTest(SECRET, Duration.ofHours(1), Clock.systemUTC()),
 					Clock.systemUTC()),
 			JsonMapper.builder().build());
 

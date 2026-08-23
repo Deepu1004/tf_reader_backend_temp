@@ -25,8 +25,8 @@ import com.tf.reader.auth.security.TnfJwtValidator;
 import com.tf.reader.auth.saml.SamlAuthenticationService.SamlLoginResult;
 import com.tf.reader.auth.token.JwtProperties;
 import com.tf.reader.auth.token.JwtTokenService;
-import com.tf.reader.auth.saml.transaction.AuthTransaction;
-import com.tf.reader.auth.saml.transaction.AuthTransactionStore;
+import com.tf.reader.auth.transaction.AuthTransaction;
+import com.tf.reader.auth.transaction.AuthTransactionStore;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 
@@ -46,8 +46,7 @@ class SamlAuthenticationServiceTest {
 
 	private final SamlAuthenticationService service = new SamlAuthenticationService(transactions,
 			new MockInstitutionRepository(), new SamlUserMapper(new MockUserRepository()),
-			new JwtTokenService(
-					new JwtProperties(SECRET, java.time.Duration.ofHours(1)),
+			JwtTokenService.forTest(SECRET, java.time.Duration.ofHours(1),
 					Clock.fixed(NOW, ZoneOffset.UTC)),
 			Clock.fixed(NOW, ZoneOffset.UTC));
 
@@ -162,8 +161,9 @@ class SamlAuthenticationServiceTest {
 	 * too.
 	 */
 	private JwtDecoder decoderAtTheTestsClock() {
-		NimbusJwtDecoder decoder =
-				NimbusJwtDecoder.withSecretKey(new JwtProperties(SECRET, null).signingKey())
+		byte[] keyBytes = SECRET.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+		var signingKey = new javax.crypto.spec.SecretKeySpec(keyBytes, "HmacSHA256");
+		NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(signingKey)
 						.macAlgorithm(MacAlgorithm.HS256)
 						.build();
 		decoder.setJwtValidator(new TnfJwtValidator(Clock.fixed(NOW, ZoneOffset.UTC)));
