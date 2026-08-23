@@ -1,4 +1,4 @@
-package com.tf.reader.auth.saml.transaction;
+package com.tf.reader.auth.transaction;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

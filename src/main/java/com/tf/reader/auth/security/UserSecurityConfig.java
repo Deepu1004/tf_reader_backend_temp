@@ -13,7 +13,6 @@ import org.springframework.security.saml2.provider.service.web.authentication.Op
 import org.springframework.security.saml2.provider.service.web.authentication.Saml2AuthenticationRequestResolver;
 import org.springframework.security.web.SecurityFilterChain;
 
-import com.tf.reader.auth.ApiAuthenticationEntryPoint;
 import com.tf.reader.auth.saml.SamlAuthenticationFailureHandler;
 import com.tf.reader.auth.saml.SamlAuthenticationSuccessHandler;
 

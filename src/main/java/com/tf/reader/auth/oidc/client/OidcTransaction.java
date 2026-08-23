@@ -5,7 +5,7 @@ import java.time.Instant;
 /**
  * One in-flight OIDC sign-in.
  *
- * <p>The OIDC counterpart of {@link com.tf.reader.auth.saml.transaction.AuthTransaction}, and separate
+ * <p>The OIDC counterpart of {@link com.tf.reader.auth.transaction.AuthTransaction}, and separate
  * from it for one reason: <b>the nonce</b>. A SAML transaction needs to carry an institution
  * across a redirect; an OIDC one needs to carry an institution, a state and a nonce, and the
  * nonce has no SAML analogue at all - it is bound into the ID token by the provider and checked

@@ -59,9 +59,19 @@ final class TestTokenFactory {
 				.claim(TokenClaims.ROLE, role.name());
 	}
 
-	/** An app access token, which the admin surface must never accept. */
+	/**
+	 * An app access token, which the admin surface must never accept.
+	 *
+	 * <p>Carries the claims {@link com.tf.reader.auth.security.TnfJwtValidator} requires on every
+	 * app-audience token, so this is a token the app chain would actually accept rather than one
+	 * that only looks right until it reaches that validator.
+	 */
 	JwtClaimsSet.Builder appAccessClaims(String subject) {
-		return baseClaims(subject, TokenAudience.APP, TokenClaims.USE_ACCESS);
+		return baseClaims(subject, TokenAudience.APP, TokenClaims.USE_ACCESS)
+				.claim("userId", subject)
+				.claim("type", "INDIVIDUAL")
+				.claim("roles", List.of())
+				.claim("collections", List.of());
 	}
 
 	/** A JWT shaped like the refresh tokens this service no longer issues. */

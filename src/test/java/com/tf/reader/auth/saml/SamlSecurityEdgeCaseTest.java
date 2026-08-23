@@ -20,8 +20,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import com.tf.reader.ContainerisedInfrastructure;
-import com.tf.reader.auth.saml.transaction.AuthTransaction;
-import com.tf.reader.auth.saml.transaction.AuthTransactionStore;
+import com.tf.reader.auth.transaction.AuthTransaction;
+import com.tf.reader.auth.transaction.AuthTransactionStore;
 
 /**
  * Hostile input at the SAML ACS, over real HTTP.

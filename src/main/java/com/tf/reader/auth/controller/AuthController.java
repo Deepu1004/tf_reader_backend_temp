@@ -27,8 +27,8 @@ import com.tf.reader.auth.repository.MockInstitutionRepository;
 import com.tf.reader.auth.security.UserSecurityConfig;
 import com.tf.reader.auth.token.IssuedToken;
 import com.tf.reader.auth.token.TokenService;
-import com.tf.reader.auth.saml.transaction.AuthTransaction;
-import com.tf.reader.auth.saml.transaction.AuthTransactionStore;
+import com.tf.reader.auth.transaction.AuthTransaction;
+import com.tf.reader.auth.transaction.AuthTransactionStore;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 
