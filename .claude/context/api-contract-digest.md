@@ -3,7 +3,7 @@
 **GENERATED FILE. Do not edit.** Run `./scripts/gen-api-digest.sh` after the contract changes.
 Source `api-docs/wokay-api.yaml`, generated 2026-08-24.
 
-45 operations across 32 paths, 82 schemas. **`FROZEN` means another team is already building against it: changing one needs a cohort conversation.**
+45 operations across 33 paths, 82 schemas. **`FROZEN` means another team is already building against it: changing one needs a cohort conversation.**
 
 ## Public institutions
 
@@ -66,7 +66,7 @@ Source `api-docs/wokay-api.yaml`, generated 2026-08-24.
 | POST | `/api/admin/v1/institutions/{institutionId}/entitlements` | DRAFT | wokay |
 | PUT | `/api/admin/v1/entitlements/{entitlementId}` | DRAFT | wokay |
 | DELETE | `/api/admin/v1/entitlements/{entitlementId}` | DRAFT | wokay |
-| PATCH | `/api/admin/v1/entitlements/{entitlementId}` | DRAFT | wokay |
+| PATCH | `/api/admin/v1/entitlements/{entitlementId}/status` | DRAFT | wokay |
 | GET | `/api/admin/v1/institutions/{institutionId}/feed-settings` | DRAFT | wokay |
 | PUT | `/api/admin/v1/institutions/{institutionId}/feed-settings` | DRAFT | wokay |
 | GET | `/api/admin/v1/admin-users` | DRAFT | wokay |

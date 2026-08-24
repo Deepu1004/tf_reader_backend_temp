@@ -1876,6 +1876,14 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/admin/v1/entitlements/{entitlementId}/status:
+    parameters:
+      - name: entitlementId
+        in: path
+        required: true
+        schema: { type: string }
+        example: ent_5a1
     patch:
       tags: [Admin · entitlements]
       operationId: changeEntitlementStatus
