@@ -61,13 +61,19 @@ class DemoDataSeederTest {
         assertThat(dataset.publishers()).hasSize(2);
         assertThat(dataset.collections()).hasSize(2);
         assertThat(dataset.institutions()).hasSize(3);
-        assertThat(dataset.catalogueItems()).hasSize(10);
+        assertThat(dataset.catalogueItems()).hasSize(8);
         assertThat(dataset.entitlements()).hasSize(2);
         assertThat(dataset.adminUsers()).hasSize(3);
         assertThat(dataset.feedSettings()).hasSize(3);
 
         // One number, so an extra row cannot be added without someone updating the plan too.
-        assertThat(dataset.documentCount()).isEqualTo(25);
+        //
+        // This was bumped to 10/25 in 574cea8 without seed/demo-dataset.json ever gaining the
+        // two extra catalogue items - canonical-items.json (generated FROM the dataset) still
+        // shows 8 too, and nothing else in the codebase references a ninth or tenth item id.
+        // Restored to match the dataset that actually exists; adding real items is a seed-data
+        // change for whoever needs them, not a number to bump on its own.
+        assertThat(dataset.documentCount()).isEqualTo(23);
     }
 
     @Test
