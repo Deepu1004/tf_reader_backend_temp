@@ -3,6 +3,7 @@ package com.tf.reader.catalogue.repository;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.query.TextCriteria;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
@@ -17,6 +18,10 @@ public interface CatalogueItemRepository extends MongoRepository<CatalogueItem, 
 
 	List<CatalogueItem> findByCollectionIdsAndStatusAndContentState(String collectionId, ItemStatus status,
 			ContentState contentState);
+
+	// Backs the OPDS "all" group: the whole entitled catalogue, sorted, entitlement
+	// filtering applied afterwards in Java since EntitlementQuery is single-item only.
+	List<CatalogueItem> findByStatusAndContentState(ItemStatus status, ContentState contentState, Sort sort);
 
 	List<CatalogueItem> findByCollectionIds(String collectionId);
 
