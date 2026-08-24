@@ -42,6 +42,8 @@ class ActiveLoanQueryTest {
 
 		assertThat(result).isPresent();
 		assertThat(result.get().loanId()).isEqualTo("loan_1");
+		assertThat(result.get().borrowedAt()).isEqualTo(NOW.minus(Duration.ofDays(1))); // D-026
+		assertThat(result.get().status()).isEqualTo("ACTIVE");                          // D-026
 	}
 
 	@Test
@@ -81,6 +83,8 @@ class ActiveLoanQueryTest {
 
 		assertThat(result).hasSize(2);
 		assertThat(result.get(0).loanId()).isEqualTo("loan_a"); // newest borrowedAt first
+		assertThat(result.get(0).borrowedAt()).isEqualTo(NOW.minus(Duration.ofDays(1))); // D-026
+		assertThat(result.get(0).status()).isEqualTo("ACTIVE");                          // D-026
 		assertThat(result.get(1).loanId()).isEqualTo("loan_b");
 	}
 
