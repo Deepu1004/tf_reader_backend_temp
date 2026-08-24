@@ -96,7 +96,7 @@ class EntitlementAdminServiceTest {
 		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
 		EntitlementCreate write = new EntitlementCreate(ScopeType.COLLECTION, "col_law2024", 2, null,
-				LocalDate.parse("2026-08-01"), LocalDate.parse("2026-12-31"));
+				LocalDate.parse("2026-08-01"), LocalDate.parse("2026-12-31"), null);
 
 		EntitlementView created = service.create("inst_7f3", write);
 
@@ -125,7 +125,8 @@ class EntitlementAdminServiceTest {
 		when(institutionRepository.existsById("inst_7f3")).thenReturn(true);
 		when(bookCollectionRepository.existsById("col_ghost")).thenReturn(false);
 
-		EntitlementCreate write = new EntitlementCreate(ScopeType.COLLECTION, "col_ghost", null, null, null, null);
+		EntitlementCreate write = new EntitlementCreate(ScopeType.COLLECTION, "col_ghost", null, null, null, null,
+				null);
 
 		assertThatThrownBy(() -> service.create("inst_7f3", write)).isInstanceOf(ApiException.class)
 				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
@@ -138,7 +139,7 @@ class EntitlementAdminServiceTest {
 	void createOnAnUnknownInstitutionIsNotFound() {
 		when(institutionRepository.existsById("inst_ghost")).thenReturn(false);
 
-		EntitlementCreate write = new EntitlementCreate(ScopeType.PUBLISHER, "pub_rtlg", null, null, null, null);
+		EntitlementCreate write = new EntitlementCreate(ScopeType.PUBLISHER, "pub_rtlg", null, null, null, null, null);
 
 		assertThatThrownBy(() -> service.create("inst_ghost", write)).isInstanceOf(ApiException.class)
 				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.NOT_FOUND));
@@ -148,12 +149,59 @@ class EntitlementAdminServiceTest {
 	void createByAnAdminScopedToAnotherInstitutionIsForbiddenScope() {
 		actingAs(AdminRole.INSTITUTION_ADMIN, "inst_other");
 
-		EntitlementCreate write = new EntitlementCreate(ScopeType.PUBLISHER, "pub_rtlg", null, null, null, null);
+		EntitlementCreate write = new EntitlementCreate(ScopeType.PUBLISHER, "pub_rtlg", null, null, null, null, null);
 
 		assertThatThrownBy(() -> service.create("inst_7f3", write)).isInstanceOf(ApiException.class)
 				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.FORBIDDEN_SCOPE));
 
 		verify(entitlementRepository, never()).save(any());
+	}
+
+	@Test
+	void createByInstitutionAdminForcesPendingRegardlessOfRequestedStatus() {
+		actingAs(AdminRole.INSTITUTION_ADMIN, "inst_7f3");
+		when(institutionRepository.existsById("inst_7f3")).thenReturn(true);
+		when(publisherRepository.existsById("pub_rtlg")).thenReturn(true);
+		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+		EntitlementCreate write = new EntitlementCreate(ScopeType.PUBLISHER, "pub_rtlg", null, null, null, null,
+				EntitlementStatus.ACTIVE);
+
+		EntitlementView created = service.create("inst_7f3", write);
+
+		assertThat(created.status()).isEqualTo(EntitlementStatus.PENDING);
+
+		ArgumentCaptor<Map<String, Object>> afterCaptor = ArgumentCaptor.forClass(Map.class);
+		verify(auditWriter).record(any(), eq(com.tf.reader.common.audit.AuditLog.Action.CREATE), eq("ENTITLEMENT"),
+				any(), eq(null), afterCaptor.capture());
+		assertThat(afterCaptor.getValue()).containsEntry("status", "PENDING");
+	}
+
+	@Test
+	void createBySuperAdminHonorsExplicitStatus() {
+		when(institutionRepository.existsById("inst_7f3")).thenReturn(true);
+		when(publisherRepository.existsById("pub_rtlg")).thenReturn(true);
+		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+		EntitlementCreate write = new EntitlementCreate(ScopeType.PUBLISHER, "pub_rtlg", null, null, null, null,
+				EntitlementStatus.ACTIVE);
+
+		EntitlementView created = service.create("inst_7f3", write);
+
+		assertThat(created.status()).isEqualTo(EntitlementStatus.ACTIVE);
+	}
+
+	@Test
+	void createBySuperAdminDefaultsToActiveWhenStatusOmitted() {
+		when(institutionRepository.existsById("inst_7f3")).thenReturn(true);
+		when(publisherRepository.existsById("pub_rtlg")).thenReturn(true);
+		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+		EntitlementCreate write = new EntitlementCreate(ScopeType.PUBLISHER, "pub_rtlg", null, null, null, null, null);
+
+		EntitlementView created = service.create("inst_7f3", write);
+
+		assertThat(created.status()).isEqualTo(EntitlementStatus.ACTIVE);
 	}
 
 	// ---------------------------------------------------------------- update
@@ -212,6 +260,8 @@ class EntitlementAdminServiceTest {
 
 		assertThat(existing.getStatus()).isEqualTo(EntitlementStatus.REVOKED);
 		verify(versionBumper).bump(CatalogueVersionBumper.Scope.INSTITUTION, "inst_7f3");
+		verify(auditWriter).record(any(), eq(com.tf.reader.common.audit.AuditLog.Action.STATUS), eq("ENTITLEMENT"),
+				eq("ent_5a1"), any(), any());
 	}
 
 	@Test
@@ -220,6 +270,74 @@ class EntitlementAdminServiceTest {
 
 		assertThatThrownBy(() -> service.revoke("ent_ghost")).isInstanceOf(ApiException.class)
 				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.NOT_FOUND));
+	}
+
+	@Test
+	void revokeByANonSuperAdminIsForbiddenRole() {
+		actingAs(AdminRole.INSTITUTION_ADMIN, "inst_7f3");
+
+		assertThatThrownBy(() -> service.revoke("ent_5a1")).isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.FORBIDDEN_ROLE));
+
+		verify(entitlementRepository, never()).save(any());
+	}
+
+	// ---------------------------------------------------------------- approve / reject
+
+	@Test
+	void changeStatusApprovesPendingToActiveAndBumpsVersion() {
+		Entitlement pending = entitlement("ent_5a1", "inst_7f3", ScopeType.PUBLISHER, "pub_rtlg", null, 0);
+		pending.setStatus(EntitlementStatus.PENDING);
+		when(entitlementRepository.findById("ent_5a1")).thenReturn(Optional.of(pending));
+		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+		EntitlementView updated = service.changeStatus("ent_5a1",
+				new com.tf.reader.admin.dto.EntitlementStatusChange(EntitlementStatus.ACTIVE, "looks legitimate"));
+
+		assertThat(updated.status()).isEqualTo(EntitlementStatus.ACTIVE);
+		verify(versionBumper).bump(CatalogueVersionBumper.Scope.INSTITUTION, "inst_7f3");
+		verify(auditWriter).record(any(), eq(com.tf.reader.common.audit.AuditLog.Action.STATUS), eq("ENTITLEMENT"),
+				eq("ent_5a1"), any(), any(), any());
+	}
+
+	@Test
+	void changeStatusRejectsPendingToRevokedWithoutBumpingVersion() {
+		Entitlement pending = entitlement("ent_5a1", "inst_7f3", ScopeType.PUBLISHER, "pub_rtlg", null, 0);
+		pending.setStatus(EntitlementStatus.PENDING);
+		when(entitlementRepository.findById("ent_5a1")).thenReturn(Optional.of(pending));
+		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+		EntitlementView updated = service.changeStatus("ent_5a1",
+				new com.tf.reader.admin.dto.EntitlementStatusChange(EntitlementStatus.REVOKED, null));
+
+		assertThat(updated.status()).isEqualTo(EntitlementStatus.REVOKED);
+		verify(versionBumper, never()).bump(any(), any());
+	}
+
+	@Test
+	void changeStatusRejectsInvalidTransitionAsValidationFailed() {
+		Entitlement active = entitlement("ent_5a1", "inst_7f3", ScopeType.PUBLISHER, "pub_rtlg", null, 0);
+		when(entitlementRepository.findById("ent_5a1")).thenReturn(Optional.of(active));
+
+		assertThatThrownBy(() -> service.changeStatus("ent_5a1",
+				new com.tf.reader.admin.dto.EntitlementStatusChange(EntitlementStatus.ACTIVE, null)))
+						.isInstanceOf(ApiException.class)
+						.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+
+		verify(entitlementRepository, never()).save(any());
+		verify(versionBumper, never()).bump(any(), any());
+	}
+
+	@Test
+	void changeStatusByANonSuperAdminIsForbiddenRole() {
+		actingAs(AdminRole.INSTITUTION_ADMIN, "inst_7f3");
+
+		assertThatThrownBy(() -> service.changeStatus("ent_5a1",
+				new com.tf.reader.admin.dto.EntitlementStatusChange(EntitlementStatus.ACTIVE, null)))
+						.isInstanceOf(ApiException.class)
+						.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.FORBIDDEN_ROLE));
+
+		verify(entitlementRepository, never()).save(any());
 	}
 
 	// ---------------------------------------------------------------- list
@@ -261,7 +379,7 @@ class EntitlementAdminServiceTest {
 		when(catalogueItemRepository.findById("item_42")).thenReturn(Optional.of(published));
 		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-		EntitlementCreate write = new EntitlementCreate(ScopeType.ITEM, "item_42", null, null, null, null);
+		EntitlementCreate write = new EntitlementCreate(ScopeType.ITEM, "item_42", null, null, null, null, null);
 		EntitlementView created = service.create("inst_7f3", write);
 
 		assertThat(created.resolvedItemCount()).isEqualTo(1);
@@ -279,7 +397,7 @@ class EntitlementAdminServiceTest {
 		when(catalogueItemRepository.findById("item_42")).thenReturn(Optional.of(draft));
 		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-		EntitlementCreate write = new EntitlementCreate(ScopeType.ITEM, "item_42", null, null, null, null);
+		EntitlementCreate write = new EntitlementCreate(ScopeType.ITEM, "item_42", null, null, null, null, null);
 		EntitlementView created = service.create("inst_7f3", write);
 
 		assertThat(created.resolvedItemCount()).isZero();

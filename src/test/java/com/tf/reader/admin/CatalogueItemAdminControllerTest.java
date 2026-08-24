@@ -63,7 +63,7 @@ class CatalogueItemAdminControllerTest {
 		return new CatalogueItemView("item_42", "pub_rtlg", null, List.of("col_law2024"), "Rights for Robots", null,
 				List.of("Joshua C. Gellers"), List.of(), List.of(), "9780367211745", ContentType.PDF,
 				AccessTier.ELITE, List.of("Law"), "en", null, null, null, null, null, ItemStatus.PUBLISHED,
-				ContentState.QUEUED, null, List.of(), CREATED, CREATED);
+				ContentState.QUEUED, null, List.of(), CREATED, CREATED, null);
 	}
 
 	private static CatalogueItemView fullView() {
@@ -72,7 +72,7 @@ class CatalogueItemAdminControllerTest {
 		return new CatalogueItemView("item_42", "pub_rtlg", "Routledge", List.of("col_law2024"),
 				"Rights for Robots", null, List.of("Joshua C. Gellers"), List.of(), List.of(), "9780367211745",
 				ContentType.PDF, AccessTier.ELITE, List.of("Law"), "en", null, null, null, null, null,
-				ItemStatus.PUBLISHED, ContentState.QUEUED, null, List.of(asset), CREATED, CREATED);
+				ItemStatus.PUBLISHED, ContentState.QUEUED, null, List.of(asset), CREATED, CREATED, null);
 	}
 
 	// ---------------------------------------------------------------- list
@@ -80,7 +80,7 @@ class CatalogueItemAdminControllerTest {
 	@Test
 	@SuppressWarnings("unchecked")
 	void listReturns200WithSummaryShapeAndNoAssets() throws Exception {
-		when(service.list(any(), any(), any(), any(), any(), any(), any(), any()))
+		when(service.list(any(), any(), any(), any(), any(), any(), any(), any(), any()))
 				.thenReturn(new PageResponse<>(List.of(summaryView()), 0, 20, 1));
 
 		String body = mvc.perform(get("/api/admin/v1/catalogue-items")).andExpect(status().isOk())
