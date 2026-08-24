@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import com.tf.reader.admin.dto.CatalogueItemView;
@@ -16,10 +17,13 @@ import com.tf.reader.catalogue.entity.AccessTier;
 import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.ContentType;
+import com.tf.reader.catalogue.entity.Entitlement;
+import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.catalogue.entity.Publisher;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.CatalogueItemSearchRepository;
+import com.tf.reader.catalogue.repository.EntitlementRepository;
 import com.tf.reader.catalogue.repository.PublisherRepository;
 import com.tf.reader.catalogue.service.CatalogueVersionBumper;
 import com.tf.reader.common.audit.AdminAuditWriter;
@@ -42,16 +46,21 @@ public class CatalogueItemAdminService {
 	private final CatalogueItemRepository catalogueItemRepository;
 	private final CatalogueItemSearchRepository searchRepository;
 	private final PublisherRepository publisherRepository;
+	private final EntitlementRepository entitlementRepository;
 	private final CatalogueVersionBumper catalogueVersionBumper;
 	private final AdminAuditWriter auditWriter;
 	private final AdminScopeAuthorizer adminScope;
 
+	private static final List<EntitlementStatus> STATUS_RANK = List.of(EntitlementStatus.REVOKED,
+			EntitlementStatus.SUSPENDED, EntitlementStatus.PENDING, EntitlementStatus.ACTIVE);
 
 	public PageResponse<CatalogueItemView> list(String publisherIdScope, String publisherId, String collectionId,
-			ContentType contentType, AccessTier accessTier, String q, Integer page, Integer size) {
+			ContentType contentType, AccessTier accessTier, String q, Integer page, Integer size,
+			String institutionId) {
 		AdminRole role = adminScope.currentRole();
-		if (role != AdminRole.SUPER_ADMIN && role != AdminRole.PUBLISHER_ADMIN) {
-			throw new ApiException(ErrorCode.FORBIDDEN_ROLE, "This operation requires SUPER_ADMIN or PUBLISHER_ADMIN.");
+		if (role != AdminRole.SUPER_ADMIN && role != AdminRole.PUBLISHER_ADMIN && role != AdminRole.INSTITUTION_ADMIN) {
+			throw new ApiException(ErrorCode.FORBIDDEN_ROLE,
+					"This operation requires SUPER_ADMIN, PUBLISHER_ADMIN or INSTITUTION_ADMIN.");
 		}
 		int resolvedPage = page == null ? 0 : page;
 		if (resolvedPage < 0) {
@@ -71,11 +80,52 @@ public class CatalogueItemAdminService {
 			resolvedPublisherId = publisherIdScope;
 		}
 
+		// An institution admin always sees their own institution's view, never one they pass in.
+		String resolvedInstitutionId = role == AdminRole.INSTITUTION_ADMIN ? adminScope.currentInstitutionScope()
+				: institutionId;
+
 		CatalogueItemSearchRepository.Results results = searchRepository.search(resolvedPublisherId, collectionId,
 				contentType, accessTier, blankToNull(q), resolvedPage, resolvedSize);
 
-		List<CatalogueItemView> items = results.items().stream().map(this::toSummaryView).toList();
+		Map<String, EntitlementStatus> statusByItemId = resolveEntitlementStatuses(resolvedInstitutionId,
+				results.items());
+		List<CatalogueItemView> items = results.items().stream()
+				.map(item -> toSummaryView(item, resolvedInstitutionId != null, statusByItemId.get(item.getId())))
+				.toList();
 		return new PageResponse<>(items, resolvedPage, resolvedSize, results.total());
+	}
+
+	/**
+	 * Loads the institution's entitlements once, not once per item, then matches each item by id,
+	 * collectionIds and publisherId. An item can match more than one entitlement at different
+	 * scopes; the strongest status wins, since the item is genuinely accessible if any covering
+	 * entitlement grants it.
+	 */
+	private Map<String, EntitlementStatus> resolveEntitlementStatuses(String institutionId,
+			List<CatalogueItem> items) {
+		if (institutionId == null) {
+			return Map.of();
+		}
+		List<Entitlement> entitlements = entitlementRepository.findByInstitutionId(institutionId, Pageable.unpaged())
+				.getContent();
+
+		Map<String, EntitlementStatus> result = new HashMap<>();
+		for (CatalogueItem item : items) {
+			EntitlementStatus best = null;
+			for (Entitlement entitlement : entitlements) {
+				boolean matches = switch (entitlement.getScopeType()) {
+					case ITEM -> entitlement.getScopeId().equals(item.getId());
+					case PUBLISHER -> entitlement.getScopeId().equals(item.getPublisherId());
+					case COLLECTION -> item.getCollectionIds() != null
+							&& item.getCollectionIds().contains(entitlement.getScopeId());
+				};
+				if (matches && (best == null || STATUS_RANK.indexOf(entitlement.getStatus()) > STATUS_RANK.indexOf(best))) {
+					best = entitlement.getStatus();
+				}
+			}
+			result.put(item.getId(), best);
+		}
+		return result;
 	}
 
 
@@ -204,8 +254,9 @@ public class CatalogueItemAdminService {
 
 
 
-	private CatalogueItemView toSummaryView(CatalogueItem item) {
-		return toView(item, null, List.of());
+	private CatalogueItemView toSummaryView(CatalogueItem item, boolean institutionView, EntitlementStatus status) {
+		String entitlementStatusLabel = !institutionView ? null : (status == null ? "none" : status.name().toLowerCase());
+		return toView(item, null, List.of(), entitlementStatusLabel);
 	}
 
 	private CatalogueItemView toFullView(CatalogueItem item) {
@@ -213,16 +264,17 @@ public class CatalogueItemAdminService {
 				.orElse(null);
 		List<CatalogueItemView.Asset> assets = item.getAssets() == null ? List.of()
 				: item.getAssets().stream().map(this::toAssetView).toList();
-		return toView(item, publisherName, assets);
+		return toView(item, publisherName, assets, null);
 	}
 
-	private CatalogueItemView toView(CatalogueItem item, String publisherName, List<CatalogueItemView.Asset> assets) {
+	private CatalogueItemView toView(CatalogueItem item, String publisherName, List<CatalogueItemView.Asset> assets,
+			String entitlementStatusLabel) {
 		return new CatalogueItemView(item.getId(), item.getPublisherId(), publisherName, item.getCollectionIds(),
 				item.getTitle(), item.getSubtitle(), item.getAuthors(), item.getEditors(), item.getNarrators(),
 				item.getIsbn(), item.getContentType(), item.getAccessTier(), item.getSubjects(), item.getLanguage(),
 				item.getDescription(), item.getPublishedAt(), item.getNumberOfPages(), item.getDuration(),
 				item.getCoverUrl(), item.getStatus(), item.getContentState(), item.getContentError(), assets,
-				item.getCreatedAt(), item.getUpdatedAt());
+				item.getCreatedAt(), item.getUpdatedAt(), entitlementStatusLabel);
 	}
 
 	private CatalogueItemView.Asset toAssetView(CatalogueItem.Asset asset) {

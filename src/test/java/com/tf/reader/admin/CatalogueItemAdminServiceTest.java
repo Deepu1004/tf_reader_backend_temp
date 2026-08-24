@@ -27,9 +27,13 @@ import com.tf.reader.catalogue.entity.AccessTier;
 import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.ContentType;
+import com.tf.reader.catalogue.entity.Entitlement;
+import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.ItemStatus;
+import com.tf.reader.catalogue.entity.ScopeType;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.CatalogueItemSearchRepository;
+import com.tf.reader.catalogue.repository.EntitlementRepository;
 import com.tf.reader.catalogue.repository.PublisherRepository;
 import com.tf.reader.catalogue.service.CatalogueVersionBumper;
 import com.tf.reader.common.audit.AdminAuditWriter;
@@ -45,6 +49,7 @@ class CatalogueItemAdminServiceTest {
 	private CatalogueItemRepository catalogueItemRepository;
 	private CatalogueItemSearchRepository searchRepository;
 	private PublisherRepository publisherRepository;
+	private EntitlementRepository entitlementRepository;
 	private CatalogueVersionBumper versionBumper;
 	private AdminAuditWriter auditWriter;
 
@@ -55,13 +60,14 @@ class CatalogueItemAdminServiceTest {
 		catalogueItemRepository = mock(CatalogueItemRepository.class);
 		searchRepository = mock(CatalogueItemSearchRepository.class);
 		publisherRepository = mock(PublisherRepository.class);
+		entitlementRepository = mock(EntitlementRepository.class);
 		versionBumper = mock(CatalogueVersionBumper.class);
 		auditWriter = mock(AdminAuditWriter.class);
 
 		service = new CatalogueItemAdminService(catalogueItemRepository, searchRepository, publisherRepository,
-				versionBumper, auditWriter, new AdminScopeAuthorizer());
+				entitlementRepository, versionBumper, auditWriter, new AdminScopeAuthorizer());
 
-		actingAs(AdminRole.SUPER_ADMIN, null);
+		actingAs(AdminRole.SUPER_ADMIN, null, null);
 	}
 
 	@AfterEach
@@ -70,10 +76,17 @@ class CatalogueItemAdminServiceTest {
 	}
 
 	private static void actingAs(AdminRole role, String scopePublisherId) {
+		actingAs(role, scopePublisherId, null);
+	}
+
+	private static void actingAs(AdminRole role, String scopePublisherId, String scopeInstitutionId) {
 		Jwt.Builder builder = Jwt.withTokenValue("t").header("alg", "none").issuedAt(Instant.now())
 				.expiresAt(Instant.now().plusSeconds(900)).claim(TokenClaims.ROLE, role.name());
 		if (scopePublisherId != null) {
 			builder.claim(TokenClaims.SCOPE_PUBLISHER_ID, scopePublisherId);
+		}
+		if (scopeInstitutionId != null) {
+			builder.claim(TokenClaims.SCOPE_INSTITUTION_ID, scopeInstitutionId);
 		}
 		SecurityContextHolder.getContext()
 				.setAuthentication(new TestingAuthenticationToken(builder.build(), null, "ROLE_ADMIN"));
@@ -254,7 +267,7 @@ class CatalogueItemAdminServiceTest {
 	@Test
 	@DisplayName("list page=-1 throws VALIDATION_FAILED")
 	void listNegativePageThrows() {
-		assertThatThrownBy(() -> service.list(null, null, null, null, null, null, -1, null))
+		assertThatThrownBy(() -> service.list(null, null, null, null, null, null, -1, null, null))
 				.isInstanceOf(ApiException.class)
 				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
 	}
@@ -265,7 +278,7 @@ class CatalogueItemAdminServiceTest {
 		when(searchRepository.search(eq("pub_mine"), any(), any(), any(), any(), eq(0), eq(20)))
 				.thenReturn(new CatalogueItemSearchRepository.Results(List.of(), 0));
 
-		service.list("pub_mine", null, null, null, null, null, null, null);
+		service.list("pub_mine", null, null, null, null, null, null, null, null);
 
 		verify(searchRepository).search(eq("pub_mine"), any(), any(), any(), any(), eq(0), eq(20));
 	}
@@ -273,9 +286,80 @@ class CatalogueItemAdminServiceTest {
 	@Test
 	@DisplayName("a publisher admin asking for another publisher's items is denied")
 	void publisherAdminAskingForAnotherPublisherIsDenied() {
-		assertThatThrownBy(() -> service.list("pub_mine", "pub_other", null, null, null, null, null, null))
+		assertThatThrownBy(() -> service.list("pub_mine", "pub_other", null, null, null, null, null, null, null))
 				.isInstanceOf(ApiException.class)
 				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.FORBIDDEN_ROLE));
+	}
+
+	@Test
+	@DisplayName("an institution admin sees entitlementStatus per item, resolved from one entitlement load")
+	void institutionAdminListResolvesEntitlementStatus() {
+		actingAs(AdminRole.INSTITUTION_ADMIN, null, "inst_7f3");
+		CatalogueItem entitledItem = pdfItem("item_42", "pub_rtlg");
+		CatalogueItem unrelatedItem = pdfItem("item_99", "pub_other");
+		when(searchRepository.search(any(), any(), any(), any(), any(), eq(0), eq(20)))
+				.thenReturn(new CatalogueItemSearchRepository.Results(List.of(entitledItem, unrelatedItem), 2));
+		Entitlement activeGrant = new Entitlement("ent_1", "inst_7f3", ScopeType.PUBLISHER, "pub_rtlg", null, 14,
+				null, null, EntitlementStatus.ACTIVE, 0, null, null);
+		when(entitlementRepository.findByInstitutionId(eq("inst_7f3"), any()))
+				.thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(activeGrant)));
+
+		var result = service.list(null, null, null, null, null, null, null, null, null);
+
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("active");
+		assertThat(result.items().get(1).entitlementStatus()).isEqualTo("none");
+	}
+
+	@Test
+	@DisplayName("a super admin passing institutionId sees that institution's entitlementStatus view")
+	void superAdminWithInstitutionIdSeesThatInstitutionsView() {
+		CatalogueItem item = pdfItem("item_42", "pub_rtlg");
+		when(searchRepository.search(any(), any(), any(), any(), any(), eq(0), eq(20)))
+				.thenReturn(new CatalogueItemSearchRepository.Results(List.of(item), 1));
+		Entitlement activeGrant = new Entitlement("ent_1", "inst_7f3", ScopeType.PUBLISHER, "pub_rtlg", null, 14,
+				null, null, EntitlementStatus.ACTIVE, 0, null, null);
+		when(entitlementRepository.findByInstitutionId(eq("inst_7f3"), any()))
+				.thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(activeGrant)));
+
+		var result = service.list(null, null, null, null, null, null, null, null, "inst_7f3");
+
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("active");
+	}
+
+	@Test
+	@DisplayName("a publisher admin's list has no entitlementStatus, not \"none\"")
+	void publisherAdminListOmitsEntitlementStatus() {
+		actingAs(AdminRole.PUBLISHER_ADMIN, "pub_rtlg", null);
+		CatalogueItem item = pdfItem("item_42", "pub_rtlg");
+		when(searchRepository.search(eq("pub_rtlg"), any(), any(), any(), any(), eq(0), eq(20)))
+				.thenReturn(new CatalogueItemSearchRepository.Results(List.of(item), 1));
+
+		var result = service.list("pub_rtlg", null, null, null, null, null, null, null, null);
+
+		assertThat(result.items().get(0).entitlementStatus()).isNull();
+	}
+
+	@Test
+	@DisplayName("the strongest matching entitlement status wins across scopes")
+	void strongestEntitlementStatusWinsAcrossScopes() {
+		actingAs(AdminRole.INSTITUTION_ADMIN, null, "inst_7f3");
+		CatalogueItem item = new CatalogueItem();
+		item.setId("item_42");
+		item.setPublisherId("pub_rtlg");
+		item.setCollectionIds(List.of("col_law2024"));
+		when(searchRepository.search(any(), any(), any(), any(), any(), eq(0), eq(20)))
+				.thenReturn(new CatalogueItemSearchRepository.Results(List.of(item), 1));
+		Entitlement pendingItemGrant = new Entitlement("ent_1", "inst_7f3", ScopeType.ITEM, "item_42", null, 14, null,
+				null, EntitlementStatus.PENDING, 0, null, null);
+		Entitlement activePublisherGrant = new Entitlement("ent_2", "inst_7f3", ScopeType.PUBLISHER, "pub_rtlg", null,
+				14, null, null, EntitlementStatus.ACTIVE, 0, null, null);
+		when(entitlementRepository.findByInstitutionId(eq("inst_7f3"), any()))
+				.thenReturn(new org.springframework.data.domain.PageImpl<>(
+						List.of(pendingItemGrant, activePublisherGrant)));
+
+		var result = service.list(null, null, null, null, null, null, null, null, null);
+
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("active");
 	}
 
 	// ---------------------------------------------------------------- fixtures
