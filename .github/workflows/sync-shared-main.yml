@@ -30,31 +30,12 @@ jobs:
           git merge origin/main --no-edit
           git push origin shared-main
 
-      # Only reached if the merge step above failed - a real conflict between main and
-      # shared-main, which nothing here should try to resolve. shared-main is left exactly as it
-      # was; a person has to merge it by hand.
-      - name: Email on conflict
-        if: failure()
-        uses: dawidd6/action-send-mail@v18
-        with:
-          server_address: ${{ secrets.SMTP_SERVER }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "shared-main sync failed - manual merge needed (${{ github.repository }})"
-          to: SatyaNagaSai.DeepakVaranasi@taylorandfrancis.com,Abhishek.RNair@taylorandfrancis.com,Ashwin.Sudhakar@taylorandfrancis.com
-          from: GitHub Actions <actions@taylorandfrancis.com>
-          body: |
-            Merging main into shared-main failed, most likely a real conflict between the two
-            branches. shared-main has NOT been changed - nothing was pushed.
-
-            main is now at ${{ github.sha }}.
-
-            To fix it by hand:
-              git fetch origin
-              git checkout shared-main
-              git merge origin/main
-              # resolve conflicts
-              git push origin shared-main
-
-            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      # If the merge step above fails - a real conflict between main and shared-main - nothing
+      # here should try to resolve it: the push never runs, shared-main is left exactly as it
+      # was, and the failed run itself (red X, GitHub UI) is the signal until there's a real SMTP
+      # account to email from. To fix a conflict by hand:
+      #   git fetch origin
+      #   git checkout shared-main
+      #   git merge origin/main
+      #   # resolve conflicts
+      #   git push origin shared-main

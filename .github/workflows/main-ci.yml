@@ -23,21 +23,6 @@ jobs:
         run: ./mvnw -B test
 
       # GitHub already shows a green check or red X on the commit for this workflow with no
-      # extra step - this is only for the separate ask of an email on top of that.
-      - name: Email on failure
-        if: failure()
-        uses: dawidd6/action-send-mail@v18
-        with:
-          server_address: ${{ secrets.SMTP_SERVER }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "main build failed - mvn test (${{ github.repository }})"
-          to: Ashwin.Sudhakar@taylorandfrancis.com,Abhishek.RNair@taylorandfrancis.com
-          from: GitHub Actions <actions@taylorandfrancis.com>
-          body: |
-            mvn test failed on main at ${{ github.sha }}.
-
-            ${{ github.event.head_commit.message }}
-
-            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      # extra step. An email-on-failure step used to live here - removed until there's a real
+      # SMTP account to send from (GitHub does not provide one; see the repo's temp/ notes for
+      # what that needs).
