@@ -60,8 +60,6 @@ public class ActiveLoanQueryImpl implements ActiveLoanQuery {
 				loan.getItemId(),
 				loan.getLicenceModel() == null ? null : loan.getLicenceModel().name(),
 				loan.isCanPersist(),
-				loan.getDueAt(),
-				loan.getBorrowedAt(),                                       // D-026
-				loan.getStatus() == null ? null : loan.getStatus().name()); // D-026
+				loan.getDueAt());
 	}
 }
