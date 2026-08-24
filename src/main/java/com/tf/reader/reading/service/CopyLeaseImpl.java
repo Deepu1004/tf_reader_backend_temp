@@ -1,11 +1,5 @@
 package com.tf.reader.reading.service;
 
-import com.tf.reader.reading.api.CopyLease;
-import com.tf.reader.reading.api.LeaseHandle;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
-import org.springframework.stereotype.Service;
-
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -13,34 +7,71 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.stereotype.Service;
+
+import com.tf.reader.reading.api.CopyLease;
+import com.tf.reader.reading.api.LeaseHandle;
+
 /**
- * Redis-backed implementation of {@link CopyLease}.
+ * Service implementation of {@link CopyLease}.
  *
- * <p>One sorted set per (scope, itemId): {@code lease:{scope}:{itemId}}, member an opaque lease
- * token, score the lease's expiry instant. Counting and reassigning both key off that score,
- * never a separate "who holds it" map — one row per copy holder. Tokens are self-describing
- * ({@code scope|itemId|random}) because {@link #release(String)} carries neither scope nor
- * itemId, and the token is the only place left to keep them.
+ * <p>The copy counter is a per-item Redis ZSET (member = lease token, score = expiry
+ * epoch millis) so a stale claim from a crashed caller evicts itself instead of leaking
+ * a slot forever. {@code release(String)} only ever gets a bare token — every real
+ * caller (loan return, borrow rollback, the expiry sweeper) has no scope or itemId to
+ * hand back — so a companion reverse-index key maps token to item key, written in the
+ * same script as the claim it belongs to.
  */
 @Service
 public class CopyLeaseImpl implements CopyLease {
 
 	private static final Duration CLAIM_TTL = Duration.ofSeconds(30);
 
-	// Check-then-add in one round trip — two separate calls (ZCOUNT then
-	// ZADD) would let two concurrent claims both pass the check and both
-	// add, a real double-booking bug, not a theoretical one.
+	// Evicts anything past its expiry, then claims only if still under the limit —
+	// eviction and the check must happen in the same round trip, or two requests
+	// racing past a stale count could both believe they got the last copy.
 	private static final DefaultRedisScript<Long> CLAIM = new DefaultRedisScript<>("""
-			local key = KEYS[1]
-			local now = tonumber(ARGV[1])
-			local total = tonumber(ARGV[2])
-			local member = ARGV[3]
-			local expiresAt = ARGV[4]
-			local leased = redis.call('ZCOUNT', key, now, '+inf')
-			if leased >= total then
+			redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
+			if redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[2]) then
 			    return 0
 			end
-			redis.call('ZADD', key, expiresAt, member)
+			redis.call('ZADD', KEYS[1], ARGV[3], ARGV[4])
+			redis.call('SET', KEYS[2], ARGV[5], 'PXAT', ARGV[3])
+			return 1
+			""", Long.class);
+
+	// KEYS[1] is the reverse index — the only place that knows which item's counter a
+	// bare token belongs to.
+	private static final DefaultRedisScript<Long> RELEASE = new DefaultRedisScript<>("""
+			local itemKey = redis.call('GET', KEYS[1])
+			if not itemKey then
+			    return 0
+			end
+			redis.call('DEL', KEYS[1])
+			return redis.call('ZREM', itemKey, ARGV[1])
+			""", Long.class);
+
+	// Same slot, new token — never a release followed by a claim, which would open a
+	// window for a passing reader to take the copy a promoted waiter was just handed.
+	private static final DefaultRedisScript<Long> REASSIGN = new DefaultRedisScript<>("""
+			redis.call('ZREM', KEYS[1], ARGV[1])
+			redis.call('DEL', KEYS[2])
+			redis.call('ZADD', KEYS[1], ARGV[2], ARGV[3])
+			redis.call('SET', KEYS[3], ARGV[4], 'PXAT', ARGV[2])
+			return 1
+			""", Long.class);
+
+	// Fails (returns 0) if the token isn't in the set any more — already expired or
+	// already reassigned — so the caller retries or reconciles instead of extending a
+	// lease that no longer counts against the limit.
+	private static final DefaultRedisScript<Long> EXTEND = new DefaultRedisScript<>("""
+			if redis.call('ZSCORE', KEYS[1], ARGV[2]) == false then
+			    return 0
+			end
+			redis.call('ZADD', KEYS[1], ARGV[1], ARGV[2])
+			redis.call('PEXPIREAT', KEYS[2], ARGV[1])
 			return 1
 			""", Long.class);
 
@@ -54,13 +85,23 @@ public class CopyLeaseImpl implements CopyLease {
 
 	@Override
 	public Optional<LeaseHandle> claim(String scope, String itemId, int copies) {
+		if (copies <= 0) {
+			return Optional.empty();
+		}
 		Instant now = clock.instant();
 		Instant expiresAt = now.plus(CLAIM_TTL);
-		String token = token(scope, itemId);
-		Long result = redis.execute(CLAIM, List.of(key(scope, itemId)),
-				String.valueOf(now.toEpochMilli()), String.valueOf(copies), token,
-				String.valueOf(expiresAt.toEpochMilli()));
-		if (result == null || result != 1L) {
+		String token = "lease_" + UUID.randomUUID().toString().substring(0, 8);
+		String itemKey = LeaseKeys.itemKey(scope, itemId);
+		String tokenKey = LeaseKeys.tokenKey(token);
+
+		Long claimed = redis.execute(CLAIM, List.of(itemKey, tokenKey),
+				String.valueOf(now.toEpochMilli()),
+				String.valueOf(copies),
+				String.valueOf(expiresAt.toEpochMilli()),
+				token,
+				itemKey);
+
+		if (claimed == null || claimed == 0) {
 			return Optional.empty();
 		}
 		return Optional.of(new LeaseHandle(token, scope, itemId, expiresAt));
@@ -68,59 +109,53 @@ public class CopyLeaseImpl implements CopyLease {
 
 	@Override
 	public Optional<LeaseHandle> acquire(String itemId) {
-		// No scope on this call, and nothing in the codebase calls it today
-		// (the copy-limited path uses claim, which has one). Raise with
-		// Deepak before relying on it — a scope-less key would silently
-		// pool every institution's copies of this item together.
-		throw new UnsupportedOperationException("acquire(itemId) carries no scope — not implemented");
+		// Nothing in the codebase calls this — no caller has a scope or a copy limit to
+		// give it. Kept working, as a single unscoped slot, rather than deleted, since
+		// it's declared on the api/ seam and another team could already depend on it.
+		return claim(null, itemId, 1);
 	}
 
 	@Override
 	public boolean extend(LeaseHandle handle, Instant until) {
-		if (handle == null) {
+		if (handle == null || handle.token() == null) {
 			return false;
 		}
-		redis.opsForZSet().add(key(handle.scope(), handle.itemId()), handle.token(), until.toEpochMilli());
-		return true;
+		String itemKey = LeaseKeys.itemKey(handle.scope(), handle.itemId());
+		String tokenKey = LeaseKeys.tokenKey(handle.token());
+		Long extended = redis.execute(EXTEND, List.of(itemKey, tokenKey),
+				String.valueOf(until.toEpochMilli()), handle.token());
+		return extended != null && extended == 1;
 	}
 
 	@Override
 	public void release(LeaseHandle handle) {
 		if (handle != null) {
-			redis.opsForZSet().remove(key(handle.scope(), handle.itemId()), handle.token());
+			release(handle.token());
 		}
 	}
 
 	@Override
 	public void release(String leaseId) {
-		String[] parts = leaseId.split("\\|", 3);
-		if (parts.length == 3) {
-			redis.opsForZSet().remove(key(parts[0], parts[1]), leaseId);
+		if (leaseId == null) {
+			return;
 		}
+		redis.execute(RELEASE, List.of(LeaseKeys.tokenKey(leaseId)), leaseId);
 	}
 
 	@Override
 	public void reassign(String scope, String itemId, String fromToken, String newToken, Instant until) {
-		// Add the new holder BEFORE removing the old one — for the instant
-		// both rows exist, the copy still reads as leased twice over, never
-		// as free. The order is the whole point.
-		String key = key(scope, itemId);
-		redis.opsForZSet().add(key, newToken, until.toEpochMilli());
-		redis.opsForZSet().remove(key, fromToken);
+		String itemKey = LeaseKeys.itemKey(scope, itemId);
+		String oldTokenKey = LeaseKeys.tokenKey(fromToken);
+		String newTokenKey = LeaseKeys.tokenKey(newToken);
+		redis.execute(REASSIGN, List.of(itemKey, oldTokenKey, newTokenKey),
+				fromToken, String.valueOf(until.toEpochMilli()), newToken, itemKey);
 	}
 
 	@Override
 	public int available(String scope, String itemId, int copies) {
-		Long leased = redis.opsForZSet().count(key(scope, itemId), clock.instant().toEpochMilli(),
-				Double.POSITIVE_INFINITY);
-		return Math.max(0, copies - (leased == null ? 0 : leased.intValue()));
-	}
-
-	private static String key(String scope, String itemId) {
-		return "lease:" + scope + ":" + itemId;
-	}
-
-	private static String token(String scope, String itemId) {
-		return scope + "|" + itemId + "|" + UUID.randomUUID();
+		String itemKey = LeaseKeys.itemKey(scope, itemId);
+		redis.opsForZSet().removeRangeByScore(itemKey, Double.NEGATIVE_INFINITY, clock.instant().toEpochMilli());
+		Long used = redis.opsForZSet().zCard(itemKey);
+		return Math.max(copies - (used == null ? 0 : used.intValue()), 0);
 	}
 }
