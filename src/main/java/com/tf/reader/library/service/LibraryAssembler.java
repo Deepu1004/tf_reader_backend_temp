@@ -12,24 +12,34 @@ import com.tf.reader.library.dto.LibraryLoan;
 import com.tf.reader.library.dto.LibraryResponse;
 import com.tf.reader.library.repository.MockLibraryRepository;
 import com.tf.reader.library.support.ReaderIdentity;
+import com.tf.reader.loan.api.ActiveLoanQuery;
 
 /**
  * Builds the library response from loans, holds and the change feed.
  *
- * <p><b>The cursor and {@code serverTime} are real; the shelves are seeded.</b> {@code loans} and
- * {@code holds} come from {@link MockLibraryRepository} until the loan and hold seams publish a
- * list — see {@link #loansFor} and {@link #holdsFor} for what each is waiting on. The response shape
- * is the same either way, so the screen gets built once instead of twice.
+ * <p><b>Loans are real; holds are still seeded.</b> {@code loans} come from the published
+ * {@code ActiveLoanQuery} seam, which gained {@code findAllFor(userId)} for exactly this screen
+ * (D-025). {@code holds} come from {@link MockLibraryRepository} because
+ * {@code HoldSnapshotQueryImpl} is still an empty shell with no bean — see {@link #holdsFor}.
+ *
+ * <p>The response shape is the same either way, which is what let the screen be built once rather
+ * than twice while the seams landed at different times.
  */
 @Service
 public class LibraryAssembler {
 
+	/** Every row {@code ActiveLoanQuery} returns is live by definition, so the wire status is fixed. */
+	private static final String ACTIVE = "ACTIVE";
+
 	private final ChangeFeedService changeFeed;
+	private final ActiveLoanQuery activeLoans;
 	private final MockLibraryRepository shelves;
 	private final Clock clock;
 
-	public LibraryAssembler(ChangeFeedService changeFeed, MockLibraryRepository shelves, Clock clock) {
+	public LibraryAssembler(ChangeFeedService changeFeed, ActiveLoanQuery activeLoans,
+			MockLibraryRepository shelves, Clock clock) {
 		this.changeFeed = changeFeed;
+		this.activeLoans = activeLoans;
 		this.shelves = shelves;
 		this.clock = clock;
 	}
@@ -52,20 +62,31 @@ public class LibraryAssembler {
 	}
 
 	/**
-	 * The reader's active loans.
+	 * The reader's active loans, from the published loan seam.
 	 *
-	 * <p><b>Seeded, because the seam is the wrong shape rather than missing.</b>
-	 * {@code loan.api.ActiveLoanQuery} does have a bean now — {@code ActiveLoanQueryImpl} is a real
-	 * {@code @Service} — but it publishes only {@code findActive(userId, itemId)}, a point query. A
-	 * shelf needs every active loan for one reader, and asking that seam for it would mean already
-	 * knowing the item ids, which is the thing being looked up.
+	 * <p>{@code findAllFor} applies the D-006 liveness rule — an {@code ACTIVE} row already past its
+	 * {@code dueAt} is excluded — so the shelf never shows a loan the reader has effectively lost,
+	 * even in the window before the expiry sweep runs.
 	 *
-	 * <p>Unblocking it is a list method on {@code loan/api}, which is the loan lane's file to change.
-	 * When it lands, this maps its view onto {@link LibraryLoan} and is the only place the loan enums
-	 * become wire strings.
+	 * <p><b>{@code status} is hard-coded rather than read.</b> {@code ActiveLoanView} carries no
+	 * status field, and it does not need one: every row this seam returns is live by definition.
+	 *
+	 * <p><b>{@code borrowedAt} has no source, so it is omitted.</b> {@code ActiveLoanView} does not
+	 * publish it, and inventing a timestamp for a field the app may render is worse than leaving it
+	 * out. The frozen {@code LibraryResponse} shape has the field, so this is a gap to close with the
+	 * loan lane — either add it to the view, or drop it from the response.
 	 */
 	private List<LibraryLoan> loansFor(ReaderIdentity reader) {
-		return shelves.loansFor(reader.userId());
+		return activeLoans.findAllFor(reader.userId()).stream()
+				.map(loan -> new LibraryLoan(
+						loan.loanId(),
+						loan.itemId(),
+						loan.licenceModel(),
+						ACTIVE,
+						null,
+						loan.dueAt(),
+						loan.canPersist()))
+				.toList();
 	}
 
 	/**

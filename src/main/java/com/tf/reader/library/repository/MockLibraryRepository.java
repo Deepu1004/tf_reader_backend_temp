@@ -8,12 +8,14 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 
 import com.tf.reader.library.dto.LibraryHold;
-import com.tf.reader.library.dto.LibraryLoan;
 import com.tf.reader.library.dto.LibraryOffer;
 
 /**
- * Seeded shelves, so the library screen has something to render before the loan and hold seams
- * publish a list.
+ * A seeded hold shelf, so the library screen has hold cards to render before the hold seam
+ * publishes a list.
+ *
+ * <p><b>Holds only.</b> Loans used to be seeded here too; they now come from the real
+ * {@code loan.api.ActiveLoanQuery}, which gained {@code findAllFor(userId)} for this screen (D-025).
  *
  * <p><b>This is a fixture, not a read model.</b> Nothing here reaches Mongo or Redis, so a hold
  * placed through {@code POST /api/v1/holds} does not appear on these shelves and a loan returned
@@ -37,9 +39,6 @@ public class MockLibraryRepository {
 	/** The default {@code POST /api/v1/auth/dev-token} mints, so a token with no parameters lands on a full shelf. */
 	private static final String DEV_READER = "usr_dev123";
 
-	/** {@code john.doe@example.com} at Imperial, from {@code auth.repository.MockUserRepository}. */
-	private static final String IMPERIAL_READER = "usr_6712ab";
-
 	private final Clock clock;
 
 	public MockLibraryRepository(Clock clock) {
@@ -47,41 +46,26 @@ public class MockLibraryRepository {
 	}
 
 	/**
-	 * Between them the two seeded loans cover both wire shapes the app has to render: a dated loan
-	 * that counts down, and an open-ended one where {@code dueAt} is absent from the JSON entirely
-	 * rather than null.
-	 */
-	public List<LibraryLoan> loansFor(String userId) {
-		Instant now = now();
-		return switch (userId) {
-			case DEV_READER -> List.of(
-					// ELITE, so canPersist is false and the download button stays off.
-					new LibraryLoan("loan_mock_42", "item_42", "ELITE", "ACTIVE",
-							now.minus(1, ChronoUnit.DAYS), now.plus(13, ChronoUnit.DAYS), false),
-					// Open access never expires, so dueAt is null and @JsonInclude drops the field.
-					new LibraryLoan("loan_mock_oa9", "item_oa9", "OPEN_ACCESS", "ACTIVE",
-							now.minus(9, ChronoUnit.DAYS), null, true));
-			case IMPERIAL_READER -> List.of(
-					new LibraryLoan("loan_mock_f3", "item_f3", "SUBSCRIPTION", "ACTIVE",
-							now.minus(3, ChronoUnit.DAYS), now.plus(20, ChronoUnit.DAYS), true));
-			default -> List.of();
-		};
-	}
-
-	/**
-	 * One WAITING hold and one OFFERED hold, because the card is a different card in each state:
-	 * WAITING shows a queue position and a guess, OFFERED shows a real deadline and no guess.
+	 * One QUEUED hold and one OFFERED hold, because the card is a different card in each state:
+	 * QUEUED shows a queue position and a guess, OFFERED shows a real deadline and no guess.
+	 *
+	 * <p><b>{@code QUEUED}, not {@code WAITING}.</b> The contract enum is {@code [QUEUED, OFFERED]}
+	 * and so is {@code hold.entity.HoldStatus} — a status invented here is one team1 would branch on
+	 * and the real hold module would never send.
 	 */
 	public List<LibraryHold> holdsFor(String userId) {
 		Instant now = now();
 		return switch (userId) {
 			case DEV_READER -> List.of(
-					new LibraryHold("hold_mock_q7", "item_q7", "WAITING", 3, 7, 12,
+					new LibraryHold("hold_mock_q7", "item_q7", "QUEUED", 3, 7, 12,
 							now.minus(5, ChronoUnit.DAYS), null),
 					// estimatedWaitDays is null once OFFERED — there is a real deadline instead, and
 					// showing a guess beside a fact on one card is what confuses a reader into
 					// abandoning a copy that is still theirs.
-					new LibraryHold("hold_mock_f3", "item_f3", "OFFERED", 0, 4, null,
+					//
+					// position is 1, not 0: the contract has it one-based with minimum 1, and the
+					// person holding an offer is by definition at the front of the queue.
+					new LibraryHold("hold_mock_f3", "item_f3", "OFFERED", 1, 4, null,
 							now.minus(11, ChronoUnit.DAYS),
 							new LibraryOffer("offer_mock_f3", now.plus(36, ChronoUnit.HOURS))));
 			default -> List.of();
