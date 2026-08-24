@@ -36,7 +36,7 @@ public class OfferSweeper {
         this.clock = clock;
     }
 
-    @Scheduled(fixedDelayString = "${holds.sweep-interval}")
+    @Scheduled(fixedDelayString = "${holds.sweep-interval:10s}")
     public void sweep() {
         Instant now = clock.instant();
         List<Hold> candidates = holds.findByStatusAndOfferExpiresAtBefore(HoldStatus.OFFERED, now);
