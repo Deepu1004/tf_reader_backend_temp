@@ -8,19 +8,30 @@ import com.tf.reader.auth.model.CurrentUser;
 import com.tf.reader.auth.model.UserType;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
+import com.tf.reader.hold.entity.Hold;
+import com.tf.reader.hold.entity.HoldStatus;
+import com.tf.reader.hold.entity.Offer;
 import com.tf.reader.hold.repository.HoldRepository;
+import com.tf.reader.hold.repository.HoldWrites;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.redis.core.ZSetOperations;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 // Everything here short-circuits before touching Mongo or Redis, so a plain
@@ -29,16 +40,21 @@ import static org.mockito.Mockito.when;
 class QueueServiceTest {
 
     private final HoldRepository holds = mock(HoldRepository.class);
+    private final HoldWrites writes = mock(HoldWrites.class);
     private final org.springframework.data.redis.core.StringRedisTemplate redis =
             mock(org.springframework.data.redis.core.StringRedisTemplate.class);
     private final EntitlementQuery entitlements = mock(EntitlementQuery.class);
+    private final PromotionService promotion = mock(PromotionService.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-08-17T09:00:00Z"), ZoneOffset.UTC);
+    @SuppressWarnings("unchecked")
+    private final ZSetOperations<String, String> zsetOps = mock(ZSetOperations.class);
 
     private QueueService queue;
 
     @BeforeEach
     void setUp() {
-        queue = new QueueService(holds, redis, entitlements, clock);
+        when(redis.opsForZSet()).thenReturn(zsetOps);
+        queue = new QueueService(holds, writes, redis, entitlements, promotion, clock);
     }
 
     @Test
@@ -77,6 +93,32 @@ class QueueServiceTest {
                 .isInstanceOf(ApiException.class)
                 .extracting(e -> ((ApiException) e).getCode())
                 .isEqualTo(ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    void leaveRemovesTheQueueEntryAndPromotesTheNextReaderOnlyIfOffered() {
+        CurrentUser me = new CurrentUser("user_a", UserType.INSTITUTION, "inst_1", List.of(), List.of());
+        Offer offer = new Offer("offer_1", Instant.now(), Instant.now().plusSeconds(900), "lease_1");
+        Hold hold = Hold.queued("user_a", "inst_1", "item_1", 1, Instant.now());
+        hold.setStatus(HoldStatus.OFFERED);
+        hold.setOffer(offer);
+        when(writes.deleteOwn("hold_1", "user_a")).thenReturn(Optional.of(hold));
+
+        queue.leave(me, "hold_1");
+
+        verify(zsetOps).remove(anyString(), eq(QueueKeys.member("user_a")));
+        verify(promotion).promoteNext("inst_1", "item_1", "lease_1");
+    }
+
+    @Test
+    void leaveIsANoOpWhenTheHoldWasAlreadyGoneOrNeverTheirs() {
+        CurrentUser me = new CurrentUser("user_a", UserType.INSTITUTION, "inst_1", List.of(), List.of());
+        when(writes.deleteOwn("hold_1", "user_a")).thenReturn(Optional.empty());
+
+        queue.leave(me, "hold_1");
+
+        verifyNoInteractions(promotion);
+        verify(zsetOps, never()).remove(anyString(), anyString());
     }
 
     @Test
