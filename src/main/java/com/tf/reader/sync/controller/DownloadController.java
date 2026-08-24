@@ -1,12 +1,14 @@
 package com.tf.reader.sync.controller;
 
 import com.tf.reader.sync.dto.DownloadRequest;
+import com.tf.reader.sync.dto.DownloadValidityRequest;
 import com.tf.reader.sync.model.Download;
 import com.tf.reader.sync.service.DownloadService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -49,6 +51,14 @@ public class DownloadController {
     @PutMapping("/{id}")
     public Download update(@PathVariable String id, @Valid @RequestBody DownloadRequest request) {
         return service.update(id, request);
+    }
+
+    /** Flips isValid for every download the user holds for the book, across all formats. */
+    @PatchMapping
+    public List<Download> updateIsValid(@RequestParam String userId,
+                                        @RequestParam String bookId,
+                                        @Valid @RequestBody DownloadValidityRequest request) {
+        return service.updateIsValid(userId, bookId, request.isValid());
     }
 
     @DeleteMapping("/{id}")
