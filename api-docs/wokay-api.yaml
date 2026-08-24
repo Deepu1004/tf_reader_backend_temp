@@ -1435,7 +1435,14 @@ paths:
       tags: [Admin · catalogue items]
       operationId: listCatalogueItems
       summary: List books, filtered
-      description: Returns a summary projection. Full detail, including assets, comes from the single-item endpoint.
+      description: >-
+        Returns a summary projection. Full detail, including assets, comes from the
+        single-item endpoint.
+
+        Callable by SUPER_ADMIN, PUBLISHER_ADMIN or INSTITUTION_ADMIN. For an
+        INSTITUTION_ADMIN caller (or a SUPER_ADMIN who passes `institutionId`), each item
+        carries `entitlementStatus` for that institution. An INSTITUTION_ADMIN always sees
+        their own institution; any `institutionId` they pass is ignored.
       x-stability: DRAFT
       security: [{ adminToken: [] }]
       parameters:
@@ -1448,6 +1455,13 @@ paths:
           description: >-
             Free text over title, authors and subjects. An ISBN-shaped value is matched
             exactly instead, so an operator can paste one in to find a single book.
+          schema: { type: string }
+        - name: institutionId
+          in: query
+          description: >-
+            SUPER_ADMIN only. Views the catalogue as that institution would see it, with
+            `entitlementStatus` resolved against its entitlements. Ignored for any other
+            role.
           schema: { type: string }
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Size'
@@ -1852,11 +1866,42 @@ paths:
       tags: [Admin · entitlements]
       operationId: revokeEntitlement
       summary: Revoke a grant
-      description: Soft. The grant moves to REVOKED and the content disappears from the feed on the next request.
+      description: >-
+        SUPER_ADMIN only. Soft: the grant moves to REVOKED and the content disappears from
+        the feed on the next request.
       x-stability: DRAFT
       security: [{ adminToken: [] }]
       responses:
         '204': { description: Revoked }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Admin · entitlements]
+      operationId: changeEntitlementStatus
+      summary: Approve or reject a pending request
+      description: >-
+        SUPER_ADMIN only. The only two valid transitions are PENDING -> ACTIVE (approve)
+        and PENDING -> REVOKED (reject); anything else is 400 VALIDATION_FAILED. Approval
+        bumps the institution's `catalogueVersion`; rejection does not, since a PENDING
+        entitlement was never visible in any feed.
+      x-stability: DRAFT
+      security: [{ adminToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EntitlementStatusChange' }
+            example:
+              status: ACTIVE
+              reason: Looks legitimate, approved by ops
+      responses:
+        '200':
+          description: The updated grant
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Entitlement' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -2381,7 +2426,7 @@ components:
 
     EntitlementStatus:
       type: string
-      enum: [ACTIVE, SUSPENDED, REVOKED]
+      enum: [ACTIVE, PENDING, SUSPENDED, REVOKED]
 
     Intent:
       type: string
@@ -3416,6 +3461,16 @@ components:
           type: string
           format: date-time
           description: Touched by every write, including ingest state changes. `IngestStatus` returns it.
+        entitlementStatus:
+          type: [string, 'null']
+          enum: [none, pending, active, revoked, null]
+          description: >-
+            Only present when the caller is viewing as an institution (an
+            INSTITUTION_ADMIN, or a SUPER_ADMIN who passed `institutionId`): `none`,
+            `pending`, `active` or `revoked`, resolved against that institution's
+            entitlements. Null for any other caller (a PUBLISHER_ADMIN, or a SUPER_ADMIN
+            with no `institutionId`) - not the same as `none`, which means the institution
+            has zero matching entitlements for this item.
 
     CatalogueItemWrite:
       type: object
@@ -3620,12 +3675,19 @@ components:
         loanPeriodDays: { type: integer, default: 14, minimum: 1 }
         validFrom: { type: string, format: date }
         validTo: { type: [string, 'null'], format: date }
+        status:
+          allOf: [{ $ref: '#/components/schemas/EntitlementStatus' }]
+          description: >-
+            SUPER_ADMIN only, to hand-grant a status directly and skip the request step.
+            Ignored for any other caller, whose grant always starts PENDING regardless of
+            what is sent here.
 
     EntitlementUpdate:
       type: object
       description: >-
         Amends the **terms** of a grant. `scopeType` and `scopeId` are not here: to
-        re-point a grant, revoke it and create a new one. `version` is required.
+        re-point a grant, revoke it and create a new one. `version` is required. Status is
+        not here either: use `PATCH .../status` to approve or reject a pending request.
       required: [version]
       properties:
         copies: { type: [integer, 'null'], minimum: 1 }
@@ -3638,6 +3700,18 @@ components:
           description: >-
             From the record you loaded. If somebody else saved since, you get
             `409 STALE_VERSION` rather than silently overwriting them.
+
+    EntitlementStatusChange:
+      type: object
+      description: >-
+        Approve (PENDING -> ACTIVE) or reject (PENDING -> REVOKED) a request. Not
+        `StatusChange`: that schema is typed to `RecordStatus`, whose terminal value is
+        RETIRED, and does not fit `EntitlementStatus`, whose terminal rejection value is
+        REVOKED.
+      required: [status]
+      properties:
+        status: { $ref: '#/components/schemas/EntitlementStatus' }
+        reason: { type: string, maxLength: 500 }
 
     Shelf:
       type: object

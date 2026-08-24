@@ -1,9 +1,9 @@
 # API contract digest
 
 **GENERATED FILE. Do not edit.** Run `./scripts/gen-api-digest.sh` after the contract changes.
-Source `api-docs/wokay-api.yaml`, generated 2026-08-20.
+Source `api-docs/wokay-api.yaml`, generated 2026-08-24.
 
-44 operations across 32 paths, 81 schemas. **`FROZEN` means another team is already building against it: changing one needs a cohort conversation.**
+45 operations across 32 paths, 82 schemas. **`FROZEN` means another team is already building against it: changing one needs a cohort conversation.**
 
 ## Public institutions
 
@@ -66,6 +66,7 @@ Source `api-docs/wokay-api.yaml`, generated 2026-08-20.
 | POST | `/api/admin/v1/institutions/{institutionId}/entitlements` | DRAFT | wokay |
 | PUT | `/api/admin/v1/entitlements/{entitlementId}` | DRAFT | wokay |
 | DELETE | `/api/admin/v1/entitlements/{entitlementId}` | DRAFT | wokay |
+| PATCH | `/api/admin/v1/entitlements/{entitlementId}` | DRAFT | wokay |
 | GET | `/api/admin/v1/institutions/{institutionId}/feed-settings` | DRAFT | wokay |
 | PUT | `/api/admin/v1/institutions/{institutionId}/feed-settings` | DRAFT | wokay |
 | GET | `/api/admin/v1/admin-users` | DRAFT | wokay |
@@ -81,7 +82,7 @@ Source `api-docs/wokay-api.yaml`, generated 2026-08-20.
 - **`ContentState`**: NONE, QUEUED, PROCESSING, READY, FAILED
 - **`AdminRole`**: SUPER_ADMIN, PUBLISHER_ADMIN, INSTITUTION_ADMIN
 - **`EntitlementScope`**: PUBLISHER, COLLECTION, ITEM
-- **`EntitlementStatus`**: ACTIVE, SUSPENDED, REVOKED
+- **`EntitlementStatus`**: ACTIVE, PENDING, SUSPENDED, REVOKED
 - **`SortOrder`**: publishedAt.desc, publishedAt.asc, title.asc, title.desc
 - **`ContentType`**: PDF, EPUB, AUDIO
 - **`Intent`**: STREAM, DOWNLOAD
@@ -104,7 +105,7 @@ Every one is reachable. There are no spare codes, so do not write a handler for 
 
 ## Schemas
 
-`Error`, `ErrorCode`, `PageMeta`, `RecordStatus`, `SortOrder`, `Isbn`, `ContentType`, `AssetFormat`, `AccessTier`, `ItemStatus`, `EntitlementScope`, `EntitlementStatus`, `Intent`, `InstitutionType`, `AdminRole`, `ContentState`, `StatusChange`, `InstitutionSummary`, `InstitutionPage`, `Branding`, `SignIn`, `SignInWrite`, `InstitutionDetail`, `OpdsLink`, `OpdsNavigationLink`, `OpdsPublicationLink`, `OpdsImageLink`, `OpdsLinkProperties`, `EncryptedInfo`, `OpdsFeedMetadata`, `OpdsGroupMetadata`, `OpdsNavigationFeed`, `OpdsPublicationFeed`, `OpdsGroup`, `OpdsPublicationDocument`, `OpdsPublication`, `OpdsContributor`, `OpdsPublicationMetadata`, `BatchItemsRequest`, `BatchItem`, `BatchItemsResponse`, `ContentGrantRequest`, `SubjectRef`, `LoanProof`, `SignedUrl`, `IndexUrl`, `Encryption`, `ContentGrant`, `AdminLoginRequest`, `TokenPair`, `AdminLoginResponse`, `RefreshResponse`, `RefreshRequest`, `AdminSession`, `AdminUser`, `AdminUserPage`, `AdminUserCreate`, `AdminUserUpdate`, `Publisher`, `PublisherWrite`, `PublisherPage`, `Collection`, `CollectionPage`, `CollectionWrite`, `Asset`, `CatalogueItem`, `CatalogueItemWrite`, `CatalogueItemPage`, `IngestStatus`, `AdminInstitution`, `AdminInstitutionPage`, `InstitutionWrite`, `Entitlement`, `EntitlementPage`, `EntitlementCreate`, `EntitlementUpdate`, `Shelf`, `FeedSettings`, `FeedSettingsWrite`, `AuditLog`, `AuditLogPage`
+`Error`, `ErrorCode`, `PageMeta`, `RecordStatus`, `SortOrder`, `Isbn`, `ContentType`, `AssetFormat`, `AccessTier`, `ItemStatus`, `EntitlementScope`, `EntitlementStatus`, `Intent`, `InstitutionType`, `AdminRole`, `ContentState`, `StatusChange`, `InstitutionSummary`, `InstitutionPage`, `Branding`, `SignIn`, `SignInWrite`, `InstitutionDetail`, `OpdsLink`, `OpdsNavigationLink`, `OpdsPublicationLink`, `OpdsImageLink`, `OpdsLinkProperties`, `EncryptedInfo`, `OpdsFeedMetadata`, `OpdsGroupMetadata`, `OpdsNavigationFeed`, `OpdsPublicationFeed`, `OpdsGroup`, `OpdsPublicationDocument`, `OpdsPublication`, `OpdsContributor`, `OpdsPublicationMetadata`, `BatchItemsRequest`, `BatchItem`, `BatchItemsResponse`, `ContentGrantRequest`, `SubjectRef`, `LoanProof`, `SignedUrl`, `IndexUrl`, `Encryption`, `ContentGrant`, `AdminLoginRequest`, `TokenPair`, `AdminLoginResponse`, `RefreshResponse`, `RefreshRequest`, `AdminSession`, `AdminUser`, `AdminUserPage`, `AdminUserCreate`, `AdminUserUpdate`, `Publisher`, `PublisherWrite`, `PublisherPage`, `Collection`, `CollectionPage`, `CollectionWrite`, `Asset`, `CatalogueItem`, `CatalogueItemWrite`, `CatalogueItemPage`, `IngestStatus`, `AdminInstitution`, `AdminInstitutionPage`, `InstitutionWrite`, `Entitlement`, `EntitlementPage`, `EntitlementCreate`, `EntitlementUpdate`, `EntitlementStatusChange`, `Shelf`, `FeedSettings`, `FeedSettingsWrite`, `AuditLog`, `AuditLogPage`
 
 ## When this is not enough
 
