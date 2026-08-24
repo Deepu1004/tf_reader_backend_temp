@@ -10,8 +10,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
+import com.tf.reader.hold.api.HoldSnapshot;
+import com.tf.reader.hold.api.HoldSnapshotQuery;
+import com.tf.reader.hold.api.OfferView;
 import com.tf.reader.library.dto.LibraryResponse;
-import com.tf.reader.library.repository.MockLibraryRepository;
 import com.tf.reader.library.service.ChangeCursor;
 import com.tf.reader.library.service.ChangeFeedService;
 import com.tf.reader.library.service.LibraryAssembler;
@@ -20,6 +22,7 @@ import com.tf.reader.loan.api.ActiveLoanQuery;
 import com.tf.reader.loan.api.ActiveLoanView;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -29,30 +32,25 @@ class LibraryAssemblerTest {
 
 	private static final ReaderIdentity READER = new ReaderIdentity("user_9c2", "inst_7f3");
 
-	/** The one identity {@code MockLibraryRepository} seeds hold cards for. */
-	private static final ReaderIdentity SEEDED_READER = new ReaderIdentity("usr_dev123", "inst_7f3");
-
-	private static final Instant NOW = Instant.parse("2026-08-20T10:00:00Z");
+	private static final Instant NOW = Instant.parse("2026-08-24T10:00:00Z");
 	private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
 
 	private final ChangeFeedService changeFeed = mock(ChangeFeedService.class);
 	private final ActiveLoanQuery activeLoans = mock(ActiveLoanQuery.class);
+	private final HoldSnapshotQuery holdSnapshots = mock(HoldSnapshotQuery.class);
 
-	// The hold fixture is the real component, not a Mockito mock: it holds no collaborator but the
-	// clock, so stubbing it would only assert that the seed says what the seed says.
-	private final LibraryAssembler assembler = new LibraryAssembler(
-			changeFeed, activeLoans, new MockLibraryRepository(CLOCK), CLOCK);
+	private final LibraryAssembler assembler =
+			new LibraryAssembler(changeFeed, activeLoans, holdSnapshots, CLOCK);
 
 	@Test
 	@DisplayName("loans and holds are empty arrays, never absent, so the screen is built once")
-	void publishesTheShapeBeforeTheContent() {
+	void publishesTheShapeEvenWhenBothAreEmpty() {
 		givenCursor(ChangeCursor.of(1189L));
 		givenLoans();
+		givenHolds();
 
 		LibraryResponse response = assembler.assemble(READER);
 
-		// A reader with no loans and no seeded holds is what a brand new reader looks like: empty,
-		// never null.
 		assertThat(response.loans()).isNotNull().isEmpty();
 		assertThat(response.holds()).isNotNull().isEmpty();
 	}
@@ -61,6 +59,7 @@ class LibraryAssemblerTest {
 	@DisplayName("loans come from the published loan seam, mapped onto the wire shape")
 	void mapsLoansFromTheSeam() {
 		givenCursor(ChangeCursor.of(4L));
+		givenHolds();
 		givenLoans(
 				new ActiveLoanView("loan_7c1", "item_42", "ELITE", false,
 						NOW.plus(13, ChronoUnit.DAYS)),
@@ -77,6 +76,7 @@ class LibraryAssemblerTest {
 	@DisplayName("every loan from this seam is ACTIVE, because the seam only returns live ones")
 	void statusIsAlwaysActive() {
 		givenCursor(ChangeCursor.of(4L));
+		givenHolds();
 		givenLoans(new ActiveLoanView("loan_7c1", "item_42", "ELITE", false,
 				NOW.plus(13, ChronoUnit.DAYS)));
 
@@ -89,6 +89,7 @@ class LibraryAssemblerTest {
 	@DisplayName("an open-ended loan carries no dueAt, so the card shows no countdown")
 	void openEndedLoanHasNoDueDate() {
 		givenCursor(ChangeCursor.of(4L));
+		givenHolds();
 		givenLoans(
 				new ActiveLoanView("loan_7c1", "item_42", "ELITE", false,
 						NOW.plus(13, ChronoUnit.DAYS)),
@@ -106,57 +107,64 @@ class LibraryAssemblerTest {
 	@DisplayName("borrowedAt is omitted, because the seam does not publish it")
 	void borrowedAtHasNoSourceYet() {
 		givenCursor(ChangeCursor.of(4L));
+		givenHolds();
 		givenLoans(new ActiveLoanView("loan_7c1", "item_42", "ELITE", false,
 				NOW.plus(13, ChronoUnit.DAYS)));
 
 		// Null rather than invented. The frozen response shape has the field, so this is the gap to
-		// close with the loan lane — add it to ActiveLoanView, or drop it from LibraryResponse.
+		// close with the loan lane: it is agreed that borrowedAt joins ActiveLoanView, and when it
+		// does this assertion flips to isNotNull.
 		assertThat(assembler.assemble(READER).loans().get(0).borrowedAt()).isNull();
 	}
 
 	@Test
-	@DisplayName("a seeded reader gets hold cards, so the offer section has something to render")
-	void seededReaderGetsHolds() {
-		when(changeFeed.currentCursor(SEEDED_READER.userId())).thenReturn(ChangeCursor.of(4L));
+	@DisplayName("holds come from the published hold seam, mapped onto the wire shape")
+	void mapsHoldsFromTheSeam() {
+		givenCursor(ChangeCursor.of(4L));
 		givenLoans();
+		givenHolds(queued("hold_q7", "item_q7", 3, 7, 12), offered("hold_f3", "item_f3", 1, 4));
 
-		LibraryResponse response = assembler.assemble(SEEDED_READER);
+		LibraryResponse response = assembler.assemble(READER);
 
 		assertThat(response.holds()).extracting("itemId").containsExactly("item_q7", "item_f3");
+		assertThat(response.holds().get(0).position()).isEqualTo(3);
+		assertThat(response.holds().get(0).queueLength()).isEqualTo(7);
 	}
 
 	@Test
 	@DisplayName("an offered hold swaps the wait guess for a real deadline")
 	void offeredHoldHasADeadlineAndNoGuess() {
-		when(changeFeed.currentCursor(SEEDED_READER.userId())).thenReturn(ChangeCursor.of(4L));
+		givenCursor(ChangeCursor.of(4L));
 		givenLoans();
+		givenHolds(queued("hold_q7", "item_q7", 3, 7, 12), offered("hold_f3", "item_f3", 1, 4));
 
-		LibraryResponse response = assembler.assemble(SEEDED_READER);
+		LibraryResponse response = assembler.assemble(READER);
 
 		var offered = response.holds().get(1);
 		assertThat(offered.status()).isEqualTo("OFFERED");
 		assertThat(offered.estimatedWaitDays()).isNull();
+		assertThat(offered.offer().offerId()).isEqualTo("offer_f3");
 		assertThat(offered.offer().expiresAt()).isAfter(response.serverTime());
-		// One-based, per the contract's minimum of 1 — and whoever holds an offer is at the front.
-		assertThat(offered.position()).isEqualTo(1);
 
-		var queued = response.holds().get(0);
-		assertThat(queued.status()).isEqualTo("QUEUED");
-		assertThat(queued.offer()).isNull();
-		assertThat(queued.estimatedWaitDays()).isNotNull();
+		var waiting = response.holds().get(0);
+		assertThat(waiting.status()).isEqualTo("QUEUED");
+		assertThat(waiting.offer()).isNull();
+		assertThat(waiting.estimatedWaitDays()).isEqualTo(12);
 	}
 
 	@Test
-	@DisplayName("seeded hold statuses are the contract's, not invented ones")
-	void seededStatusesAreInTheContractEnum() {
-		when(changeFeed.currentCursor(SEEDED_READER.userId())).thenReturn(ChangeCursor.of(4L));
+	@DisplayName("offeredAt is dropped: the reader is racing the deadline, not the start")
+	void offerCarriesOnlyWhatTheCardNeeds() {
+		givenCursor(ChangeCursor.of(4L));
 		givenLoans();
+		givenHolds(offered("hold_f3", "item_f3", 1, 4));
 
-		// The contract enum is [QUEUED, OFFERED] and so is hold.entity.HoldStatus. A status invented
-		// in the fixture is one team1 branches on and the real hold module never sends.
-		assertThat(assembler.assemble(SEEDED_READER).holds())
-				.extracting("status")
-				.containsOnly("QUEUED", "OFFERED");
+		var offer = assembler.assemble(READER).holds().get(0).offer();
+
+		// LibraryOffer is two fields where OfferView is three. Asserting the shape here stops the
+		// third quietly reappearing in the response and changing what team1 parses.
+		assertThat(offer.offerId()).isEqualTo("offer_f3");
+		assertThat(offer.expiresAt()).isNotNull();
 	}
 
 	@Test
@@ -164,6 +172,7 @@ class LibraryAssemblerTest {
 	void carriesTheFeedCursor() {
 		givenCursor(ChangeCursor.of(1189L));
 		givenLoans();
+		givenHolds();
 
 		assertThat(assembler.assemble(READER).cursor()).isEqualTo("1189");
 	}
@@ -173,6 +182,7 @@ class LibraryAssemblerTest {
 	void newReaderGetsTheBeginning() {
 		givenCursor(ChangeCursor.BEGINNING);
 		givenLoans();
+		givenHolds();
 
 		String cursor = assembler.assemble(READER).cursor();
 
@@ -186,35 +196,39 @@ class LibraryAssemblerTest {
 	void anchorsToServerTime() {
 		givenCursor(ChangeCursor.of(1189L));
 		givenLoans();
+		givenHolds();
 
 		assertThat(assembler.assemble(READER).serverTime()).isEqualTo(NOW);
 	}
 
 	@Test
-	@DisplayName("the cursor is read before the shelf, so nothing falls between the two reads")
-	void readsTheCursorBeforeTheShelf() {
+	@DisplayName("the cursor is read before both shelves, so nothing falls between the reads")
+	void readsTheCursorBeforeTheShelves() {
 		givenCursor(ChangeCursor.of(1189L));
 		givenLoans();
+		givenHolds();
 
 		assembler.assemble(READER);
 
-		// Now assertable, because there is finally a real read to order against. Cursor last would
-		// mean a change landing mid-assembly is behind the cursor but missing from the snapshot, and
-		// the app never learns about it.
-		InOrder order = inOrder(changeFeed, activeLoans);
+		// Cursor last would mean a change landing mid-assembly is behind the cursor but missing from
+		// the snapshot, and the app never learns about it. Cursor first replays it, which converges.
+		InOrder order = inOrder(changeFeed, activeLoans, holdSnapshots);
 		order.verify(changeFeed).currentCursor("user_9c2");
 		order.verify(activeLoans).findAllFor("user_9c2");
+		order.verify(holdSnapshots).holdsFor("user_9c2");
 	}
 
 	@Test
-	@DisplayName("the loans asked for are this reader's, never anybody else's")
-	void asksTheSeamForThisReader() {
+	@DisplayName("both seams are asked for this reader, never anybody else")
+	void asksBothSeamsForThisReader() {
 		givenCursor(ChangeCursor.of(1189L));
 		givenLoans();
+		givenHolds();
 
 		assembler.assemble(READER);
 
 		verify(activeLoans).findAllFor("user_9c2");
+		verify(holdSnapshots).holdsFor("user_9c2");
 	}
 
 	@Test
@@ -230,8 +244,24 @@ class LibraryAssemblerTest {
 	}
 
 	private void givenLoans(ActiveLoanView... loans) {
-		when(activeLoans.findAllFor(org.mockito.ArgumentMatchers.anyString()))
-				.thenReturn(List.of(loans));
+		when(activeLoans.findAllFor(anyString())).thenReturn(List.of(loans));
+	}
+
+	private void givenHolds(HoldSnapshot... holds) {
+		when(holdSnapshots.holdsFor(anyString())).thenReturn(List.of(holds));
+	}
+
+	private static HoldSnapshot queued(String holdId, String itemId, int position, int queueLength,
+			Integer waitDays) {
+		return new HoldSnapshot(holdId, itemId, "QUEUED", position, queueLength, waitDays,
+				NOW.minus(5, ChronoUnit.DAYS), null);
+	}
+
+	private static HoldSnapshot offered(String holdId, String itemId, int position, int queueLength) {
+		return new HoldSnapshot(holdId, itemId, "OFFERED", position, queueLength, null,
+				NOW.minus(11, ChronoUnit.DAYS),
+				new OfferView("offer_f3", NOW.minus(2, ChronoUnit.HOURS),
+						NOW.plus(36, ChronoUnit.HOURS)));
 	}
 
 }
