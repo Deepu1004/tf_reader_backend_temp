@@ -1,0 +1,43 @@
+name: Main CI
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    # ubuntu-latest ships with Docker already running - the suite's Testcontainers tests (real
+    # MongoDB, real Redis) need nothing extra here. This only becomes a real dependency to watch
+    # if this ever moves to a self-hosted runner.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Run the test suite
+        run: ./mvnw -B test
+
+      # GitHub already shows a green check or red X on the commit for this workflow with no
+      # extra step - this is only for the separate ask of an email on top of that.
+      - name: Email on failure
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "main build failed - mvn test (${{ github.repository }})"
+          to: Ashwin.Sudhakar@taylorandfrancis.com,Abhishek.RNair@taylorandfrancis.com
+          from: GitHub Actions <actions@taylorandfrancis.com>
+          body: |
+            mvn test failed on main at ${{ github.sha }}.
+
+            ${{ github.event.head_commit.message }}
+
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
