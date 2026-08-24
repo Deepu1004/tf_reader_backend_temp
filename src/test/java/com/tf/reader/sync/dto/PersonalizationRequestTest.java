@@ -19,7 +19,7 @@ class PersonalizationRequestTest {
     @Test
     void omittedTypographyFallsBackToThePointsBasedDefaults() {
         PersonalizationRequest request = new PersonalizationRequest(
-                null, "user-001", null, null, null, null, null, null, null, null, null, null);
+                null, "user-001", null, null, null, null, null, null, null, null, null, null, null);
 
         Personalization document = request.toDocument();
 
@@ -31,7 +31,7 @@ class PersonalizationRequestTest {
     @Test
     void aMissingUserIdFailsValidation() {
         PersonalizationRequest request = new PersonalizationRequest(
-                null, null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         Set<ConstraintViolation<PersonalizationRequest>> violations = validator.validate(request);
 

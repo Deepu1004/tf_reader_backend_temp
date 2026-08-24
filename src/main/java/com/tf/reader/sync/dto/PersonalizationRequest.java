@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -40,7 +41,10 @@ public record PersonalizationRequest(
         String layoutSpread,
 
         @Positive(message = "zoom must be greater than zero")
-        Double zoom) implements SyncRequest<Personalization> {
+        Double zoom,
+
+        /** Client-owned. Field name -> ISO-8601 timestamp, carried through as-is. */
+        Map<String, String> fieldUpdatedAt) implements SyncRequest<Personalization> {
 
     @Override
     public Personalization toDocument() {
@@ -63,5 +67,6 @@ public record PersonalizationRequest(
         target.setLayoutFlow(Objects.requireNonNullElse(layoutFlow, "paginated"));
         target.setLayoutSpread(Objects.requireNonNullElse(layoutSpread, "single"));
         target.setZoom(Objects.requireNonNullElse(zoom, 1.0));
+        target.setFieldUpdatedAt(Objects.requireNonNullElse(fieldUpdatedAt, Map.of()));
     }
 }

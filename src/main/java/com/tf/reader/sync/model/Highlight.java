@@ -11,6 +11,10 @@ import java.time.Instant;
  */
 @Document(collection = "highlights")
 @CompoundIndex(name = "highlight_user_book_idx", def = "{'userId': 1, 'bookId': 1}")
+@CompoundIndex(name = "highlight_span_uk",
+        def = "{'userId': 1, 'bookId': 1, 'startLocator': 1, 'endLocator': 1}",
+        unique = true,
+        partialFilter = "{'isDeleted': false}")
 public class Highlight extends BookScopedDocument {
 
     private Locator startLocator;
