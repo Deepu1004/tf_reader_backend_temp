@@ -3,6 +3,8 @@ package com.tf.reader.sync.model;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.util.Map;
+
 /**
  * Reader appearance settings. Scoped to the user only - there is no bookId, and no
  * separate preferences collection.
@@ -30,6 +32,9 @@ public class Personalization extends BaseDocument {
     private String layoutSpread = "single";
 
     private Double zoom = 1.0;
+
+    /** Client-owned. Field name -> ISO-8601 timestamp; the backend never reads this. */
+    private Map<String, String> fieldUpdatedAt = Map.of();
 
     public String getTheme() {
         return theme;
@@ -109,5 +114,13 @@ public class Personalization extends BaseDocument {
 
     public void setZoom(Double zoom) {
         this.zoom = zoom;
+    }
+
+    public Map<String, String> getFieldUpdatedAt() {
+        return fieldUpdatedAt;
+    }
+
+    public void setFieldUpdatedAt(Map<String, String> fieldUpdatedAt) {
+        this.fieldUpdatedAt = fieldUpdatedAt;
     }
 }

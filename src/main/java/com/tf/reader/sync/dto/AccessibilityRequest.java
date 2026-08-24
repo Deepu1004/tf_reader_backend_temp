@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -61,7 +62,10 @@ public record AccessibilityRequest(
 
         Boolean announceChapterChanges,
 
-        Boolean screenReaderHints) implements SyncRequest<Accessibility> {
+        Boolean screenReaderHints,
+
+        /** Client-owned. Field name -> ISO-8601 timestamp, carried through as-is. */
+        Map<String, String> fieldUpdatedAt) implements SyncRequest<Accessibility> {
 
     @Override
     public Accessibility toDocument() {
@@ -93,5 +97,6 @@ public record AccessibilityRequest(
         target.setAnnouncePageChanges(Objects.requireNonNullElse(announcePageChanges, true));
         target.setAnnounceChapterChanges(Objects.requireNonNullElse(announceChapterChanges, true));
         target.setScreenReaderHints(Objects.requireNonNullElse(screenReaderHints, false));
+        target.setFieldUpdatedAt(Objects.requireNonNullElse(fieldUpdatedAt, Map.of()));
     }
 }

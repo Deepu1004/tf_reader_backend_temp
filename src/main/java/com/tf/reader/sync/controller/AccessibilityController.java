@@ -1,7 +1,9 @@
 package com.tf.reader.sync.controller;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -74,6 +76,9 @@ public class AccessibilityController {
 
     @PostMapping("/{id}/restore")
     public Accessibility restore(@PathVariable String id) {
+
         return service.restore(id);
     }
+
+
 }
