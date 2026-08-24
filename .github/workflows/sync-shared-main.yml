@@ -7,6 +7,12 @@ on:
   push:
     branches: [main]
 
+# The default GITHUB_TOKEN is read-only unless a workflow says otherwise. Declared here rather
+# than relying only on the repo's Settings > Actions > General > Workflow permissions toggle, so
+# this keeps working even if that repo-wide default is ever reset.
+permissions:
+  contents: write
+
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -29,7 +35,7 @@ jobs:
       # was; a person has to merge it by hand.
       - name: Email on conflict
         if: failure()
-        uses: dawidd6/action-send-mail@v3
+        uses: dawidd6/action-send-mail@v18
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
           server_port: ${{ secrets.SMTP_PORT }}

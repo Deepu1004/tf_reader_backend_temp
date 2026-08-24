@@ -26,7 +26,7 @@ jobs:
       # extra step - this is only for the separate ask of an email on top of that.
       - name: Email on failure
         if: failure()
-        uses: dawidd6/action-send-mail@v3
+        uses: dawidd6/action-send-mail@v18
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
           server_port: ${{ secrets.SMTP_PORT }}
