@@ -1,0 +1,28 @@
+name: Main CI
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    # ubuntu-latest ships with Docker already running - the suite's Testcontainers tests (real
+    # MongoDB, real Redis) need nothing extra here. This only becomes a real dependency to watch
+    # if this ever moves to a self-hosted runner.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Run the test suite
+        run: ./mvnw -B test
+
+      # GitHub already shows a green check or red X on the commit for this workflow with no
+      # extra step. An email-on-failure step used to live here - removed until there's a real
+      # SMTP account to send from (GitHub does not provide one; see the repo's temp/ notes for
+      # what that needs).
