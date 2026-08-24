@@ -15,7 +15,7 @@ public record CatalogueItemView(String id, String publisherId, String publisherN
 		String isbn, ContentType contentType, AccessTier accessTier, List<String> subjects, String language,
 		String description, LocalDate publishedAt, Integer numberOfPages, Integer duration, String coverUrl,
 		ItemStatus status, ContentState contentState, String contentError, List<Asset> assets, Instant createdAt,
-		Instant updatedAt) {
+		Instant updatedAt, String entitlementStatus) {
 
 
 	public record Asset(ContentType format, String mimeType, long sizeBytes, Long cipherLength, boolean encrypted,

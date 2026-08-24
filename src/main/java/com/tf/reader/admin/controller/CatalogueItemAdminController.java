@@ -39,9 +39,10 @@ public class CatalogueItemAdminController {
 			@RequestParam(required = false) String collectionId,
 			@RequestParam(required = false) ContentType contentType,
 			@RequestParam(required = false) AccessTier accessTier, @RequestParam(required = false) String q,
-			@RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
+			@RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size,
+			@RequestParam(required = false) String institutionId) {
 		return catalogueItems.list(adminScope.currentPublisherScope(), publisherId, collectionId, contentType,
-				accessTier, q, page, size);
+				accessTier, q, page, size, institutionId);
 	}
 
 	@PostMapping

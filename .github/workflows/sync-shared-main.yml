@@ -1,0 +1,41 @@
+name: Sync shared-main with main
+
+# shared-main is flambeau's integration branch: they push their own commits there and later
+# merge that branch onto main themselves, reviewed, as a normal PR. This workflow only moves in
+# the other direction - it keeps shared-main current with main - and never touches main itself.
+on:
+  push:
+    branches: [main]
+
+# The default GITHUB_TOKEN is read-only unless a workflow says otherwise. Declared here rather
+# than relying only on the repo's Settings > Actions > General > Workflow permissions toggle, so
+# this keeps working even if that repo-wide default is ever reset.
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: shared-main
+          fetch-depth: 0
+
+      - name: Merge main into shared-main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git merge origin/main --no-edit
+          git push origin shared-main
+
+      # If the merge step above fails - a real conflict between main and shared-main - nothing
+      # here should try to resolve it: the push never runs, shared-main is left exactly as it
+      # was, and the failed run itself (red X, GitHub UI) is the signal until there's a real SMTP
+      # account to email from. To fix a conflict by hand:
+      #   git fetch origin
+      #   git checkout shared-main
+      #   git merge origin/main
+      #   # resolve conflicts
+      #   git push origin shared-main

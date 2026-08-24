@@ -2,6 +2,7 @@ package com.tf.reader.admin.dto;
 
 import java.time.LocalDate;
 
+import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.ScopeType;
 
 import jakarta.validation.constraints.Min;
@@ -14,12 +15,15 @@ import jakarta.validation.constraints.NotNull;
  //loanPeriodDays defaults to 14 when omitted
  //validFrom      defaults to today when omitted
  //validTo        null means open ended
- 
+ //status         SUPER_ADMIN only, hand-grants a status directly (e.g. ACTIVE, skipping the
+ //                request step). Ignored for any other caller, who always lands PENDING.
+
 public record EntitlementCreate(
 		@NotNull ScopeType scopeType,
 		@NotBlank String scopeId,
 		@Min(1) Integer copies,
 		@Min(1) Integer loanPeriodDays,
 		LocalDate validFrom,
-		LocalDate validTo) {
+		LocalDate validTo,
+		EntitlementStatus status) {
 }

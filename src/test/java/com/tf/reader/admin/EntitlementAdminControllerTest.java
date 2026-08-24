@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -195,6 +196,29 @@ class EntitlementAdminControllerTest {
 
 		mvc.perform(delete("/api/admin/v1/entitlements/ent_ghost")).andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("NOT_FOUND"));
+	}
+
+	// ---------------------------------------------------------------- approve / reject
+
+	@Test
+	@DisplayName("PATCH status returns 200 with the updated entitlement")
+	void changeStatusReturns200() throws Exception {
+		when(service.changeStatus(eq("ent_5a1"), any())).thenReturn(view());
+
+		mvc.perform(patch("/api/admin/v1/entitlements/ent_5a1/status").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"status\":\"ACTIVE\"}")).andExpect(status().isOk())
+				.andExpect(jsonPath("$.id").value("ent_5a1"));
+	}
+
+	@Test
+	@DisplayName("PATCH status with an invalid transition returns 400 VALIDATION_FAILED")
+	void changeStatusInvalidTransitionIs400() throws Exception {
+		when(service.changeStatus(eq("ent_5a1"), any())).thenThrow(
+				new ApiException(ErrorCode.VALIDATION_FAILED, "Cannot change entitlement status from ACTIVE to ACTIVE"));
+
+		mvc.perform(patch("/api/admin/v1/entitlements/ent_5a1/status").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"status\":\"ACTIVE\"}")).andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
 	}
 
 }
