@@ -7,30 +7,41 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import com.tf.reader.hold.api.HoldSnapshot;
+import com.tf.reader.hold.api.HoldSnapshotQuery;
 import com.tf.reader.library.dto.LibraryHold;
 import com.tf.reader.library.dto.LibraryLoan;
+import com.tf.reader.library.dto.LibraryOffer;
 import com.tf.reader.library.dto.LibraryResponse;
-import com.tf.reader.library.repository.MockLibraryRepository;
 import com.tf.reader.library.support.ReaderIdentity;
+import com.tf.reader.loan.api.ActiveLoanQuery;
 
 /**
  * Builds the library response from loans, holds and the change feed.
  *
- * <p><b>The cursor and {@code serverTime} are real; the shelves are seeded.</b> {@code loans} and
- * {@code holds} come from {@link MockLibraryRepository} until the loan and hold seams publish a
- * list — see {@link #loansFor} and {@link #holdsFor} for what each is waiting on. The response shape
- * is the same either way, so the screen gets built once instead of twice.
+ * <p><b>A read model over three sources, owning none of them.</b> Loans come from
+ * {@code loan.api.ActiveLoanQuery}, holds from {@code hold.api.HoldSnapshotQuery}, and the cursor
+ * from this module's own change feed. Nothing here re-derives what another lane already computes.
+ *
+ * <p>The response shape never changed while those two seams landed weeks apart, which is what let
+ * the screen be built once rather than twice.
  */
 @Service
 public class LibraryAssembler {
 
+	/** Every row {@code ActiveLoanQuery} returns is live by definition, so the wire status is fixed. */
+	private static final String ACTIVE = "ACTIVE";
+
 	private final ChangeFeedService changeFeed;
-	private final MockLibraryRepository shelves;
+	private final ActiveLoanQuery activeLoans;
+	private final HoldSnapshotQuery holdSnapshots;
 	private final Clock clock;
 
-	public LibraryAssembler(ChangeFeedService changeFeed, MockLibraryRepository shelves, Clock clock) {
+	public LibraryAssembler(ChangeFeedService changeFeed, ActiveLoanQuery activeLoans,
+			HoldSnapshotQuery holdSnapshots, Clock clock) {
 		this.changeFeed = changeFeed;
-		this.shelves = shelves;
+		this.activeLoans = activeLoans;
+		this.holdSnapshots = holdSnapshots;
 		this.clock = clock;
 	}
 
@@ -52,38 +63,63 @@ public class LibraryAssembler {
 	}
 
 	/**
-	 * The reader's active loans.
+	 * The reader's active loans, from the published loan seam.
 	 *
-	 * <p><b>Seeded, because the seam is the wrong shape rather than missing.</b>
-	 * {@code loan.api.ActiveLoanQuery} does have a bean now — {@code ActiveLoanQueryImpl} is a real
-	 * {@code @Service} — but it publishes only {@code findActive(userId, itemId)}, a point query. A
-	 * shelf needs every active loan for one reader, and asking that seam for it would mean already
-	 * knowing the item ids, which is the thing being looked up.
+	 * <p>{@code findAllFor} applies the D-006 liveness rule — an {@code ACTIVE} row already past its
+	 * {@code dueAt} is excluded — so the shelf never shows a loan the reader has effectively lost,
+	 * even in the window before the expiry sweep runs.
 	 *
-	 * <p>Unblocking it is a list method on {@code loan/api}, which is the loan lane's file to change.
-	 * When it lands, this maps its view onto {@link LibraryLoan} and is the only place the loan enums
-	 * become wire strings.
+	 * <p><b>{@code status} is hard-coded rather than read.</b> {@code ActiveLoanView} carries no
+	 * status field, and it does not need one: every row this seam returns is live by definition.
+	 *
+	 * <p><b>{@code borrowedAt} has no source, so it is omitted.</b> {@code ActiveLoanView} does not
+	 * publish it, and inventing a timestamp for a field the app may render is worse than leaving it
+	 * out. The frozen {@code LibraryResponse} shape has the field, so this is a gap to close with the
+	 * loan lane — either add it to the view, or drop it from the response.
 	 */
 	private List<LibraryLoan> loansFor(ReaderIdentity reader) {
-		return shelves.loansFor(reader.userId());
+		return activeLoans.findAllFor(reader.userId()).stream()
+				.map(loan -> new LibraryLoan(
+						loan.loanId(),
+						loan.itemId(),
+						loan.licenceModel(),
+						ACTIVE,
+						null,
+						loan.dueAt(),
+						loan.canPersist()))
+				.toList();
 	}
 
 	/**
-	 * The reader's holds, offered ones included.
+	 * The reader's holds, offered ones included, from the published hold seam.
 	 *
-	 * <p><b>Seeded, because the port has no bean.</b> {@code hold.api.HoldSnapshotQuery} is published
-	 * and real, but {@code HoldSnapshotQueryImpl} is an empty shell that neither implements it nor
-	 * carries {@code @Service} — injecting the port would fail context startup rather than return an
-	 * empty list.
+	 * <p><b>{@code position} and {@code queueLength} are read live and never cached here.</b> They are
+	 * computed on every read by the queue, because a hold ahead of this one cancelling changes both —
+	 * a stored position is wrong the moment anybody in front gives up.
 	 *
-	 * <p>When it lands, note that {@code position} and {@code queueLength} are computed there on
-	 * read — this assembler must not cache them, because a hold ahead of this one cancelling changes
-	 * both. Do not write a local {@code @Service} implementing that port either: the moment the hold
-	 * lane annotates theirs, the context has two candidates and fails for whoever merges second.
-	 * {@link MockLibraryRepository} is a plain component for exactly that reason.
+	 * <p>{@code OfferView} also carries {@code offeredAt}, which is dropped: the screen renders a
+	 * countdown to the deadline, and the moment the offer started is not something the reader is
+	 * racing.
 	 */
 	private List<LibraryHold> holdsFor(ReaderIdentity reader) {
-		return shelves.holdsFor(reader.userId());
+		return holdSnapshots.holdsFor(reader.userId()).stream()
+				.map(hold -> new LibraryHold(
+						hold.holdId(),
+						hold.itemId(),
+						hold.status(),
+						hold.position(),
+						hold.queueLength(),
+						hold.estimatedWaitDays(),
+						hold.placedAt(),
+						offerOf(hold)))
+				.toList();
+	}
+
+	/** Present only while a hold is OFFERED; absent from the JSON otherwise. */
+	private static LibraryOffer offerOf(HoldSnapshot hold) {
+		return hold.offer() == null
+				? null
+				: new LibraryOffer(hold.offer().offerId(), hold.offer().expiresAt());
 	}
 
 	/**

@@ -10,6 +10,10 @@ import java.time.Instant;
  */
 @Document(collection = "bookmarks")
 @CompoundIndex(name = "bookmark_user_book_idx", def = "{'userId': 1, 'bookId': 1}")
+@CompoundIndex(name = "bookmark_locator_uk",
+        def = "{'userId': 1, 'bookId': 1, 'locator': 1}",
+        unique = true,
+        partialFilter = "{'isDeleted': false}")
 public class Bookmark extends BookScopedDocument {
 
     private String chapterId;

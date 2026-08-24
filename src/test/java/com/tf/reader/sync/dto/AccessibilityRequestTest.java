@@ -48,6 +48,7 @@ class AccessibilityRequestTest {
                 null,            // largeAudioControls
                 null,            // announcePageChanges
                 null,            // announceChapterChanges
-                screenReaderHints);
+                screenReaderHints,
+                null);           // fieldUpdatedAt
     }
 }

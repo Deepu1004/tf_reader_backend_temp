@@ -10,6 +10,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpInputMessage;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.access.AccessDeniedException;
@@ -165,6 +166,38 @@ class GlobalExceptionHandlerTest {
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
 		assertThat(response.getBody().code()).isEqualTo("INTERNAL_ERROR");
 		assertThat(response.getBody().message()).doesNotContain("connection pool exhausted");
+	}
+
+	@Test
+	void identifiesAHighlightSpanCollisionSoTheClientDoesNotRetryItsOwnId() {
+		DuplicateKeyException ex = new DuplicateKeyException(
+				"E11000 duplicate key error collection: reader.highlights index: highlight_span_uk dup key: { }");
+
+		ResponseEntity<ErrorResponse> response = handler.handleDuplicateKey(ex, new MockHttpServletRequest());
+
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+		assertThat(response.getBody().code()).isEqualTo("CODE_TAKEN");
+		assertThat(response.getBody().message()).isEqualTo("HIGHLIGHT_LOCATOR_DUPLICATION");
+	}
+
+	@Test
+	void identifiesABookmarkLocatorCollisionSoTheClientDoesNotRetryItsOwnId() {
+		DuplicateKeyException ex = new DuplicateKeyException(
+				"E11000 duplicate key error collection: reader.bookmarks index: bookmark_locator_uk dup key: { }");
+
+		ResponseEntity<ErrorResponse> response = handler.handleDuplicateKey(ex, new MockHttpServletRequest());
+
+		assertThat(response.getBody().message()).isEqualTo("BOOKMARK_LOCATOR_DUPLICATION");
+	}
+
+	@Test
+	void fallsBackToTheGenericMessageForAnUnrecognisedUniqueIndex() {
+		DuplicateKeyException ex = new DuplicateKeyException(
+				"E11000 duplicate key error collection: reader.progress index: progress_user_book_uk dup key: { }");
+
+		ResponseEntity<ErrorResponse> response = handler.handleDuplicateKey(ex, new MockHttpServletRequest());
+
+		assertThat(response.getBody().message()).isEqualTo("A record already exists for this scope.");
 	}
 
 	@SuppressWarnings("unused")

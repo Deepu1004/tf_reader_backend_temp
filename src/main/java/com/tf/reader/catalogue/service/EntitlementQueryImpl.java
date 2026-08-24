@@ -60,11 +60,18 @@ class EntitlementQueryImpl implements EntitlementQuery {
             return denied(DenyReason.NO_ENTITLEMENT);
         }
 
+        // A grant's copies count is a term of what the institution bought at that scope, and one
+        // grant (a whole publisher, say) can cover books of more than one tier. Only ELITE is
+        // copy limited by nature, so a SUBSCRIPTION book sharing that grant must never inherit a
+        // concurrency limit meant for the ELITE titles alongside it - regardless of what copies
+        // says on the matched row.
+        boolean copyLimited = item.getAccessTier() == AccessTier.ELITE;
+
         return new EntitlementDecision(
                 true,
-                accessLevelFor(grant),
+                accessLevelFor(copyLimited, grant),
                 grant.getId(),
-                grant.getCopies(),
+                copyLimited ? grant.getCopies() : null,
                 grant.getLoanPeriodDays(),
                 grant.getValidTo() == null ? null : grant.getValidTo().atStartOfDay(ZoneOffset.UTC).toInstant(),
                 null
@@ -111,7 +118,10 @@ class EntitlementQueryImpl implements EntitlementQuery {
 
     // OPEN_ACCESS is handled earlier in check(), before a grant is looked up, so this is only
     // ever reached for a real grant now - never for an open access item.
-    private AccessLevel accessLevelFor(Entitlement grant) {
+    private AccessLevel accessLevelFor(boolean copyLimited, Entitlement grant) {
+        if (!copyLimited) {
+            return AccessLevel.ENTITLED_UNLIMITED;
+        }
         return grant.getCopies() == null ? AccessLevel.ENTITLED_UNLIMITED : AccessLevel.ENTITLED_CONCURRENT;
     }
 

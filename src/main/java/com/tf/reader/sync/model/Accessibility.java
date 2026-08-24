@@ -3,6 +3,8 @@ package com.tf.reader.sync.model;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.util.Map;
+
 /**
  * Accessibility and TTS settings. Scoped to the user only - there is no bookId.
  */
@@ -50,6 +52,9 @@ public class Accessibility extends BaseDocument {
     private boolean announceChapterChanges = true;
 
     private boolean screenReaderHints = false;
+
+    /** Client-owned. Field name -> ISO-8601 timestamp; the backend never reads this. */
+    private Map<String, String> fieldUpdatedAt = Map.of();
 
     public boolean isDyslexiaFont() {
         return dyslexiaFont;
@@ -201,5 +206,13 @@ public class Accessibility extends BaseDocument {
 
     public void setScreenReaderHints(boolean screenReaderHints) {
         this.screenReaderHints = screenReaderHints;
+    }
+
+    public Map<String, String> getFieldUpdatedAt() {
+        return fieldUpdatedAt;
+    }
+
+    public void setFieldUpdatedAt(Map<String, String> fieldUpdatedAt) {
+        this.fieldUpdatedAt = fieldUpdatedAt;
     }
 }
