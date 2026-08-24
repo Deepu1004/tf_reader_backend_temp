@@ -11,6 +11,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import com.tf.reader.admin.dto.EntitlementCreate;
+import com.tf.reader.admin.dto.EntitlementStatusChange;
 import com.tf.reader.admin.dto.EntitlementUpdate;
 import com.tf.reader.admin.dto.EntitlementView;
 import com.tf.reader.admin.security.AdminScopeAuthorizer;
@@ -92,7 +93,7 @@ public class EntitlementAdminService {
 		entitlement.setLoanPeriodDays(write.loanPeriodDays() != null ? write.loanPeriodDays() : DEFAULT_LOAN_PERIOD_DAYS);
 		entitlement.setValidFrom(write.validFrom() != null ? write.validFrom() : LocalDate.now());
 		entitlement.setValidTo(write.validTo());
-		entitlement.setStatus(EntitlementStatus.ACTIVE);
+		entitlement.setStatus(resolveCreateStatus(write.status()));
 		entitlement.setVersion(0);
 		entitlement.setCreatedAt(now);
 		entitlement.setUpdatedAt(now);
@@ -104,6 +105,14 @@ public class EntitlementAdminService {
 		catalogueVersionBumper.bump(CatalogueVersionBumper.Scope.INSTITUTION, institutionId);
 
 		return toView(entitlement);
+	}
+
+
+	private EntitlementStatus resolveCreateStatus(EntitlementStatus requested) {
+		if (!adminScope.isSuperAdmin()) {
+			return EntitlementStatus.PENDING;
+		}
+		return requested != null ? requested : EntitlementStatus.ACTIVE;
 	}
 
 	// update
@@ -137,10 +146,11 @@ public class EntitlementAdminService {
 
 	// ---------------------------------------------------------------- revoke
 
-	//Soft delete: marks the grant REVOKED rather than removing the row.
+	//Soft delete: marks the grant REVOKED rather than removing the row. Now that an institution
+	//can no longer self-grant access, it can no longer self-revoke it either.
 	public void revoke(String entitlementId) {
+		adminScope.requireSuperAdmin();
 		Entitlement entitlement = findOrThrow(entitlementId);
-		requireInstitutionAccess(entitlement.getInstitutionId());
 
 		Map<String, Object> before = Map.of("status", String.valueOf(entitlement.getStatus()));
 
@@ -148,10 +158,50 @@ public class EntitlementAdminService {
 		entitlement.setUpdatedAt(Instant.now());
 		entitlementRepository.save(entitlement);
 
-		auditWriter.record(adminScope.currentAdminId(), AuditLog.Action.UPDATE, "ENTITLEMENT", entitlementId, before,
+		auditWriter.record(adminScope.currentAdminId(), AuditLog.Action.STATUS, "ENTITLEMENT", entitlementId, before,
 				Map.of("status", String.valueOf(EntitlementStatus.REVOKED)));
 		catalogueVersionBumper.bump(CatalogueVersionBumper.Scope.INSTITUTION, entitlement.getInstitutionId());
 	}
+
+	// ---------------------------------------------------------------- approve / reject
+
+	/**
+	 * The only two transitions a super admin may make through this endpoint: approve a pending
+	 * request into ACTIVE, or reject it into REVOKED. Every other combination is a 400, not a
+	 * 409, because the request itself is invalid, not merely stale.
+	 */
+	public EntitlementView changeStatus(String entitlementId, EntitlementStatusChange change) {
+		adminScope.requireSuperAdmin();
+		Entitlement entitlement = findOrThrow(entitlementId);
+
+		EntitlementStatus from = entitlement.getStatus();
+		EntitlementStatus to = change.status();
+		if (from != EntitlementStatus.PENDING
+				|| (to != EntitlementStatus.ACTIVE && to != EntitlementStatus.REVOKED)) {
+			throw new ApiException(ErrorCode.VALIDATION_FAILED,
+					"Cannot change entitlement status from " + from + " to " + to);
+		}
+
+		Map<String, Object> before = Map.of("status", String.valueOf(from));
+
+		entitlement.setStatus(to);
+		entitlement.setUpdatedAt(Instant.now());
+		entitlement = entitlementRepository.save(entitlement);
+
+		Map<String, Object> meta = change.reason() != null && !change.reason().isBlank()
+				? Map.of("reason", change.reason())
+				: null;
+		auditWriter.record(adminScope.currentAdminId(), AuditLog.Action.STATUS, "ENTITLEMENT", entitlement.getId(),
+				before, Map.of("status", String.valueOf(to)), meta);
+
+
+		if (to == EntitlementStatus.ACTIVE) {
+			catalogueVersionBumper.bump(CatalogueVersionBumper.Scope.INSTITUTION, entitlement.getInstitutionId());
+		}
+
+		return toView(entitlement);
+	}
+
 //access
 
 	/**
