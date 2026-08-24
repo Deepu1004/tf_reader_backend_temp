@@ -4,9 +4,11 @@ import com.tf.reader.admin.entity.AdminUser;
 import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.Entitlement;
 import com.tf.reader.catalogue.entity.Institution;
+import com.tf.reader.catalogue.entity.Publisher;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
 import com.tf.reader.catalogue.repository.InstitutionRepository;
+import com.tf.reader.catalogue.repository.PublisherRepository;
 import com.tf.reader.hold.entity.Hold;
 import com.tf.reader.hold.repository.HoldRepository;
 import com.tf.reader.library.entity.ChangeLogEntry;
@@ -35,6 +37,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class FlambeauMongoDataTest extends ContainerisedInfrastructure {
 
 	@Autowired
+	private PublisherRepository publisherRepository;
+
+	@Autowired
 	private CatalogueItemRepository catalogueItemRepository;
 
 	@Autowired
@@ -55,10 +60,29 @@ public class FlambeauMongoDataTest extends ContainerisedInfrastructure {
 	@Test
 	@DisplayName("verify MongoDB persistence for Catalogue, Loans, Holds, and Sync Logs")
 	void testMongoDataPersistence() {
-		// 1. Verify Catalogue Items
+		// 1. Verify Catalogue Items. Inserted here rather than assumed from the demo seed:
+		// ContainerisedInfrastructure gives the whole test JVM one shared, never-reset MongoDB
+		// container, and the seeder is off by default for tests (see
+		// src/test/resources/application.properties) so plain repository tests can insert their
+		// own fixtures without colliding with seeded rows. A test that needs data present has to
+		// write it itself, the same way this method already does for Loan and Hold below.
+		Publisher publisher = new Publisher();
+		publisher.setId("pub_flambeau_smoke");
+		publisher.setCode("flambeau-smoke-" + System.nanoTime());
+		publisher.setName("Flambeau Mongo Data Test Publisher");
+		publisherRepository.save(publisher);
+
+		// CatalogueItemPersistenceGuard refuses to save an item whose publisherId does not
+		// resolve to a real Publisher, hence the row above.
+		CatalogueItem seedItem = new CatalogueItem();
+		seedItem.setId("item_flambeau_smoke");
+		seedItem.setPublisherId("pub_flambeau_smoke");
+		seedItem.setTitle("Flambeau Mongo Data Test Fixture");
+		catalogueItemRepository.save(seedItem);
+
 		List<CatalogueItem> items = catalogueItemRepository.findAll();
 		assertThat(items).isNotEmpty();
-		assertThat(items).anyMatch(item -> "item_42".equals(item.getId()));
+		assertThat(items).anyMatch(item -> "item_flambeau_smoke".equals(item.getId()));
 
 		// 2. Insert and verify Loan entity
 		Loan newLoan = Loan.builder()
@@ -81,7 +105,22 @@ public class FlambeauMongoDataTest extends ContainerisedInfrastructure {
 		Hold savedHold = holdRepository.save(newHold);
 		assertThat(savedHold.getHoldId()).startsWith("hold_");
 
-		// 5. Verify Publishers & Book Collections
+		// 5. Verify Institutions & Entitlements. Same reasoning as the catalogue item above -
+		// inserted here rather than assumed present from a seed nothing in this test enables.
+		Institution institution = new Institution();
+		institution.setId("inst_flambeau_smoke");
+		institution.setCode("flambeau-smoke-" + System.nanoTime());
+		institution.setName("Flambeau Mongo Data Test Institution");
+		institutionRepository.save(institution);
+
+		Entitlement entitlement = new Entitlement();
+		entitlement.setId("ent_flambeau_smoke");
+		entitlement.setInstitutionId("inst_flambeau_smoke");
+		entitlement.setScopeType(com.tf.reader.catalogue.entity.ScopeType.ITEM);
+		entitlement.setScopeId("item_flambeau_smoke");
+		entitlement.setStatus(com.tf.reader.catalogue.entity.EntitlementStatus.ACTIVE);
+		entitlementRepository.save(entitlement);
+
 		assertThat(catalogueItemRepository.findAll()).isNotEmpty();
 		assertThat(institutionRepository.findAll()).isNotEmpty();
 		assertThat(entitlementRepository.findAll()).isNotEmpty();
