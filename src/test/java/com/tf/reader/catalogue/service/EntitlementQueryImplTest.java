@@ -49,7 +49,10 @@ class EntitlementQueryImplTest {
 
     @Test
     void allowsAccessWhenAnActiveCollectionGrantCoversTheItem() {
+        // ELITE, not the readyItem default of SUBSCRIPTION: this test is specifically about a
+        // copy-limited grant, and only ELITE is copy limited by nature.
         CatalogueItem item = readyItem("item_c25", List.of("col_1"));
+        item.setAccessTier(AccessTier.ELITE);
         when(catalogueItemRepository.findById("item_c25")).thenReturn(Optional.of(item));
 
         Entitlement grant = entitlement("ent_1", ScopeType.COLLECTION, "col_1", 3, 21,
@@ -66,6 +69,27 @@ class EntitlementQueryImplTest {
         assertThat(decision.loanPeriodDays()).isEqualTo(21);
         assertThat(decision.accessLevel()).isEqualTo(AccessLevel.ENTITLED_CONCURRENT);
         assertThat(decision.reason()).isNull();
+    }
+
+    @Test
+    void aSubscriptionItemIsNeverCopyLimitedEvenWhenTheMatchedGrantHasCopies() {
+        // The same grant can cover a whole publisher, ELITE and SUBSCRIPTION titles alike. A
+        // SUBSCRIPTION book must not inherit a concurrency limit meant for the ELITE titles
+        // sharing that grant - the tier decides, not the number on the row.
+        CatalogueItem item = readyItem("item_c25", List.of("col_1"));
+        when(catalogueItemRepository.findById("item_c25")).thenReturn(Optional.of(item));
+
+        Entitlement grant = entitlement("ent_1", ScopeType.COLLECTION, "col_1", 3, 21,
+                LocalDate.now().plusDays(30));
+        when(entitlementRepository.findByInstitutionIdAndScopeTypeAndScopeId(
+                eq("inst_7f3"), eq(ScopeType.COLLECTION), eq("col_1")))
+                .thenReturn(Optional.of(grant));
+
+        EntitlementDecision decision = query.check(SUBJECT, "item_c25");
+
+        assertThat(decision.entitled()).isTrue();
+        assertThat(decision.copies()).isNull();
+        assertThat(decision.accessLevel()).isEqualTo(AccessLevel.ENTITLED_UNLIMITED);
     }
 
     @Test
