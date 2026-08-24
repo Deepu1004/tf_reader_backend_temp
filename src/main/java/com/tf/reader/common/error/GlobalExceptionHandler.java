@@ -40,7 +40,26 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 	/** Raised by a unique index, e.g. two progress records for the same user + book. */
 	@ExceptionHandler(DuplicateKeyException.class)
 	public ResponseEntity<ErrorResponse> handleDuplicateKey(DuplicateKeyException ex, HttpServletRequest request) {
-		return respond(ErrorCode.CODE_TAKEN, "A record already exists for this scope.", request, ex);
+		return respond(ErrorCode.CODE_TAKEN, duplicateKeyMessage(ex), request, ex);
+	}
+
+	/**
+	 * Mongo names the violated index in its own error message, which is the only way to tell a
+	 * content collision - e.g. two offline devices creating the same highlight span - apart from
+	 * any other unique-index violation, without a new error code. sendCreate() on the client
+	 * already retries a same-id 409 as a PUT; this code is how it tells that case apart from one
+	 * where a different device's record occupies the slot and the client's own id must be dropped
+	 * instead.
+	 */
+	private String duplicateKeyMessage(DuplicateKeyException ex) {
+		String raw = String.valueOf(ex.getMostSpecificCause().getMessage());
+		if (raw.contains("highlight_span_uk")) {
+			return "HIGHLIGHT_LOCATOR_DUPLICATION";
+		}
+		if (raw.contains("bookmark_locator_uk")) {
+			return "BOOKMARK_LOCATOR_DUPLICATION";
+		}
+		return "A record already exists for this scope.";
 	}
 
 	@ExceptionHandler(ConstraintViolationException.class)
