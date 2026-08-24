@@ -240,6 +240,25 @@ public class SecurityConfig {
 		return stateless(http).build();
 	}
 
+	/**
+	 * The mock content grant's signed URLs ({@code content.service.ContentAccessGrantImpl}), until
+	 * wokay's real object storage is wired in.
+	 *
+	 * <p>Public on purpose, not a shortcut: a signed URL is pre-authorized by its own signature and
+	 * expiry, not by the caller's bearer token — that is the point of a signed URL, and it is also
+	 * why the real design has content bytes never pass through this process at all. A stale or
+	 * absent {@code tf-app} token must not block a link this process already decided to hand out.
+	 */
+	@Bean
+	@Order(7)
+	SecurityFilterChain mockContentFilterChain(HttpSecurity http) throws Exception {
+		http.securityMatcher("/mock-content/**")
+				.authorizeHttpRequests(authorize -> authorize
+						.requestMatchers(HttpMethod.GET, "/mock-content/**").permitAll()
+						.anyRequest().denyAll());
+		return stateless(http).build();
+	}
+
 	/** Everything not matched above is denied. ERROR dispatches pass so a genuine 404 still renders. */
 	@Bean
 	@Order(100)
