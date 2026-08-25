@@ -121,10 +121,6 @@ docker-compose.override.yml
 mongo-data/
 
 
-.claude/settings.local.json
-.claude-context/
-CLAUDE.md
-
 
 /docs/
 /documents
@@ -155,3 +151,5 @@ master-key*
 
 # temp
 temp/
+
+probe.sh
