@@ -58,10 +58,10 @@ package com.tf.reader.hold.repository;
  * <p><b>Getting a token.</b> {@code POST /api/v1/auth/dev-token?userId=...&institutionId=...}
  * issues a real, correctly-signed token — no hand-crafted JWTs needed.
  *
- * <p><b>Which database.</b> Despite {@code MONGODB_URI} naming {@code tnfreader}, this app
- * currently ends up reading/writing a database literally named {@code test} — a known,
- * unresolved Spring Boot / Docker Compose quirk, unrelated to hold's own code. Point any direct
- * {@code mongosh} inspection at {@code test}, not {@code tnfreader}, until that's tracked down.
+ * <p><b>Which database.</b> Whichever one {@code MONGODB_URI} actually names — confirmed by
+ * reading the running process's own environment, not assumed. The earlier note here about a
+ * mismatched {@code test} database was a leftover from the {@code compose.yaml} bug fixed in
+ * Week 2 and is no longer true; don't resurrect it without checking the process env again.
  */
 public final class MockHoldFixtures {
 
