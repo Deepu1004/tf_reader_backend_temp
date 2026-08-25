@@ -6,6 +6,7 @@ import java.util.Map;
 
 import org.springframework.stereotype.Component;
 
+import com.tf.reader.catalogue.api.AccessLevel;
 import com.tf.reader.catalogue.api.EntitlementDecision;
 import com.tf.reader.catalogue.entity.AccessTier;
 import com.tf.reader.catalogue.entity.CatalogueItem;
@@ -14,6 +15,7 @@ import com.tf.reader.catalogue.entity.ContentType;
 import com.tf.reader.catalogue.entity.Publisher;
 import com.tf.reader.catalogue.opds.dto.Copies;
 import com.tf.reader.catalogue.opds.dto.EncryptedInfo;
+import com.tf.reader.catalogue.opds.dto.OpdsAvailability;
 import com.tf.reader.catalogue.opds.dto.IndirectAcquisition;
 import com.tf.reader.catalogue.opds.dto.OpdsContributor;
 import com.tf.reader.catalogue.opds.dto.OpdsImageLink;
@@ -43,17 +45,46 @@ class OpdsPublicationMapper {
     private static final String ACQUISITION_LINK_TYPE = "application/json";
     private static final String PUBLICATION_LINK_TYPE = "application/opds-publication+json";
     private static final String ENCRYPTION_ALGORITHM = "http://www.w3.org/2009/xmlenc11#aes256-gcm";
+    private static final String SUBSCRIBE_LINK_TITLE = "Available through your institution";
+
+    // Open access needs no grant lookup at all (EntitlementQueryImpl), so a fixed "entitled"
+    // decision is exactly as correct here as a real one - there is nothing a real check could add.
+    private static final EntitlementDecision OPEN_ACCESS_DECISION =
+            new EntitlementDecision(true, AccessLevel.OPEN_ACCESS, null, null, 0, null, null);
 
     private final CatalogueUrlBuilder catalogueUrlBuilder;
     private final FlambeauUrlBuilder flambeauUrlBuilder;
 
     OpdsPublication toPublication(CatalogueItem item, EntitlementDecision decision, String institutionId,
             Map<String, Publisher> publishersById) {
+        return toPublicationWithSelfHref(item, decision,
+                catalogueUrlBuilder.publicationUrlFor(institutionId, item.getId()), publishersById);
+    }
+
+
+    OpdsPublication toPublicationWithSelfHref(CatalogueItem item, EntitlementDecision decision, String selfHref,
+            Map<String, Publisher> publishersById) {
         List<OpdsLink> links = List.of(
-                new OpdsLink("self", catalogueUrlBuilder.publicationUrlFor(institutionId, item.getId()),
-                        PUBLICATION_LINK_TYPE),
+                new OpdsLink("self", selfHref, PUBLICATION_LINK_TYPE),
                 acquisitionLink(item, decision));
         return new OpdsPublication(metadata(item, publishersById), links, coverImages(item));
+    }
+
+    // Discovery search (Workstream 9) has no institution and runs no entitlement check at all -
+    // an open access book gets the real acquisition link, anything else gets a subscribe link,
+    // regardless of what any caller happens to hold, since there is no caller to check against.
+    OpdsPublication toDiscoveryPublication(CatalogueItem item, String selfHref, Map<String, Publisher> publishersById) {
+        OpdsLink link = item.getAccessTier() == AccessTier.OPEN_ACCESS
+                ? acquisitionLink(item, OPEN_ACCESS_DECISION)
+                : subscribeLink(item);
+        List<OpdsLink> links = List.of(new OpdsLink("self", selfHref, PUBLICATION_LINK_TYPE), link);
+        return new OpdsPublication(metadata(item, publishersById), links, coverImages(item));
+    }
+
+    private OpdsLink subscribeLink(CatalogueItem item) {
+        OpdsLinkProperties properties = new OpdsLinkProperties(item.getAccessTier(), OpdsAvailability.UNAVAILABLE);
+        return new OpdsLink("http://opds-spec.org/acquisition/subscribe", catalogueUrlBuilder.institutionsUrl(),
+                ACQUISITION_LINK_TYPE, SUBSCRIBE_LINK_TITLE, null, properties);
     }
 
     private OpdsPublicationMetadata metadata(CatalogueItem item, Map<String, Publisher> publishersById) {
@@ -146,7 +177,7 @@ class OpdsPublicationMapper {
         // plaintext length, already used for EncryptedInfo.originalLength above), sizeBytes
         // otherwise - same distinction content/api/SignedUrl draws between the two fields.
         Long fileSize = asset == null ? null : (asset.isEncrypted() ? asset.getCipherLength() : asset.getSizeBytes());
-        return new OpdsLinkProperties(tier, indirect, copies, encrypted, hasSearchIndex, canPersist, fileSize);
+        return new OpdsLinkProperties(tier, indirect, copies, encrypted, hasSearchIndex, canPersist, fileSize, null);
     }
 
     private Asset matchingAsset(CatalogueItem item) {
