@@ -13,6 +13,8 @@ import com.tf.reader.hold.entity.HoldStatus;
 import com.tf.reader.hold.entity.Offer;
 import com.tf.reader.hold.repository.HoldRepository;
 import com.tf.reader.hold.repository.HoldWrites;
+import com.tf.reader.loan.api.LicenceCommand;
+import com.tf.reader.loan.api.LicenceView;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.ZSetOperations;
@@ -41,10 +43,10 @@ class QueueServiceTest {
 
     private final HoldRepository holds = mock(HoldRepository.class);
     private final HoldWrites writes = mock(HoldWrites.class);
-    private final org.springframework.data.redis.core.StringRedisTemplate redis =
-            mock(org.springframework.data.redis.core.StringRedisTemplate.class);
+    private final org.springframework.data.redis.core.StringRedisTemplate redis = mock(org.springframework.data.redis.core.StringRedisTemplate.class);
     private final EntitlementQuery entitlements = mock(EntitlementQuery.class);
     private final PromotionService promotion = mock(PromotionService.class);
+    private final LicenceCommand loans = mock(LicenceCommand.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-08-17T09:00:00Z"), ZoneOffset.UTC);
     @SuppressWarnings("unchecked")
     private final ZSetOperations<String, String> zsetOps = mock(ZSetOperations.class);
@@ -54,7 +56,7 @@ class QueueServiceTest {
     @BeforeEach
     void setUp() {
         when(redis.opsForZSet()).thenReturn(zsetOps);
-        queue = new QueueService(holds, writes, redis, entitlements, promotion, clock);
+        queue = new QueueService(holds, writes, redis, entitlements, promotion, loans, clock);
     }
 
     @Test
@@ -119,6 +121,43 @@ class QueueServiceTest {
 
         verifyNoInteractions(promotion);
         verify(zsetOps, never()).remove(anyString(), anyString());
+    }
+
+    @Test
+    void acceptCreatesTheLoanFromTheOffersLeaseToken() {
+        CurrentUser me = new CurrentUser("user_a", UserType.INSTITUTION, "inst_1", List.of(), List.of());
+        Offer offer = new Offer("offer_1", Instant.now(), Instant.now().plusSeconds(900), "lease_1");
+        Hold hold = Hold.queued("user_a", "inst_1", "item_1", 1, Instant.now());
+        hold.setStatus(HoldStatus.OFFERED);
+        hold.setOffer(offer);
+        when(writes.claimIfLive("hold_1", "user_a", clock.instant())).thenReturn(Optional.of(hold));
+        when(entitlements.check(any(), any())).thenReturn(
+                new EntitlementDecision(true, AccessLevel.ENTITLED_CONCURRENT, "ent_1", 2, 14, null, null));
+        when(loans.create(any(), eq("item_1"), eq(AccessLevel.ENTITLED_CONCURRENT), eq(14), eq("lease_1")))
+                .thenReturn(new LicenceView("loan_1", "user_a", "item_1", AccessLevel.ENTITLED_CONCURRENT,
+                        false, Instant.parse("2026-08-31T09:00:00Z"), "lease_1"));
+
+        var response = queue.accept(me, "hold_1");
+
+        assertThat(response.loanId()).isEqualTo("loan_1");
+        assertThat(response.userId()).isEqualTo("user_a");
+        assertThat(response.institutionId()).isEqualTo("inst_1");
+        assertThat(response.licenceModel()).isEqualTo("ELITE");
+        assertThat(response.status()).isEqualTo("ACTIVE");
+        assertThat(response.dueAt()).isEqualTo(Instant.parse("2026-08-31T09:00:00Z"));
+    }
+
+    @Test
+    void acceptRefusesWithOfferExpiredWhenNothingIsLive() {
+        CurrentUser me = new CurrentUser("user_a", UserType.INSTITUTION, "inst_1", List.of(), List.of());
+        when(writes.claimIfLive("hold_1", "user_a", clock.instant())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> queue.accept(me, "hold_1"))
+                .isInstanceOf(ApiException.class)
+                .extracting(e -> ((ApiException) e).getCode())
+                .isEqualTo(ErrorCode.OFFER_EXPIRED);
+
+        verifyNoInteractions(loans);
     }
 
     @Test
