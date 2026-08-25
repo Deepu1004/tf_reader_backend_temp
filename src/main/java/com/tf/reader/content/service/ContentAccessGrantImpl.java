@@ -62,9 +62,11 @@ class ContentAccessGrantImpl implements ContentAccessGrant {
     private static final byte[] MOCK_BEK =
             Base64.getDecoder().decode("hvVWs7CKbTSCYXSFQmUtOIOLYe7cjeZgilJ16YpKdB0=");
 
-    // Fixture classpath locations — four files, two sizes (small dev stand-ins + big measurement books).
+    // Fixture classpath locations — two sizes (small dev stand-ins + big measurement books),
+    // three formats. Audio is unencrypted (whole-file encryption cannot seek), so no .enc suffix.
     private static final String EPUB_SMALL_FIXTURE = "static/mock-content/sample-small.epub.enc";
     private static final String PDF_SMALL_FIXTURE  = "static/mock-content/sample-small.pdf.enc";
+    private static final String AUDIO_SMALL_FIXTURE = "static/mock-content/sample-small.wav";
     private static final String EPUB_BIG_FIXTURE   = "static/mock-content/sample.epub.enc";
     private static final String PDF_BIG_FIXTURE    = "static/mock-content/sample.pdf.enc";
 
@@ -75,6 +77,7 @@ class ContentAccessGrantImpl implements ContentAccessGrant {
     private static final Map<String, String> ITEM_FIXTURE_MAP = Map.of(
             "dev-sample-epub", EPUB_SMALL_FIXTURE,
             "dev-sample-pdf",  PDF_SMALL_FIXTURE,
+            "dev-sample-audio", AUDIO_SMALL_FIXTURE,
             "dev-fixture-epub", EPUB_BIG_FIXTURE,
             "dev-fixture-pdf",  PDF_BIG_FIXTURE
     );
@@ -82,6 +85,7 @@ class ContentAccessGrantImpl implements ContentAccessGrant {
     private final String baseUrl;
     private final Fixture epubSmallFixture;
     private final Fixture pdfSmallFixture;
+    private final Fixture audioSmallFixture;
     private final Fixture epubBigFixture;
     private final Fixture pdfBigFixture;
 
@@ -89,6 +93,7 @@ class ContentAccessGrantImpl implements ContentAccessGrant {
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.epubSmallFixture = loadFixture(EPUB_SMALL_FIXTURE);
         this.pdfSmallFixture = loadFixture(PDF_SMALL_FIXTURE);
+        this.audioSmallFixture = loadFixture(AUDIO_SMALL_FIXTURE);
         this.epubBigFixture = loadFixture(EPUB_BIG_FIXTURE);
         this.pdfBigFixture = loadFixture(PDF_BIG_FIXTURE);
     }
@@ -106,11 +111,14 @@ class ContentAccessGrantImpl implements ContentAccessGrant {
         boolean isAudio = request.format() == Format.AUDIO;
         Fixture fixture = resolveFixture(request.itemId(), request.format());
 
+        // Audio is unencrypted: cipherLength is null (no ciphertext), originalLength is the file size.
+        // Encrypted formats: file IS the ciphertext (nonce || ciphertext || tag), so cipherLength is
+        // the file size and originalLength subtracts the 28-byte overhead.
         SignedUrl content = new SignedUrl(
                 baseUrl + "/" + fixture.path(),
                 expiresAt,
-                fixture.cipherLength(),
-                fixture.cipherLength() - CIPHER_OVERHEAD_BYTES,
+                isAudio ? null : fixture.cipherLength(),
+                isAudio ? fixture.cipherLength() : fixture.cipherLength() - CIPHER_OVERHEAD_BYTES,
                 mimeTypeFor(request.format())
         );
 
@@ -142,10 +150,15 @@ class ContentAccessGrantImpl implements ContentAccessGrant {
         if (classpathLocation != null) {
             if (classpathLocation.equals(EPUB_SMALL_FIXTURE)) return epubSmallFixture;
             if (classpathLocation.equals(PDF_SMALL_FIXTURE)) return pdfSmallFixture;
+            if (classpathLocation.equals(AUDIO_SMALL_FIXTURE)) return audioSmallFixture;
             if (classpathLocation.equals(EPUB_BIG_FIXTURE)) return epubBigFixture;
             if (classpathLocation.equals(PDF_BIG_FIXTURE)) return pdfBigFixture;
         }
-        return format == Format.PDF ? pdfBigFixture : epubBigFixture;
+        return switch (format) {
+            case PDF -> pdfBigFixture;
+            case AUDIO -> audioSmallFixture;
+            case EPUB -> epubBigFixture;
+        };
     }
 
     // The transformation NAME "OAEPWithSHA-256AndMGF1Padding" is misleading: without an explicit
