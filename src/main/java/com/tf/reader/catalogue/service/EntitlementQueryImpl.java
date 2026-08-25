@@ -78,27 +78,53 @@ class EntitlementQueryImpl implements EntitlementQuery {
         );
     }
 
+    // Scope specificity, narrowest first. An ITEM grant always wins over a COLLECTION grant,
+    // which always wins over a PUBLISHER grant, no matter what each one's copies says - a
+    // narrower entitlement is a deliberate, more specific purchase and must not be shadowed by
+    // a wider one that happens to look more generous.
     private Entitlement mostPermissiveActiveGrant(String institutionId, CatalogueItem item) {
-        List<Entitlement> candidates = new ArrayList<>();
-        entitlementRepository.findByInstitutionIdAndScopeTypeAndScopeId(institutionId, ScopeType.ITEM, item.getId())
-                .ifPresent(candidates::add);
-        List<String> collectionIds = item.getCollectionIds() == null ? List.of() : item.getCollectionIds();
-        for (String collectionId : collectionIds) {
-            entitlementRepository.findByInstitutionIdAndScopeTypeAndScopeId(institutionId, ScopeType.COLLECTION, collectionId)
-                    .ifPresent(candidates::add);
+        Entitlement itemGrant = activeGrant(entitlementRepository
+                .findByInstitutionIdAndScopeTypeAndScopeId(institutionId, ScopeType.ITEM, item.getId()));
+        if (itemGrant != null) {
+            return itemGrant;
         }
-        entitlementRepository.findByInstitutionIdAndScopeTypeAndScopeId(institutionId, ScopeType.PUBLISHER, item.getPublisherId())
-                .ifPresent(candidates::add);
 
+        List<String> collectionIds = item.getCollectionIds() == null ? List.of() : item.getCollectionIds();
+        List<Entitlement> collectionGrants = new ArrayList<>();
+        for (String collectionId : collectionIds) {
+            Entitlement grant = activeGrant(entitlementRepository
+                    .findByInstitutionIdAndScopeTypeAndScopeId(institutionId, ScopeType.COLLECTION, collectionId));
+            if (grant != null) {
+                collectionGrants.add(grant);
+            }
+        }
+        Entitlement bestCollectionGrant = mostPermissiveOf(collectionGrants);
+        if (bestCollectionGrant != null) {
+            return bestCollectionGrant;
+        }
+
+        return activeGrant(entitlementRepository
+                .findByInstitutionIdAndScopeTypeAndScopeId(institutionId, ScopeType.PUBLISHER, item.getPublisherId()));
+    }
+
+    private Entitlement activeGrant(Optional<Entitlement> maybeGrant) {
+        if (maybeGrant.isEmpty()) {
+            return null;
+        }
+        Entitlement grant = maybeGrant.get();
         LocalDate today = LocalDate.now();
+        if (grant.getStatus() != EntitlementStatus.ACTIVE) {
+            return null;
+        }
+        if (grant.getValidTo() != null && grant.getValidTo().isBefore(today)) {
+            return null;
+        }
+        return grant;
+    }
+
+    private Entitlement mostPermissiveOf(List<Entitlement> candidates) {
         Entitlement best = null;
         for (Entitlement candidate : candidates) {
-            if (candidate.getStatus() != EntitlementStatus.ACTIVE) {
-                continue;
-            }
-            if (candidate.getValidTo() != null && candidate.getValidTo().isBefore(today)) {
-                continue;
-            }
             if (best == null || isMorePermissive(candidate, best)) {
                 best = candidate;
             }

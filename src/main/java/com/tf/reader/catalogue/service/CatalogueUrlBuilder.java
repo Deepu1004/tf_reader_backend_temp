@@ -16,4 +16,17 @@ public class CatalogueUrlBuilder {
     public String catalogueUrlFor(String institutionId) {
         return baseUrl + "/opds/v1/institutions/" + institutionId + "/catalogue";
     }
+
+    public String groupUrlFor(String institutionId, String groupId) {
+        return baseUrl + "/opds/v1/institutions/" + institutionId + "/groups/" + groupId;
+    }
+
+    public String publicationUrlFor(String institutionId, String itemId) {
+        return baseUrl + "/opds/v1/institutions/" + institutionId + "/publications/" + itemId;
+    }
+
+    /** RFC 6570 template - {@code {?query}} is filled in by the OPDS client, not by us. */
+    public String searchUrlTemplateFor(String institutionId) {
+        return baseUrl + "/opds/v1/institutions/" + institutionId + "/search{?query}";
+    }
 }

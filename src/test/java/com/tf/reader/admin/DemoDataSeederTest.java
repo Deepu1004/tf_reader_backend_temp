@@ -62,7 +62,7 @@ class DemoDataSeederTest {
         assertThat(dataset.collections()).hasSize(2);
         assertThat(dataset.institutions()).hasSize(3);
         assertThat(dataset.catalogueItems()).hasSize(8);
-        assertThat(dataset.entitlements()).hasSize(2);
+        assertThat(dataset.entitlements()).hasSize(3);
         assertThat(dataset.adminUsers()).hasSize(3);
         assertThat(dataset.feedSettings()).hasSize(3);
 
@@ -418,10 +418,11 @@ class DemoDataSeederTest {
                 .extracting(SeedDataset.SeedInstitution::type)
                 .allSatisfy(t -> assertThat(t).isEqualTo("ACADEMIC"));
 
-        // Two access models, so the resolver has both to distinguish.
+        // Two access models, so the resolver has both to distinguish — ent_dev_elite adds a
+        // second CONCURRENT row (dev-sample-pdf's own ITEM-scope grant), not a third model.
         assertThat(dataset.entitlements())
                 .extracting(SeedDataset.SeedEntitlement::copies)
-                .containsExactlyInAnyOrder(2, null);
+                .containsExactlyInAnyOrder(2, null, 2);
 
         // At least one book with no cover and one with two assets.
         assertThat(dataset.catalogueItems()).anySatisfy(i -> assertThat(i.coverUrl()).isNull());
