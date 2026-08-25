@@ -121,14 +121,15 @@ public class QueueService {
         Hold hold = writes.claimIfLive(holdId, me.userId(), clock.instant())
                 .orElseThrow(() -> new ApiException(ErrorCode.OFFER_EXPIRED, "This offer is no longer live"));
 
-        EntitlementDecision decision = entitlements.check(new SubjectRef(me.userId(), hold.getScope()), hold.getItemId());
-        LicenceView licence = loans.create(new SubjectRef(me.userId(), hold.getScope()), hold.getItemId(),
+        SubjectRef subject = new SubjectRef(me.userId(), hold.getScope());
+        EntitlementDecision decision = entitlements.check(subject, hold.getItemId());
+        LicenceView licence = loans.create(subject, hold.getItemId(),
                 AccessLevel.ENTITLED_CONCURRENT, decision.loanPeriodDays(), hold.getOffer().getLeaseToken());
 
         log.info("HOLD_ACCEPTED user={} item={}", me.userId(), hold.getItemId()); // becomes ChangeLog.record() once the port exists
         Instant now = clock.instant();
-        return new AcceptedLoanResponse(licence.licenceId(), licence.itemId(), "ELITE", "ACTIVE",
-                licence.canPersist(), now, licence.expiresAt(), now);
+        return new AcceptedLoanResponse(licence.licenceId(), subject.userId(), subject.institutionId(), licence.itemId(),
+                "ELITE", "ACTIVE", licence.canPersist(), now, licence.expiresAt(), now);
     }
 
     public List<HoldView> holdsFor(String userId) {

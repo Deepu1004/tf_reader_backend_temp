@@ -140,6 +140,8 @@ class QueueServiceTest {
         var response = queue.accept(me, "hold_1");
 
         assertThat(response.loanId()).isEqualTo("loan_1");
+        assertThat(response.userId()).isEqualTo("user_a");
+        assertThat(response.institutionId()).isEqualTo("inst_1");
         assertThat(response.licenceModel()).isEqualTo("ELITE");
         assertThat(response.status()).isEqualTo("ACTIVE");
         assertThat(response.dueAt()).isEqualTo(Instant.parse("2026-08-31T09:00:00Z"));
