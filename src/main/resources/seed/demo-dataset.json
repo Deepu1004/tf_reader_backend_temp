@@ -489,8 +489,8 @@
       "storageKey": "static/mock-content/sample-small.epub.enc",
       "indexKey": null,
       "wrappedBek": "seed-placeholder-not-a-real-key",
-      "createdAt": "2026-08-20T09:00:00Z",
-      "updatedAt": "2026-08-20T09:00:00Z"
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
     },
     {
       "_seedWhy": "Dev fixture — small PDF, encrypted with MOCK_BEK. ELITE (copy-limited, online-only) so the app has a small fixture to exercise that tier without paying the big-fixture download cost. Covered by ent_dev_elite (ITEM scope, copies:2), not by an existing publisher/collection grant. Matches the app's dev-sample-pdf bookId. The content grant routes by itemId to sample-small.pdf.enc.",
@@ -529,8 +529,8 @@
       "storageKey": "static/mock-content/sample-small.pdf.enc",
       "indexKey": null,
       "wrappedBek": "seed-placeholder-not-a-real-key",
-      "createdAt": "2026-08-20T09:00:00Z",
-      "updatedAt": "2026-08-20T09:00:00Z"
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
     },
     {
       "_seedWhy": "Dev fixture — big EPUB, encrypted with MOCK_BEK. SUBSCRIPTION (persists, reopenable offline) — matches what this fixture is actually used for (a big encrypted download, not an open-access one). Covered by ent_imp2 (PUBLISHER scope pub_rtlg, UNLIMITED), already granted to inst_7f3. Matches the app's dev-fixture-epub bookId. The content grant routes by itemId to sample.epub.enc.",
@@ -569,8 +569,8 @@
       "storageKey": "static/mock-content/sample.epub.enc",
       "indexKey": null,
       "wrappedBek": "seed-placeholder-not-a-real-key",
-      "createdAt": "2026-08-20T09:00:00Z",
-      "updatedAt": "2026-08-20T09:00:00Z"
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
     },
     {
       "_seedWhy": "Dev fixture — big PDF, encrypted with MOCK_BEK. SUBSCRIPTION (persists, reopenable offline) — matches what this fixture is actually used for (a big encrypted download, not an open-access one). Covered by ent_imp2 (PUBLISHER scope pub_rtlg, UNLIMITED), already granted to inst_7f3. Matches the app's dev-fixture-pdf bookId. The content grant routes by itemId to sample.pdf.enc.",
@@ -609,8 +609,8 @@
       "storageKey": "static/mock-content/sample.pdf.enc",
       "indexKey": null,
       "wrappedBek": "seed-placeholder-not-a-real-key",
-      "createdAt": "2026-08-20T09:00:00Z",
-      "updatedAt": "2026-08-20T09:00:00Z"
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
     }
   ],
 
@@ -654,8 +654,8 @@
       "validFrom": "2026-08-01",
       "validTo": null,
       "status": "ACTIVE",
-      "createdAt": "2026-08-24T09:00:00Z",
-      "updatedAt": "2026-08-24T09:00:00Z"
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
     }
   ],
 
