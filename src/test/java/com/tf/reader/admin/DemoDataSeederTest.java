@@ -36,6 +36,17 @@ class DemoDataSeederTest {
     /** Every timestamp in the dataset is this literal. Nothing is generated at load time. */
     private static final Instant SEED_EPOCH = Instant.parse("2026-08-10T09:00:00Z");
 
+    /**
+     * These four are not week 1 placeholders like the other eight items: their ids and their
+     * {@code storageKey}s are matched by exact string equality in
+     * {@code ContentAccessGrantImpl}, against real AES-256-GCM fixture files under
+     * {@code src/main/resources/static/mock-content/}. The {@code item_}/{@code seed/}
+     * conventions below don't apply to them - renaming either would silently disconnect them
+     * from working content, not just fail a naming check.
+     */
+    private static final Set<String> DEV_CONTENT_FIXTURE_ITEM_IDS =
+            Set.of("dev-sample-epub", "dev-sample-pdf", "dev-fixture-epub", "dev-fixture-pdf");
+
     private static ObjectMapper mapper;
     private static SeedDataset dataset;
     private static JsonNode raw;
@@ -61,19 +72,15 @@ class DemoDataSeederTest {
         assertThat(dataset.publishers()).hasSize(2);
         assertThat(dataset.collections()).hasSize(2);
         assertThat(dataset.institutions()).hasSize(3);
-        assertThat(dataset.catalogueItems()).hasSize(8);
+        // Eight week 1 placeholders plus the four real dev-content fixtures (see
+        // DEV_CONTENT_FIXTURE_ITEM_IDS) that ContentAccessGrantImpl routes to real files.
+        assertThat(dataset.catalogueItems()).hasSize(12);
         assertThat(dataset.entitlements()).hasSize(3);
         assertThat(dataset.adminUsers()).hasSize(3);
         assertThat(dataset.feedSettings()).hasSize(3);
 
         // One number, so an extra row cannot be added without someone updating the plan too.
-        //
-        // This was bumped to 10/25 in 574cea8 without seed/demo-dataset.json ever gaining the
-        // two extra catalogue items - canonical-items.json (generated FROM the dataset) still
-        // shows 8 too, and nothing else in the codebase references a ninth or tenth item id.
-        // Restored to match the dataset that actually exists; adding real items is a seed-data
-        // change for whoever needs them, not a number to bump on its own.
-        assertThat(dataset.documentCount()).isEqualTo(23);
+        assertThat(dataset.documentCount()).isEqualTo(28);
     }
 
     @Test
@@ -82,7 +89,16 @@ class DemoDataSeederTest {
         assertPrefixed(ids(dataset.publishers(), SeedDataset.SeedPublisher::id), "pub_");
         assertPrefixed(ids(dataset.collections(), SeedDataset.SeedCollection::id), "col_");
         assertPrefixed(ids(dataset.institutions(), SeedDataset.SeedInstitution::id), "inst_");
-        assertPrefixed(ids(dataset.catalogueItems(), SeedDataset.SeedItem::id), "item_");
+
+        // The four dev-content fixtures are matched by exact id in ContentAccessGrantImpl, not
+        // prefixed like the rest - carved out rather than renamed, see
+        // DEV_CONTENT_FIXTURE_ITEM_IDS. Checked against the known set explicitly, so a future
+        // item with a genuine typo'd prefix doesn't slip through this exception by accident.
+        List<String> itemIds = ids(dataset.catalogueItems(), SeedDataset.SeedItem::id);
+        Set<String> unprefixed =
+                itemIds.stream().filter(id -> !id.startsWith("item_")).collect(Collectors.toSet());
+        assertThat(unprefixed).isEqualTo(DEV_CONTENT_FIXTURE_ITEM_IDS);
+
         assertPrefixed(ids(dataset.entitlements(), SeedDataset.SeedEntitlement::id), "ent_");
         assertPrefixed(ids(dataset.adminUsers(), SeedDataset.SeedAdminUser::id), "adm_");
         assertPrefixed(ids(dataset.feedSettings(), SeedDataset.SeedFeedSettings::id), "fs_");
@@ -251,9 +267,17 @@ class DemoDataSeederTest {
             }
 
             if (hasAssets) {
-                assertThat(item.get("storageKey").asText())
-                        .as("%s storageKey is a week 1 placeholder", id)
-                        .startsWith("seed/");
+                if (DEV_CONTENT_FIXTURE_ITEM_IDS.contains(id)) {
+                    // A real fixture, not a placeholder - ContentAccessGrantImpl serves this
+                    // exact path from src/main/resources/static/mock-content/.
+                    assertThat(item.get("storageKey").asText())
+                            .as("%s storageKey is a real dev-content fixture", id)
+                            .startsWith("static/mock-content/");
+                } else {
+                    assertThat(item.get("storageKey").asText())
+                            .as("%s storageKey is a week 1 placeholder", id)
+                            .startsWith("seed/");
+                }
             } else {
                 // A key pointing at nothing is worse than no key: it looks like content exists.
                 for (String field : List.of("storageKey", "indexKey", "wrappedBek")) {
@@ -395,7 +419,9 @@ class DemoDataSeederTest {
     void compositionIsDeliberate() {
         // These assertions are the composition table in the approach document, made executable. They
         // exist so that "tidying" a row that another team's test depends on fails here first.
-        assertThat(dataset.catalogueItems()).filteredOn(SeedDataset.SeedItem::isFeedVisible).hasSize(6);
+        // Six of the original eight (item_q7 is QUEUED, item_f3 is FAILED) plus all four
+        // dev-content fixtures, which are PUBLISHED and READY.
+        assertThat(dataset.catalogueItems()).filteredOn(SeedDataset.SeedItem::isFeedVisible).hasSize(10);
 
         assertThat(dataset.catalogueItems())
                 .extracting(SeedDataset.SeedItem::accessTier)
