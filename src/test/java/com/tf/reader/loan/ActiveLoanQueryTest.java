@@ -8,6 +8,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -20,12 +21,10 @@ import com.tf.reader.loan.repository.LoanRepository;
 import com.tf.reader.loan.service.ActiveLoanQueryImpl;
 
 /**
- * The active-licence check (Day 8), and the one rule that makes it correct: D-006 — liveness is
- * re-derived from {@code dueAt} against the server clock, never read off the raw {@code status}.
- *
- * <p>A row can sit at {@code status = ACTIVE} after its {@code dueAt} has passed, because the expiry
- * sweeper is periodic, not instant. Trusting the column would report a lapsed licence as live. So a
- * loan is active iff it is {@code ACTIVE} AND ({@code dueAt} is null OR still in the future).
+ * The active-licence check — both point query ({@code findActive}) and shelf query
+ * ({@code findAllFor}, D-025). The same D-006 liveness rule applies to both: a loan is live iff it
+ * is {@code ACTIVE} AND ({@code dueAt} is null OR still in the future on the server clock). A
+ * lapsed-but-not-yet-swept row must not appear on a reader's point check or their shelf.
  */
 class ActiveLoanQueryTest {
 
@@ -68,6 +67,38 @@ class ActiveLoanQueryTest {
 		assertThat(query.findActive("user_1", "item_1")).isEmpty();
 	}
 
+	// ── findAllFor ──────────────────────────────────────────────────────────────────────────────
+
+	@Test
+	void findAllForReturnsOnlyLiveLoansSortedNewestFirst() {
+		Loan live1 = loan("loan_a", "item_a", NOW.minus(Duration.ofDays(1)), NOW.plus(Duration.ofDays(5)));
+		Loan live2 = loan("loan_b", "item_b", NOW.minus(Duration.ofDays(3)), null); // open-ended
+		Loan lapsed = loan("loan_c", "item_c", NOW.minus(Duration.ofDays(10)), NOW.minus(Duration.ofSeconds(1)));
+		when(loans.findByUserIdAndStatus("user_1", LoanStatus.ACTIVE))
+				.thenReturn(List.of(live1, live2, lapsed));
+
+		List<ActiveLoanView> result = query.findAllFor("user_1");
+
+		assertThat(result).hasSize(2);
+		assertThat(result.get(0).loanId()).isEqualTo("loan_a"); // newest borrowedAt first
+		assertThat(result.get(1).loanId()).isEqualTo("loan_b");
+	}
+
+	@Test
+	void findAllForReturnsEmptyWhenUserHasNoLoans() {
+		when(loans.findByUserIdAndStatus("user_1", LoanStatus.ACTIVE)).thenReturn(List.of());
+
+		assertThat(query.findAllFor("user_1")).isEmpty();
+	}
+
+	@Test
+	void findAllForExcludesLapsedLoansEvenIfStatusIsStillActive() {
+		Loan lapsed = loan("loan_x", "item_x", NOW.minus(Duration.ofDays(5)), NOW.minus(Duration.ofDays(1)));
+		when(loans.findByUserIdAndStatus("user_1", LoanStatus.ACTIVE)).thenReturn(List.of(lapsed));
+
+		assertThat(query.findAllFor("user_1")).isEmpty();
+	}
+
 	private void stubActiveRow(Loan loan) {
 		when(loans.findByUserIdAndItemIdAndStatus("user_1", "item_1", LoanStatus.ACTIVE))
 				.thenReturn(Optional.of(loan));
@@ -78,6 +109,14 @@ class ActiveLoanQueryTest {
 				.loanId("loan_1").userId("user_1").itemId("item_1")
 				.licenceModel(LicenceModel.ELITE).status(LoanStatus.ACTIVE)
 				.canPersist(false).borrowedAt(NOW.minus(Duration.ofDays(1))).dueAt(dueAt)
+				.build();
+	}
+
+	private Loan loan(String loanId, String itemId, Instant borrowedAt, Instant dueAt) {
+		return Loan.builder()
+				.loanId(loanId).userId("user_1").itemId(itemId)
+				.licenceModel(LicenceModel.SUBSCRIPTION).status(LoanStatus.ACTIVE)
+				.canPersist(true).borrowedAt(borrowedAt).dueAt(dueAt)
 				.build();
 	}
 }

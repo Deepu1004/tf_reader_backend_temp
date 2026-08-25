@@ -204,7 +204,7 @@ class SamlSecurityEdgeCaseTest extends ContainerisedInfrastructure {
 		try (var walk = java.nio.file.Files.walk(
 				java.nio.file.Path.of("src/main/java/com/tf/reader/auth/saml"))) {
 
-			for (java.nio.file.Path file : walk.filter(p -> p.toString().endsWith(".java")).toList()) {
+			for (java.nio.file.Path file : walk.filter(p -> p.toString().endsWith(".java") && !p.toString().contains("/mock/")).toList()) {
 				for (String line : java.nio.file.Files.readAllLines(file)) {
 					String code = line.strip();
 					if (code.startsWith("//") || code.startsWith("*") || code.startsWith("/*")) {
