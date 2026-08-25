@@ -9,11 +9,15 @@ import java.time.Instant;
  * re-derives liveness from {@code dueAt} rather than trusting the stored status (D-006).
  *
  * @param dueAt scheduled end; {@code null} for an open-ended (Subscription / Open-Access) loan.
+ * @param institutionId the lease scope; {@code null} for a personal, non-institutional loan.
+ * @param leaseId the held {@code CopyLease} token; {@code null} unless the loan is ELITE.
  */
 public record ActiveLoanView(
 		String loanId,
 		String itemId,
 		String licenceModel,
 		boolean canPersist,
-		Instant dueAt) {
+		Instant dueAt,
+		String institutionId,
+		String leaseId) {
 }

@@ -151,6 +151,26 @@ public class CopyLeaseImpl implements CopyLease {
 				fromToken, String.valueOf(until.toEpochMilli()), newToken, itemKey);
 	}
 
+	/**
+	 * Rebuilds one item's lease state from the DB's own truth, replacing whatever Redis
+	 * currently holds. Only ever called by {@link ReconcilerService} — this is not part of
+	 * the published {@code CopyLease} contract, since no caller outside the reading module
+	 * has a reason to overwrite a counter rather than claim against it.
+	 *
+	 * @param seeds every token that should be live right now, per the DB
+	 */
+	void rebuild(String scope, String itemId, List<LeaseSeed> seeds, Instant now) {
+		String itemKey = LeaseKeys.itemKey(scope, itemId);
+		redis.delete(itemKey);
+		for (LeaseSeed seed : seeds) {
+			if (seed.expiresAt().isAfter(now)) {
+				redis.opsForZSet().add(itemKey, seed.token(), seed.expiresAt().toEpochMilli());
+				redis.opsForValue().set(LeaseKeys.tokenKey(seed.token()), itemKey,
+						Duration.between(now, seed.expiresAt()));
+			}
+		}
+	}
+
 	@Override
 	public int available(String scope, String itemId, int copies) {
 		String itemKey = LeaseKeys.itemKey(scope, itemId);
