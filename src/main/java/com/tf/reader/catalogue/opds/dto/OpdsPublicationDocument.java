@@ -17,4 +17,11 @@ public record OpdsPublicationDocument(
     public OpdsPublicationDocument(OpdsPublication publication) {
         this(WEBPUB_CONTEXT, publication.metadata(), publication.links(), publication.images());
     }
+
+    // Same shared shape, built from the institution-side publication detail (OpdsFeedService)
+    // rather than the public one - the context is fixed either way, never per-caller.
+    public OpdsPublicationDocument(OpdsPublicationMetadata metadata, List<OpdsLink> links,
+            List<OpdsImageLink> images) {
+        this(WEBPUB_CONTEXT, metadata, links, images);
+    }
 }
