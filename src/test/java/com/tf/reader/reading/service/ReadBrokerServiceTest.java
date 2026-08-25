@@ -268,7 +268,11 @@ class ReadBrokerServiceTest {
 				false, CLOCK.instant().plusSeconds(1_209_600), "token_1");
 		when(licences.create(MEMBER, ITEM, AccessLevel.ENTITLED_CONCURRENT, 14, "token_1")).thenReturn(licence);
 		when(content.grant(any())).thenReturn(aGrant());
-		when(lease.extend(handle, licence.expiresAt())).thenReturn(true);
+		// Extended to THIS SESSION's own expiry (CLOCK + SESSION_TTL), not the licence's — see
+		// ReadBrokerService.open()'s Step 8 comment. A re-fetched ELITE loan can have a null
+		// expiresAt (no subscription-style due date), which this used to pass straight to
+		// copyLease.extend() and NPE; found via device testing, 2026-08-25.
+		when(lease.extend(handle, CLOCK.instant().plusSeconds(300))).thenReturn(true);
 
 		ReadingSessionResponse response = broker.open(MEMBER, request(Intent.STREAM));
 
@@ -280,7 +284,7 @@ class ReadBrokerServiceTest {
 		order.verify(lease).claim(MEMBER.institutionId(), ITEM, 5);
 		order.verify(licences).create(MEMBER, ITEM, AccessLevel.ENTITLED_CONCURRENT, 14, "token_1");
 		order.verify(content).grant(any());
-		order.verify(lease).extend(handle, licence.expiresAt());
+		order.verify(lease).extend(handle, CLOCK.instant().plusSeconds(300));
 	}
 
 	@Test
@@ -292,7 +296,7 @@ class ReadBrokerServiceTest {
 				false, CLOCK.instant().plusSeconds(1_209_600), "token_1");
 		when(licences.create(any(), any(), any(), anyInt(), any())).thenReturn(licence);
 		when(content.grant(any())).thenReturn(aGrant());
-		when(lease.extend(any(), any())).thenReturn(false); // both the first attempt and the retry fail
+		when(lease.extend(any(), any())).thenReturn(false); // the one extend attempt fails
 
 		broker.open(MEMBER, request(Intent.STREAM));
 
