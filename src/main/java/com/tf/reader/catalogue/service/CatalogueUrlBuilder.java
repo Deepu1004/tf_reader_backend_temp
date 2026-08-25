@@ -35,4 +35,12 @@ public class CatalogueUrlBuilder {
     public String searchUrlFor(String institutionId) {
         return baseUrl + "/opds/v1/institutions/" + institutionId + "/search";
     }
+
+    public String publicCatalogueUrlFor() {
+        return baseUrl + "/opds/v1/public/catalogue";
+    }
+
+    public String publicPublicationUrlFor(String itemId) {
+        return baseUrl + "/opds/v1/public/publications/" + itemId;
+    }
 }

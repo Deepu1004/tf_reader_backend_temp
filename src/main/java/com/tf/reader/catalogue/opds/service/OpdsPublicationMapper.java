@@ -49,9 +49,15 @@ class OpdsPublicationMapper {
 
     OpdsPublication toPublication(CatalogueItem item, EntitlementDecision decision, String institutionId,
             Map<String, Publisher> publishersById) {
+        return toPublicationWithSelfHref(item, decision,
+                catalogueUrlBuilder.publicationUrlFor(institutionId, item.getId()), publishersById);
+    }
+
+
+    OpdsPublication toPublicationWithSelfHref(CatalogueItem item, EntitlementDecision decision, String selfHref,
+            Map<String, Publisher> publishersById) {
         List<OpdsLink> links = List.of(
-                new OpdsLink("self", catalogueUrlBuilder.publicationUrlFor(institutionId, item.getId()),
-                        PUBLICATION_LINK_TYPE),
+                new OpdsLink("self", selfHref, PUBLICATION_LINK_TYPE),
                 acquisitionLink(item, decision));
         return new OpdsPublication(metadata(item, publishersById), links, coverImages(item));
     }
