@@ -170,4 +170,31 @@ class OpdsFeedSchemaValidationIT extends ContainerisedInfrastructure {
 		assertThat(feed.publications()).isNull();
 		assertThat(validate(schema("opds-publication-feed.schema.json"), feed)).isEmpty();
 	}
+
+	// Search returns the same list shape as a group ("a search result" is explicitly one of
+	// the cases opds-publication-feed.schema.json's own description names) - both the hit and
+	// the zero-result navigation-fallback case go through this schema.
+	@Test
+	void searchWithAHitMatchesThePublicationFeedSchema() throws Exception {
+		Institution institution = newInstitution("OPDS-SCHEMA-SEARCH-OK");
+		Publisher publisher = newPublisher("OPDS-SCHEMA-SEARCH-OK-PUB");
+		newOpenAccessItem(publisher.getId(), "Schema Checked Search Book");
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, new SubjectRef("user_1", institution.getId()),
+				"Schema Checked Search Book", new PageQuery(0, 20), null, null);
+
+		assertThat(feed.publications()).isNotNull();
+		assertThat(validate(schema("opds-publication-feed.schema.json"), feed)).isEmpty();
+	}
+
+	@Test
+	void searchWithNoHitsFallsBackToNavigationAndStillMatchesTheSchema() throws Exception {
+		Institution institution = newInstitution("OPDS-SCHEMA-SEARCH-EMPTY");
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, new SubjectRef("user_1", institution.getId()),
+				"no such book exists anywhere", new PageQuery(0, 20), null, null);
+
+		assertThat(feed.publications()).isNull();
+		assertThat(validate(schema("opds-publication-feed.schema.json"), feed)).isEmpty();
+	}
 }

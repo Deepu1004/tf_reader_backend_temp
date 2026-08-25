@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.tf.reader.admin.dto.CatalogueItemView;
 import com.tf.reader.admin.dto.CatalogueItemWrite;
+import com.tf.reader.admin.entity.AdminRole;
 import com.tf.reader.admin.security.AdminScopeAuthorizer;
 import com.tf.reader.admin.service.CatalogueItemAdminService;
 import com.tf.reader.catalogue.entity.AccessTier;
@@ -41,8 +42,12 @@ public class CatalogueItemAdminController {
 			@RequestParam(required = false) AccessTier accessTier, @RequestParam(required = false) String q,
 			@RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size,
 			@RequestParam(required = false) String institutionId) {
-		return catalogueItems.list(adminScope.currentPublisherScope(), publisherId, collectionId, contentType,
-				accessTier, q, page, size, institutionId);
+
+		String publisherIdScope = adminScope.currentRole() == AdminRole.PUBLISHER_ADMIN
+				? adminScope.currentPublisherScope()
+				: null;
+		return catalogueItems.list(publisherIdScope, publisherId, collectionId, contentType, accessTier, q, page,
+				size, institutionId);
 	}
 
 	@PostMapping

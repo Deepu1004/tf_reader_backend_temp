@@ -25,6 +25,7 @@ import com.tf.reader.catalogue.opds.dto.OpdsGroupMetadata;
 import com.tf.reader.catalogue.opds.dto.OpdsLink;
 import com.tf.reader.catalogue.opds.dto.OpdsNavigationFeed;
 import com.tf.reader.catalogue.opds.dto.OpdsPublication;
+import com.tf.reader.catalogue.opds.dto.OpdsPublicationDocument;
 import com.tf.reader.catalogue.opds.dto.OpdsPublicationFeed;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.FeedSettingsRepository;
@@ -54,6 +55,7 @@ public class OpdsFeedService {
     private final CatalogueItemRepository catalogueItemRepository;
     private final OpdsEntitlementFilter entitlementFilter;
     private final OpdsCatalogueQuery catalogueQuery;
+    private final OpdsSearchQuery searchQuery;
     private final CatalogueUrlBuilder catalogueUrlBuilder;
 
     public Institution loadInstitution(String institutionId) {
@@ -145,6 +147,24 @@ public class OpdsFeedService {
                 .filter(item -> item.getStatus() == ItemStatus.PUBLISHED && item.getContentState() == ContentState.READY)
                 .collect(Collectors.toMap(CatalogueItem::getId, item -> item));
         return itemIds.stream().map(byId::get).filter(Objects::nonNull).toList();
+    }
+
+    public OpdsPublicationFeed searchFeed(Institution institution, SubjectRef subject, String queryText,
+            PageQuery page, ContentType contentTypeFilter, AccessTier accessTierFilter) {
+        return searchQuery.search(institution, subject, queryText, page, contentTypeFilter, accessTierFilter);
+    }
+
+    // Unknown item, archived/unpublished item and an unentitled item all reach this same
+    // NOT_FOUND - the three are deliberately indistinguishable per wokay-api.yaml, so the
+    // catalogue cannot be mapped by walking identifiers.
+    public OpdsPublicationDocument publicationDocument(Institution institution, String itemId, SubjectRef subject) {
+        CatalogueItem item = catalogueItemRepository.findById(itemId)
+                .filter(candidate -> candidate.getStatus() == ItemStatus.PUBLISHED
+                        && candidate.getContentState() == ContentState.READY)
+                .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "No such publication"));
+        OpdsPublication publication = entitlementFilter.mapIfEntitled(item, institution.getId(), subject)
+                .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "No such publication"));
+        return new OpdsPublicationDocument(publication.metadata(), publication.links(), publication.images());
     }
 
     private OpdsLink searchLink(String institutionId) {
