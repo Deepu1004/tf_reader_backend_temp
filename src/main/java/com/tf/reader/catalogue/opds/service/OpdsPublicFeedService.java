@@ -21,11 +21,14 @@ import com.tf.reader.catalogue.entity.Publisher;
 import com.tf.reader.catalogue.opds.dto.OpdsFeedMetadata;
 import com.tf.reader.catalogue.opds.dto.OpdsLink;
 import com.tf.reader.catalogue.opds.dto.OpdsPublication;
+import com.tf.reader.catalogue.opds.dto.OpdsPublicationDocument;
 import com.tf.reader.catalogue.opds.dto.OpdsPublicationFeed;
 import com.tf.reader.catalogue.repository.CatalogueItemPublicSearchRepository;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.PublisherRepository;
 import com.tf.reader.catalogue.service.CatalogueUrlBuilder;
+import com.tf.reader.common.error.ApiException;
+import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.common.page.PageQuery;
 
 import lombok.RequiredArgsConstructor;
@@ -141,5 +144,20 @@ public class OpdsPublicFeedService {
             url.append("&accessTier=").append(accessTierFilter);
         }
         return url.toString();
+    }
+
+
+    public OpdsPublicationDocument publicationDocument(String itemId) {
+        CatalogueItem item = catalogueItemRepository.findById(itemId)
+                .filter(candidate -> candidate.getStatus() == ItemStatus.PUBLISHED)
+                .filter(candidate -> candidate.getContentState() == ContentState.READY)
+                .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "No such item"));
+
+        Map<String, Publisher> publishersById = publisherRepository.findById(item.getPublisherId())
+                .map(publisher -> Map.of(publisher.getId(), publisher))
+                .orElse(Map.of());
+        OpdsPublication publication = publicationMapper.toDiscoveryPublication(item,
+                catalogueUrlBuilder.publicPublicationUrlFor(item.getId()), publishersById);
+        return new OpdsPublicationDocument(publication);
     }
 }

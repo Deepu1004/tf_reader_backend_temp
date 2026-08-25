@@ -32,8 +32,10 @@ import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.catalogue.entity.Publisher;
 import com.tf.reader.catalogue.entity.Shelf;
 import com.tf.reader.catalogue.opds.dto.OpdsNavigationFeed;
+import com.tf.reader.catalogue.opds.dto.OpdsPublicationDocument;
 import com.tf.reader.catalogue.opds.dto.OpdsPublicationFeed;
 import com.tf.reader.catalogue.opds.service.OpdsFeedService;
+import com.tf.reader.catalogue.opds.service.OpdsPublicFeedService;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.FeedSettingsRepository;
 import com.tf.reader.catalogue.repository.InstitutionRepository;
@@ -60,6 +62,7 @@ import com.tf.reader.common.page.PageQuery;
 class OpdsFeedSchemaValidationIT extends ContainerisedInfrastructure {
 
 	@Autowired private OpdsFeedService feedService;
+	@Autowired private OpdsPublicFeedService publicFeedService;
 	@Autowired private InstitutionRepository institutionRepository;
 	@Autowired private PublisherRepository publisherRepository;
 	@Autowired private CatalogueItemRepository catalogueItemRepository;
@@ -92,6 +95,20 @@ class OpdsFeedSchemaValidationIT extends ContainerisedInfrastructure {
 		item.setCollectionIds(List.of());
 		item.setTitle(title);
 		item.setAccessTier(AccessTier.OPEN_ACCESS);
+		item.setStatus(ItemStatus.PUBLISHED);
+		item.setContentState(ContentState.READY);
+		item.setContentType(ContentType.EPUB);
+		item.setPublishedAt(LocalDate.of(2026, 1, 1));
+		item.setUpdatedAt(Instant.parse("2026-08-10T09:00:00Z"));
+		return catalogueItemRepository.save(item);
+	}
+
+	private CatalogueItem newItem(String publisherId, String title, AccessTier accessTier) {
+		CatalogueItem item = new CatalogueItem();
+		item.setPublisherId(publisherId);
+		item.setCollectionIds(List.of());
+		item.setTitle(title);
+		item.setAccessTier(accessTier);
 		item.setStatus(ItemStatus.PUBLISHED);
 		item.setContentState(ContentState.READY);
 		item.setContentType(ContentType.EPUB);
@@ -196,5 +213,27 @@ class OpdsFeedSchemaValidationIT extends ContainerisedInfrastructure {
 
 		assertThat(feed.publications()).isNull();
 		assertThat(validate(schema("opds-publication-feed.schema.json"), feed)).isEmpty();
+	}
+
+	@Test
+	void openAccessPublicationDocumentMatchesTheSchema() throws Exception {
+		Publisher publisher = newPublisher("OPDS-SCHEMA-DOC-OA-PUB");
+		CatalogueItem item = newOpenAccessItem(publisher.getId(), "Schema Checked Open Document");
+
+		OpdsPublicationDocument document = publicFeedService.publicationDocument(item.getId());
+
+		assertThat(validate(schema("opds-publication-document.schema.json"), document)).isEmpty();
+	}
+
+	// The subscribe/unavailable link is the shape most likely to drift from the schema, since it
+	// is the one link type nothing else in the codebase produces.
+	@Test
+	void subscribeLinkPublicationDocumentMatchesTheSchema() throws Exception {
+		Publisher publisher = newPublisher("OPDS-SCHEMA-DOC-ELITE-PUB");
+		CatalogueItem item = newItem(publisher.getId(), "Schema Checked Elite Document", AccessTier.ELITE);
+
+		OpdsPublicationDocument document = publicFeedService.publicationDocument(item.getId());
+
+		assertThat(validate(schema("opds-publication-document.schema.json"), document)).isEmpty();
 	}
 }
