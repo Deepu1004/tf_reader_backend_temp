@@ -312,15 +312,19 @@ class AdminTokenSeparationTest extends AbstractAdminAuthIntegrationTest {
 	// chain came to guard a path that did not exist.
 
 	/**
-	 * A valid app token has to get past the app chain. No controller sits behind the path yet, so the
-	 * proof is a 404: routing was reached, and that only happens once authentication has succeeded.
-	 * Tighten this to 200 when the OPDS endpoint lands.
+	 * A valid app token has to get past the app chain. The OPDS endpoint is real now: the proof is a
+	 * 403, not a 404 - {@code appAccessClaims} mints an {@code INDIVIDUAL} token with no
+	 * {@code institutionId}, and an individual can never match an institution-scoped path, so
+	 * {@code FORBIDDEN_INSTITUTION_MISMATCH} is the correct terminal answer here, not a stepping
+	 * stone to 200. Either way, routing and authentication were reached, which is all this test
+	 * ever asserted - a 401 would mean the chain rejected the token, which is what the other tests
+	 * in this class check.
 	 */
 	@Test
 	void letsAValidAppTokenPastTheAppChain() throws Exception {
 		String appToken = this.tokens.sign(this.tokens.appAccessClaims("reader-1").build());
 
-		assertThat(callApp(appToken)).isEqualTo(404);
+		assertThat(callApp(appToken)).isEqualTo(403);
 	}
 
 	/** Open-access browsing and the institution picker must work with no token at all. */
