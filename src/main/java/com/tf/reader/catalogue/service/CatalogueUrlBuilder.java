@@ -43,4 +43,13 @@ public class CatalogueUrlBuilder {
     public String publicPublicationUrlFor(String itemId) {
         return baseUrl + "/opds/v1/public/publications/" + itemId;
     }
+
+    public String publicSearchUrlFor() {
+        return baseUrl + "/opds/v1/public/search";
+    }
+
+    /** Where a book this caller cannot obtain sends them, per the {@code subscribe} link. */
+    public String institutionsUrl() {
+        return baseUrl + "/api/v1/institutions";
+    }
 }
