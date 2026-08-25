@@ -45,7 +45,7 @@ class AuthMeTest extends ContainerisedInfrastructure {
 	private static final Instant NOW = Instant.parse("2026-08-13T14:42:00Z");
 
 	private static final TnfUser MEMBER = new TnfUser("usr_6712ab", UserType.INSTITUTION,
-			"inst_imperial", List.of("MEMBER"), List.of("col_medicine"));
+			"inst_7f3", List.of("MEMBER"), List.of("col_medicine"));
 
 	private static final TnfUser INDIVIDUAL = new TnfUser("usr_9f01cd", UserType.INDIVIDUAL, null,
 			List.of("SUBSCRIBER"), List.of("col_open"));
@@ -77,7 +77,7 @@ class AuthMeTest extends ContainerisedInfrastructure {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.userId").value("usr_6712ab"))
 				.andExpect(jsonPath("$.type").value("INSTITUTION"))
-				.andExpect(jsonPath("$.institutionId").value("inst_imperial"))
+				.andExpect(jsonPath("$.institutionId").value("inst_7f3"))
 				.andExpect(jsonPath("$.roles[0]").value("MEMBER"))
 				.andExpect(jsonPath("$.collections[0]").value("col_medicine"));
 	}
@@ -155,14 +155,14 @@ class AuthMeTest extends ContainerisedInfrastructure {
 		// because "ignored" is a claim worth proving rather than asserting in a comment.
 		mockMvc.perform(get("/api/v1/auth/me")
 						.queryParam("userId", "usr_admin")
-						.queryParam("institutionId", "inst_dsu")
+						.queryParam("institutionId", "inst_ucl")
 						.queryParam("roles", "ADMIN")
 						.queryParam("type", "INDIVIDUAL")
 						.queryParam("collections", "col_everything")
 						.header("Authorization", "Bearer " + tokenFor(MEMBER)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.userId").value("usr_6712ab"))
-				.andExpect(jsonPath("$.institutionId").value("inst_imperial"))
+				.andExpect(jsonPath("$.institutionId").value("inst_7f3"))
 				.andExpect(jsonPath("$.roles[0]").value("MEMBER"))
 				.andExpect(jsonPath("$.type").value("INSTITUTION"))
 				.andExpect(jsonPath("$.collections[0]").value("col_medicine"));
@@ -175,12 +175,12 @@ class AuthMeTest extends ContainerisedInfrastructure {
 		mockMvc.perform(get("/api/v1/auth/me")
 						.header("Authorization", "Bearer " + tokenFor(MEMBER))
 						.header("X-User-Id", "usr_admin")
-						.header("X-Institution-Id", "inst_dsu")
+						.header("X-Institution-Id", "inst_ucl")
 						.header("X-Roles", "ADMIN")
 						.header("X-Forwarded-User", "usr_admin"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.userId").value("usr_6712ab"))
-				.andExpect(jsonPath("$.institutionId").value("inst_imperial"))
+				.andExpect(jsonPath("$.institutionId").value("inst_7f3"))
 				.andExpect(jsonPath("$.roles[0]").value("MEMBER"))
 				.andExpect(jsonPath("$.roles", org.hamcrest.Matchers.hasSize(1)));
 	}
@@ -192,12 +192,12 @@ class AuthMeTest extends ContainerisedInfrastructure {
 						.header("Authorization", "Bearer " + tokenFor(MEMBER))
 						.contentType(org.springframework.http.MediaType.APPLICATION_JSON)
 						.content("""
-								{ "userId": "usr_admin", "institutionId": "inst_dsu",
+								{ "userId": "usr_admin", "institutionId": "inst_ucl",
 								  "roles": ["ADMIN"], "type": "INDIVIDUAL" }
 								"""))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.userId").value("usr_6712ab"))
-				.andExpect(jsonPath("$.institutionId").value("inst_imperial"))
+				.andExpect(jsonPath("$.institutionId").value("inst_7f3"))
 				.andExpect(jsonPath("$.type").value("INSTITUTION"))
 				.andExpect(jsonPath("$.roles[0]").value("MEMBER"));
 	}
@@ -206,7 +206,7 @@ class AuthMeTest extends ContainerisedInfrastructure {
 	void aSecondTokenInAnotherHeaderIsNotConsulted() throws Exception {
 		// An ADMIN token in a header nobody reads must not escalate a MEMBER request. Only the
 		// Authorization header is an authentication input.
-		TnfUser admin = new TnfUser("usr_b920fe", UserType.INSTITUTION, "inst_imperial",
+		TnfUser admin = new TnfUser("usr_b920fe", UserType.INSTITUTION, "inst_7f3",
 				List.of("MEMBER", "ADMIN"), List.of("col_medicine"));
 
 		mockMvc.perform(get("/api/v1/auth/me")

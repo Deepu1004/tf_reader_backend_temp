@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,9 +21,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import com.tf.reader.TestcontainersConfiguration;
+import com.tf.reader.auth.AuthTestInstitutions;
 import com.tf.reader.auth.transaction.AuthTransaction;
 import com.tf.reader.auth.transaction.AuthTransactionStore;
 import com.tf.reader.auth.security.UserSecurityConfig;
+import com.tf.reader.catalogue.repository.InstitutionRepository;
 
 /**
  * Exercises the real Spring Security SAML filter chain against the real configuration.
@@ -46,9 +49,17 @@ class SamlLoginFlowTest {
 	@Autowired
 	private AuthTransactionStore transactions;
 
+	@Autowired
+	private InstitutionRepository institutions;
+
+	@BeforeEach
+	void seedInstitutions() {
+		AuthTestInstitutions.seed(institutions);
+	}
+
 	@Test
 	void theEntryPointRedirectsToTheOneMockIdpCarryingOurTransactionAsRelayState() throws Exception {
-		AuthTransaction transaction = transactions.open("inst_imperial");
+		AuthTransaction transaction = transactions.open("inst_7f3");
 
 		MvcResult result = mockMvc.perform(get("/saml2/authenticate")
 						.queryParam("registrationId", "tf-reader")
@@ -73,9 +84,9 @@ class SamlLoginFlowTest {
 	void everyInstitutionIsSentToTheSameIdp() throws Exception {
 		// One integration, many institutions. If these ever differ, the architecture has
 		// regressed to one IdP per institution.
-		String imperial = idpUrlFor("inst_imperial");
-		String dsu = idpUrlFor("inst_dsu");
-		String xyz = idpUrlFor("inst_xyz");
+		String imperial = idpUrlFor("inst_7f3");
+		String dsu = idpUrlFor("inst_ucl");
+		String xyz = idpUrlFor("inst_leeds");
 
 		assertThat(imperial).isEqualTo(dsu).isEqualTo(xyz);
 		assertThat(imperial).isEqualTo("https://samlmock.dev/idp");
@@ -102,7 +113,7 @@ class SamlLoginFlowTest {
 		mockMvc.perform(post("/login/saml2/sso/tf-reader")
 						.contentType(MediaType.APPLICATION_FORM_URLENCODED)
 						.param("SAMLResponse", "not-even-base64")
-						.param("RelayState", transactions.open("inst_imperial").id()))
+						.param("RelayState", transactions.open("inst_7f3").id()))
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.code").value("SAML_AUTHENTICATION_FAILED"));
 	}
@@ -111,7 +122,7 @@ class SamlLoginFlowTest {
 	void theStartEndpointNeedsNoTokenButEverythingElseDoes() throws Exception {
 		mockMvc.perform(post("/api/v1/auth/saml/start")
 						.contentType(MediaType.APPLICATION_JSON)
-						.content("{ \"institutionId\": \"inst_imperial\" }"))
+						.content("{ \"institutionId\": \"inst_7f3\" }"))
 				.andExpect(status().isOk());
 
 		// Deny by default, and refused as JSON the app can read rather than a redirect to the
@@ -125,7 +136,7 @@ class SamlLoginFlowTest {
 
 	@Test
 	void theEntryPointIsUnusableWithoutAKnownRegistration() throws Exception {
-		mockMvc.perform(get("/saml2/authenticate").queryParam("registrationId", "inst_imperial"))
+		mockMvc.perform(get("/saml2/authenticate").queryParam("registrationId", "inst_7f3"))
 				.andExpect(status().is4xxClientError())
 				.andExpect(header().doesNotExist("Location"));
 	}

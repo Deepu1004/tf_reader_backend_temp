@@ -9,6 +9,8 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Map;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,11 +22,12 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.tf.reader.auth.repository.MockInstitutionRepository;
 import com.tf.reader.auth.token.JwtProperties;
 import com.tf.reader.auth.token.JwtTokenService;
 import com.tf.reader.auth.token.TokenService;
 import com.tf.reader.auth.transaction.AuthTransactionStore;
+import com.tf.reader.catalogue.api.InstitutionLookup;
+import com.tf.reader.catalogue.api.InstitutionRef;
 import com.tf.reader.common.error.GlobalExceptionHandler;
 
 /**
@@ -37,7 +40,7 @@ import com.tf.reader.common.error.GlobalExceptionHandler;
 // relying party registration, and it is covered by SamlRelyingPartyRegistrationTest instead.
 // This test is about the endpoint's own contract.
 @AutoConfigureMockMvc(addFilters = false)
-@Import({ AuthTransactionStore.class, MockInstitutionRepository.class, GlobalExceptionHandler.class,
+@Import({ AuthTransactionStore.class, GlobalExceptionHandler.class,
 		AuthControllerTest.FixedClockConfig.class })
 class AuthControllerTest {
 
@@ -64,6 +67,16 @@ class AuthControllerTest {
 		TokenService tokenService(Clock clock) {
 			return JwtTokenService.forTest("a-test-only-signing-secret-of-sufficient-length-0123456789", Duration.ofHours(1), clock);
 		}
+
+		/** A fixed stand-in for the real, Mongo-backed lookup - this slice never starts Mongo. */
+		@Bean
+		InstitutionLookup institutions() {
+			Map<String, InstitutionRef> institutions = Map.of(
+					"inst_7f3", new InstitutionRef("inst_7f3", "Imperial College London"),
+					"inst_ucl", new InstitutionRef("inst_ucl", "University College London"),
+					"inst_leeds", new InstitutionRef("inst_leeds", "University of Leeds"));
+			return institutionId -> Optional.ofNullable(institutions.get(institutionId));
+		}
 	}
 
 	@Test
@@ -71,12 +84,12 @@ class AuthControllerTest {
 		mockMvc.perform(post("/api/v1/auth/saml/start")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
-								{ "institutionId": "inst_imperial", "idpHint": "imperial-sso" }
+								{ "institutionId": "inst_7f3", "idpHint": "imperial-sso" }
 								"""))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.authTxnId").value(org.hamcrest.Matchers.startsWith("authTxn_")))
-				.andExpect(jsonPath("$.institution.institutionId").value("inst_imperial"))
-				.andExpect(jsonPath("$.institution.name").value("Imperial College"))
+				.andExpect(jsonPath("$.institution.institutionId").value("inst_7f3"))
+				.andExpect(jsonPath("$.institution.name").value("Imperial College London"))
 				.andExpect(jsonPath("$.serverTime").value("2026-08-12T14:42:00Z"))
 				.andExpect(jsonPath("$.expiresAt").value("2026-08-12T14:52:00Z"));
 	}
@@ -85,7 +98,7 @@ class AuthControllerTest {
 	void theAuthorizationUrlPointsAtTheOneSharedRegistration() throws Exception {
 		// Every institution must produce the same registrationId. A per-institution
 		// registration id appearing here is the architecture regressing.
-		for (String institutionId : new String[] { "inst_imperial", "inst_dsu", "inst_xyz" }) {
+		for (String institutionId : new String[] { "inst_7f3", "inst_ucl", "inst_leeds" }) {
 			mockMvc.perform(post("/api/v1/auth/saml/start")
 							.contentType(MediaType.APPLICATION_JSON)
 							.content("{ \"institutionId\": \"" + institutionId + "\" }"))
@@ -104,7 +117,7 @@ class AuthControllerTest {
 		mockMvc.perform(post("/api/v1/auth/saml/start")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
-								{ "institutionId": "inst_imperial" }
+								{ "institutionId": "inst_7f3" }
 								"""))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.token").doesNotExist())
