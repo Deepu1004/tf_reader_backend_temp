@@ -68,7 +68,18 @@ class AuthorizationCoverageTest {
 			// Public institution discovery, so a reader can choose where to sign in before they
 			// hold a token - see shared.md.
 			"GET /api/v1/institutions",
-			"GET /api/v1/institutions/{institutionId}");
+			"GET /api/v1/institutions/{institutionId}",
+			// The local mock OIDC provider and mock SAML IdP, enabled only for local/test runs.
+			// These stand in for a THIRD-PARTY identity provider, not our own API surface - a
+			// real OP's discovery document, JWKS, authorize and token endpoints are always
+			// unauthenticated, and so is a real IdP's SSO endpoint. Protecting them here would
+			// make the mock behave unlike the thing it mocks.
+			"GET /.well-known/openid-configuration",
+			"GET /oauth2/jwks",
+			"GET /oauth2/authorize",
+			"POST /oauth2/authorize",
+			"POST /oauth2/token",
+			"GET /saml-mock/sso");
 
 	/** Only our own controllers. Spring's {@code /error} forward target is not ours to protect. */
 	private static final String OUR_PACKAGE = "com.tf.reader";

@@ -38,7 +38,14 @@ import com.tf.reader.catalogue.repository.InstitutionRepository;
  */
 // The application refuses to start without a signing secret, so the test context supplies a
 // throwaway one. No secret is committed for any real environment.
-@SpringBootTest(properties = "tf.security.jwt.secret=a-test-only-signing-secret-of-sufficient-length-0123456789")
+//
+// spring.profiles.active is forced empty because application.yml defaults it to "local", and a
+// developer's own gitignored application-local.yml (never committed - see CLAUDE.md) points the
+// mock registration at their own machine instead of samlmock.dev. Without this, whether these
+// assertions hold depends on files nobody else on the team has.
+@SpringBootTest(properties = {
+		"tf.security.jwt.secret=a-test-only-signing-secret-of-sufficient-length-0123456789",
+		"spring.profiles.active=" })
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
 class SamlLoginFlowTest {

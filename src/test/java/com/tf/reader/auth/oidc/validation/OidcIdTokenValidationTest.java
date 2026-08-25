@@ -49,9 +49,15 @@ import com.tf.reader.common.error.ErrorCode;
 // DEFINED_PORT, because two hops here are real HTTP: the decoder fetches the provider's JWKS to
 // verify a signature. Under MockMvc there is nothing listening and every positive case would fail
 // for a reason that has nothing to do with token validation.
+//
+// The properties here must match OidcEndToEndAuthFlowTest's exactly: both extend
+// MockOidcTestProfile and so share its static PORT, and Spring only reuses one real server for
+// both when their context configuration - these properties included - is identical. Diverge and
+// both try to bind that same port in the same JVM.
 @SpringBootTest(
 		webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT,
-		properties = { "tnf.auth.jwt.secret=" + ContainerisedInfrastructure.JWT_SECRET })
+		properties = { "tnf.auth.jwt.secret=" + ContainerisedInfrastructure.JWT_SECRET,
+				"spring.profiles.active=" })
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class OidcIdTokenValidationTest extends MockOidcTestProfile {
 
