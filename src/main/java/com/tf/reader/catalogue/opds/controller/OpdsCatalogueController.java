@@ -19,6 +19,7 @@ import com.tf.reader.catalogue.entity.AccessTier;
 import com.tf.reader.catalogue.entity.ContentType;
 import com.tf.reader.catalogue.entity.Institution;
 import com.tf.reader.catalogue.opds.dto.OpdsNavigationFeed;
+import com.tf.reader.catalogue.opds.dto.OpdsPublicationDocument;
 import com.tf.reader.catalogue.opds.dto.OpdsPublicationFeed;
 import com.tf.reader.catalogue.opds.service.OpdsFeedService;
 import com.tf.reader.common.error.ApiException;
@@ -37,6 +38,7 @@ import com.tf.reader.common.page.PageQuery;
 public class OpdsCatalogueController {
 
     private static final String OPDS_MEDIA_TYPE = "application/opds+json";
+    private static final String OPDS_PUBLICATION_MEDIA_TYPE = "application/opds-publication+json";
 
     private final OpdsFeedService feedService;
 
@@ -83,6 +85,36 @@ public class OpdsCatalogueController {
         OpdsPublicationFeed feed = feedService.groupFeed(institution, groupId, subject, page, sort, contentType,
                 accessTier);
         return ok(feed, etag);
+    }
+
+    @GetMapping(value = "/search", produces = OPDS_MEDIA_TYPE)
+    public ResponseEntity<OpdsPublicationFeed> search(
+            @PathVariable String institutionId,
+            @AuthenticationPrincipal CurrentUser caller,
+            @RequestParam String query,
+            PageQuery page,
+            @RequestParam(required = false) ContentType contentType,
+            @RequestParam(required = false) AccessTier accessTier) {
+
+        requireMatchingInstitution(caller, institutionId);
+        Institution institution = feedService.loadInstitution(institutionId);
+        SubjectRef subject = new SubjectRef(caller.userId(), institutionId);
+        OpdsPublicationFeed feed = feedService.searchFeed(institution, subject, query, page, contentType, accessTier);
+        return ResponseEntity.ok().body(feed);
+    }
+
+    // Not a feed and never cached: a standalone document, and the only place a copy count
+    // changes, so the reader app is expected to refetch after every borrow/return.
+    @GetMapping(value = "/publications/{itemId}", produces = OPDS_PUBLICATION_MEDIA_TYPE)
+    public ResponseEntity<OpdsPublicationDocument> publicationDetail(
+            @PathVariable String institutionId,
+            @PathVariable String itemId,
+            @AuthenticationPrincipal CurrentUser caller) {
+
+        requireMatchingInstitution(caller, institutionId);
+        Institution institution = feedService.loadInstitution(institutionId);
+        SubjectRef subject = new SubjectRef(caller.userId(), institutionId);
+        return ResponseEntity.ok(feedService.publicationDocument(institution, itemId, subject));
     }
 
     private void requireMatchingInstitution(CurrentUser caller, String institutionId) {
