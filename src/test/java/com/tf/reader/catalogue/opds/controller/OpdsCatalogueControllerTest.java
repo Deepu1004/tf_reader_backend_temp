@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -111,6 +112,43 @@ class OpdsCatalogueControllerTest {
 
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 		assertThat(response.getBody()).isSameAs(feed);
+	}
+
+	@Test
+	void searchRejectsAnEmptyQueryInsteadOfMatchingEveryBook() {
+		assertThatThrownBy(() -> controller.search("inst_1", member, "", new PageQuery(0, 20), null, null))
+				.isInstanceOf(ApiException.class)
+				.satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+	}
+
+	@Test
+	void searchRejectsAWhitespaceOnlyQuery() {
+		assertThatThrownBy(() -> controller.search("inst_1", member, "   ", new PageQuery(0, 20), null, null))
+				.isInstanceOf(ApiException.class)
+				.satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+	}
+
+	// String.trim() strips any character <= U+0020, which includes a bare NUL byte - so this
+	// takes the same path as "" and "   " rather than needing its own special case.
+	@Test
+	void searchRejectsANullByteTheSameAsABlankQuery() {
+		assertThatThrownBy(() -> controller.search("inst_1", member, "\0", new PageQuery(0, 20), null, null))
+				.isInstanceOf(ApiException.class)
+				.satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+	}
+
+	@Test
+	void searchTrimsLeadingAndTrailingWhitespaceBeforeQueryingTheService() {
+		Institution institution = institution(3);
+		when(feedService.loadInstitution("inst_1")).thenReturn(institution);
+		OpdsPublicationFeed feed = new OpdsPublicationFeed(
+				new OpdsFeedMetadata("Search: robots", 0, 20, 0, null), List.of(), null, List.of());
+		when(feedService.searchFeed(eq(institution), any(), eq("robots"), any(), eq(null), eq(null)))
+				.thenReturn(feed);
+
+		controller.search("inst_1", member, "  robots  ", new PageQuery(0, 20), null, null);
+
+		verify(feedService).searchFeed(eq(institution), any(), eq("robots"), any(), eq(null), eq(null));
 	}
 
 	@Test

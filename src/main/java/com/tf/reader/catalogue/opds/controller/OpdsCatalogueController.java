@@ -97,9 +97,11 @@ public class OpdsCatalogueController {
             @RequestParam(required = false) AccessTier accessTier) {
 
         requireMatchingInstitution(caller, institutionId);
+        String searchTerm = requireSearchTerm(query);
         Institution institution = feedService.loadInstitution(institutionId);
         SubjectRef subject = new SubjectRef(caller.userId(), institutionId);
-        OpdsPublicationFeed feed = feedService.searchFeed(institution, subject, query, page, contentType, accessTier);
+        OpdsPublicationFeed feed = feedService.searchFeed(institution, subject, searchTerm, page, contentType,
+                accessTier);
         return ResponseEntity.ok().body(feed);
     }
 
@@ -115,6 +117,18 @@ public class OpdsCatalogueController {
         Institution institution = feedService.loadInstitution(institutionId);
         SubjectRef subject = new SubjectRef(caller.userId(), institutionId);
         return ResponseEntity.ok(feedService.publicationDocument(institution, itemId, subject));
+    }
+
+    // An empty or whitespace-only pattern matches every document in a MongoDB regex match, so
+    // a blank query must be rejected here rather than reaching OpdsSearchQuery as "match
+    // anything" - it also fixes " ethereum"/"ethereum " into the same request the contract
+    // means, since a search box's own leading/trailing whitespace is never intentional.
+    private String requireSearchTerm(String query) {
+        String trimmed = query == null ? "" : query.trim();
+        if (trimmed.isEmpty()) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "query must not be blank");
+        }
+        return trimmed;
     }
 
     private void requireMatchingInstitution(CurrentUser caller, String institutionId) {
