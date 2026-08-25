@@ -143,6 +143,11 @@
 			<version>${jjwt.version}</version>
 			<scope>runtime</scope>
 		</dependency>
+		<dependency>
+			<groupId>org.apache.pdfbox</groupId>
+			<artifactId>pdfbox</artifactId>
+			<version>3.0.4</version> <!-- latest 3.0.x; code uses only Loader + PDFTextStripper -->
+		</dependency>
 	</dependencies>
 
 	<build>
