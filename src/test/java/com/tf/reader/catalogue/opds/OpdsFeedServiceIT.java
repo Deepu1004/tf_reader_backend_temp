@@ -27,6 +27,7 @@ import com.tf.reader.catalogue.entity.Publisher;
 import com.tf.reader.catalogue.entity.ScopeType;
 import com.tf.reader.catalogue.entity.Shelf;
 import com.tf.reader.catalogue.opds.dto.OpdsNavigationFeed;
+import com.tf.reader.catalogue.opds.dto.OpdsPublicationDocument;
 import com.tf.reader.catalogue.opds.dto.OpdsPublicationFeed;
 import com.tf.reader.catalogue.opds.service.OpdsFeedService;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
@@ -315,5 +316,84 @@ class OpdsFeedServiceIT extends ContainerisedInfrastructure {
 				.orElseThrow(() -> new AssertionError("expected a next link since more than one page exists"))
 				.href();
 		assertThat(next).contains("page=1", "size=1", "sort=title.asc", "contentType=EPUB", "accessTier=OPEN_ACCESS");
+	}
+
+	// ----------------------------------------------------------------------------------- search
+
+	@Test
+	void searchFindsAnEntitledBookByTitleAndHidesAnUnentitledOne() {
+		Institution institution = newInstitution("OPDS-SEARCH-TITLE");
+		Publisher publisher = newPublisher("OPDS-SEARCH-TITLE-PUB");
+		newItem(publisher.getId(), "Rights for Robots", AccessTier.OPEN_ACCESS);
+		newItem(publisher.getId(), "Locked Robots Book", AccessTier.SUBSCRIPTION);
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, subjectFor(institution), "robots",
+				new PageQuery(0, 20), null, null);
+
+		assertThat(feed.publications()).extracting(p -> p.metadata().title())
+				.containsExactly("Rights for Robots");
+	}
+
+	@Test
+	void searchMatchesAHyphenatedIsbnAgainstTheStoredUnhyphenatedOne() {
+		Institution institution = newInstitution("OPDS-SEARCH-ISBN");
+		Publisher publisher = newPublisher("OPDS-SEARCH-ISBN-PUB");
+		CatalogueItem item = newItem(publisher.getId(), "Rights for Robots", AccessTier.OPEN_ACCESS);
+		item.setIsbn("9780367211745");
+		catalogueItemRepository.save(item);
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, subjectFor(institution),
+				"978-0-367-21174-5", new PageQuery(0, 20), null, null);
+
+		assertThat(feed.publications()).extracting(p -> p.metadata().title())
+				.containsExactly("Rights for Robots");
+	}
+
+	@Test
+	void searchWithNoMatchesReturnsANavigationLinkBackToTheCatalogueNotAnEmptyArray() {
+		Institution institution = newInstitution("OPDS-SEARCH-EMPTY");
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, subjectFor(institution),
+				"quantum knitting nonsense", new PageQuery(0, 20), null, null);
+
+		assertThat(feed.publications()).isNull();
+		assertThat(feed.navigation()).hasSize(1);
+		assertThat(feed.metadata().numberOfItems()).isZero();
+	}
+
+	// --------------------------------------------------------------------------- publicationDocument
+
+	@Test
+	void publicationDocumentReturnsTheEntitledBookAsAStandaloneDocument() {
+		Institution institution = newInstitution("OPDS-PUB-OK");
+		Publisher publisher = newPublisher("OPDS-PUB-OK-PUB");
+		CatalogueItem item = newItem(publisher.getId(), "Open Book", AccessTier.OPEN_ACCESS);
+
+		OpdsPublicationDocument document = feedService.publicationDocument(institution, item.getId(),
+				subjectFor(institution));
+
+		assertThat(document.context()).isEqualTo("https://readium.org/webpub-manifest/context.jsonld");
+		assertThat(document.metadata().title()).isEqualTo("Open Book");
+	}
+
+	@Test
+	void publicationDocumentIs404WhenTheItemIsNotEntitled() {
+		Institution institution = newInstitution("OPDS-PUB-LOCKED");
+		Publisher publisher = newPublisher("OPDS-PUB-LOCKED-PUB");
+		CatalogueItem item = newItem(publisher.getId(), "Locked Book", AccessTier.SUBSCRIPTION);
+
+		assertThatThrownBy(() -> feedService.publicationDocument(institution, item.getId(), subjectFor(institution)))
+				.isInstanceOf(ApiException.class)
+				.satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.NOT_FOUND));
+	}
+
+	@Test
+	void publicationDocumentIs404ForAnUnknownItem() {
+		Institution institution = newInstitution("OPDS-PUB-UNKNOWN");
+
+		assertThatThrownBy(() -> feedService.publicationDocument(institution, "does-not-exist",
+				subjectFor(institution)))
+				.isInstanceOf(ApiException.class)
+				.satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.NOT_FOUND));
 	}
 }

@@ -29,4 +29,10 @@ public class CatalogueUrlBuilder {
     public String searchUrlTemplateFor(String institutionId) {
         return baseUrl + "/opds/v1/institutions/" + institutionId + "/search{?query}";
     }
+
+    /** The bare search path, for a concrete self/next link on an actual result page -
+     * {@link #searchUrlTemplateFor(String)} is for the untemplated signpost only. */
+    public String searchUrlFor(String institutionId) {
+        return baseUrl + "/opds/v1/institutions/" + institutionId + "/search";
+    }
 }
