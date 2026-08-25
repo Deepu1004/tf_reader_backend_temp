@@ -8,6 +8,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
@@ -347,6 +349,113 @@ class OpdsFeedServiceIT extends ContainerisedInfrastructure {
 
 		assertThat(feed.publications()).extracting(p -> p.metadata().title())
 				.containsExactly("Rights for Robots");
+	}
+
+	// A user-supplied regex metacharacter must never reach Mongo's $regex unescaped - a naive
+	// pattern would either throw (unbalanced "(") or, worse, silently widen the match (unescaped
+	// ".*" becomes a real wildcard). Confirms these are searched for literally.
+	@Test
+	void searchTreatsRegexMetacharactersAsLiteralTextNotAsAPattern() {
+		Institution institution = newInstitution("OPDS-SEARCH-REGEX");
+		Publisher publisher = newPublisher("OPDS-SEARCH-REGEX-PUB");
+		newItem(publisher.getId(), "Robots (2020 edition)", AccessTier.OPEN_ACCESS);
+		newItem(publisher.getId(), "Robots without parentheses", AccessTier.OPEN_ACCESS);
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, subjectFor(institution),
+				"Robots (2020 edition)", new PageQuery(0, 20), null, null);
+
+		assertThat(feed.publications()).extracting(p -> p.metadata().title())
+				.containsExactly("Robots (2020 edition)");
+	}
+
+	@Test
+	void searchWithOnlyRegexMetacharactersDoesNotThrowAndDoesNotMatchEverything() {
+		Institution institution = newInstitution("OPDS-SEARCH-SYMBOLS");
+		Publisher publisher = newPublisher("OPDS-SEARCH-SYMBOLS-PUB");
+		newItem(publisher.getId(), "An Ordinary Title", AccessTier.OPEN_ACCESS);
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, subjectFor(institution),
+				"*.?[]{}", new PageQuery(0, 20), null, null);
+
+		assertThat(feed.publications()).isNull();
+		assertThat(feed.navigation()).hasSize(1);
+	}
+
+	// Not SQL, so these are not an injection vector, but the search must still run to
+	// completion and simply find nothing rather than erroring on the punctuation.
+	@Test
+	void searchWithSqlLikeInputFindsNothingRatherThanErroring() {
+		Institution institution = newInstitution("OPDS-SEARCH-SQLI");
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, subjectFor(institution),
+				"'; DROP TABLE users; --", new PageQuery(0, 20), null, null);
+
+		assertThat(feed.publications()).isNull();
+		assertThat(feed.navigation()).hasSize(1);
+	}
+
+	@Test
+	void searchWithAVeryLongQueryDoesNotThrow() {
+		Institution institution = newInstitution("OPDS-SEARCH-LONG");
+		String longQuery = "a".repeat(3000);
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, subjectFor(institution), longQuery,
+				new PageQuery(0, 20), null, null);
+
+		assertThat(feed.publications()).isNull();
+		assertThat(feed.navigation()).hasSize(1);
+	}
+
+	@Test
+	void searchIsCaseInsensitive() {
+		Institution institution = newInstitution("OPDS-SEARCH-CASE");
+		Publisher publisher = newPublisher("OPDS-SEARCH-CASE-PUB");
+		newItem(publisher.getId(), "Ethereum Explained", AccessTier.OPEN_ACCESS);
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, subjectFor(institution), "ETHEREUM",
+				new PageQuery(0, 20), null, null);
+
+		assertThat(feed.publications()).extracting(p -> p.metadata().title())
+				.containsExactly("Ethereum Explained");
+	}
+
+	// Open access has no institution filter (same as the "all" group - see the comment on
+	// this shared, never-reset test database further up), so this uses a title unique to this
+	// test rather than "Ethereum Explained", which searchIsCaseInsensitive also seeds and would
+	// then double-count.
+	@Test
+	void searchMatchesAPrefixOrSubstringNotJustTheWholeWord() {
+		Institution institution = newInstitution("OPDS-SEARCH-PREFIX");
+		Publisher publisher = newPublisher("OPDS-SEARCH-PREFIX-PUB");
+		newItem(publisher.getId(), "Zynthex Quantum Primer", AccessTier.OPEN_ACCESS);
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, subjectFor(institution), "zynth",
+				new PageQuery(0, 20), null, null);
+
+		assertThat(feed.publications()).extracting(p -> p.metadata().title())
+				.containsExactly("Zynthex Quantum Primer");
+	}
+
+	// The full battery from the edge-case review: every character class a search box can
+	// receive, run against real Mongo. None of these may throw - a search endpoint that 500s
+	// on a stray character or a pasted SQL/HTML/regex payload is worse than one that just
+	// finds nothing. Metacharacter *escaping correctness* itself is InstitutionSearchRegexTest's
+	// job (same escape() method, no Mongo needed there); this only proves the query completes.
+	@ParameterizedTest
+	@ValueSource(strings = {
+			"ethereum blockchain", "12345", "abc123", "block-chain", "block_chain", "test.com", "foo/bar",
+			"foo\\bar", "\"ethereum\"", "user's", "(ethereum)", "[ethereum]", "{ethereum}", "*", "eth*", "?",
+			"%", "eth%", "_", "eth_", "' OR 1=1 --", "'; DROP TABLE users; --", "<script>alert(1)</script>",
+			"é", "ñ", "中文", "தமிழ்", "🔥", "🚀", "ethereum\nblockchain", "ethereum\tblockchain",
+			"aaaaaaaaaaaaaaaa", "!@#$%^&*()"
+	})
+	void searchNeverThrowsForAnyCharacterClass(String query) {
+		Institution institution = newInstitution("OPDS-SEARCH-SWEEP-" + Math.abs(query.hashCode()));
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, subjectFor(institution), query,
+				new PageQuery(0, 20), null, null);
+
+		assertThat(feed).isNotNull();
 	}
 
 	@Test
