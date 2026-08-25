@@ -83,8 +83,8 @@ public class LibraryAssembler {
 						loan.loanId(),
 						loan.itemId(),
 						loan.licenceModel(),
-						ACTIVE,
-						null,
+						loan.status(),       // D-026: real status from the view
+						loan.borrowedAt(),   // D-026: real borrowedAt from the view
 						loan.dueAt(),
 						loan.canPersist()))
 				.toList();
