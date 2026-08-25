@@ -14,8 +14,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 
-// HTTP endpoints for placing and reading holds. Leave and accept land in a
-// later commit, once QueueService grows those lifecycle transitions.
+// HTTP endpoints for placing, reading and cancelling holds. Accept lands in
+// a later commit, once QueueService grows that lifecycle transition.
 @RestController
 @RequestMapping("/api/v1/holds")
 public class HoldController {
@@ -44,5 +44,13 @@ public class HoldController {
     public List<HoldResponse> mine(@AuthenticationPrincipal CurrentUser me) {
         Instant now = clock.instant();
         return queue.holdsFor(me.userId()).stream().map(v -> HoldResponse.of(v, now)).toList();
+    }
+
+    // Leave the queue. Always 204 — cancelling an already-cancelled hold,
+    // or a holdId that was never yours, is not an error.
+    @DeleteMapping("/{holdId}")
+    public ResponseEntity<Void> leave(@AuthenticationPrincipal CurrentUser me, @PathVariable String holdId) {
+        queue.leave(me, holdId);
+        return ResponseEntity.noContent().build();
     }
 }
