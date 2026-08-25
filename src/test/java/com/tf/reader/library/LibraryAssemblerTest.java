@@ -62,8 +62,8 @@ class LibraryAssemblerTest {
 		givenHolds();
 		givenLoans(
 				new ActiveLoanView("loan_7c1", "item_42", "ELITE", false,
-						NOW.plus(13, ChronoUnit.DAYS)),
-				new ActiveLoanView("loan_oa9", "item_oa9", "OPEN_ACCESS", true, null));
+						NOW.plus(13, ChronoUnit.DAYS), null, null),
+				new ActiveLoanView("loan_oa9", "item_oa9", "OPEN_ACCESS", true, null, null, null));
 
 		LibraryResponse response = assembler.assemble(READER);
 
@@ -78,7 +78,7 @@ class LibraryAssemblerTest {
 		givenCursor(ChangeCursor.of(4L));
 		givenHolds();
 		givenLoans(new ActiveLoanView("loan_7c1", "item_42", "ELITE", false,
-				NOW.plus(13, ChronoUnit.DAYS)));
+				NOW.plus(13, ChronoUnit.DAYS), null, null));
 
 		// ActiveLoanView carries no status field and does not need one: findAllFor applies the D-006
 		// liveness rule, so a lapsed-but-unswept row never reaches here.
@@ -92,8 +92,8 @@ class LibraryAssemblerTest {
 		givenHolds();
 		givenLoans(
 				new ActiveLoanView("loan_7c1", "item_42", "ELITE", false,
-						NOW.plus(13, ChronoUnit.DAYS)),
-				new ActiveLoanView("loan_oa9", "item_oa9", "OPEN_ACCESS", true, null));
+						NOW.plus(13, ChronoUnit.DAYS), null, null),
+				new ActiveLoanView("loan_oa9", "item_oa9", "OPEN_ACCESS", true, null, null, null));
 
 		LibraryResponse response = assembler.assemble(READER);
 
@@ -109,7 +109,7 @@ class LibraryAssemblerTest {
 		givenCursor(ChangeCursor.of(4L));
 		givenHolds();
 		givenLoans(new ActiveLoanView("loan_7c1", "item_42", "ELITE", false,
-				NOW.plus(13, ChronoUnit.DAYS)));
+				NOW.plus(13, ChronoUnit.DAYS), null, null));
 
 		// Null rather than invented. The frozen response shape has the field, so this is the gap to
 		// close with the loan lane: it is agreed that borrowedAt joins ActiveLoanView, and when it
