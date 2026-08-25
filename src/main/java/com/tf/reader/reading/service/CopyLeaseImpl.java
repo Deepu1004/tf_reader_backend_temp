@@ -186,6 +186,25 @@ public class CopyLeaseImpl implements CopyLease {
 		removeOrphans(itemKey, seeded, now);
 	}
 
+	/**
+	 * Every item key Redis currently holds a counter for — including one with no live DB
+	 * row at all, which is exactly the case {@link #rebuild} must still visit to purge a
+	 * lease nothing backs any more.
+	 */
+	Set<LeaseKeys.Parsed> knownItems() {
+		Set<String> keys = redis.keys(LeaseKeys.ALL_KEYS_PATTERN);
+		if (keys == null) {
+			return Set.of();
+		}
+		Set<LeaseKeys.Parsed> items = new HashSet<>();
+		for (String key : keys) {
+			if (!key.startsWith(LeaseKeys.TOKEN_KEY_PREFIX)) {
+				items.add(LeaseKeys.parseItemKey(key));
+			}
+		}
+		return items;
+	}
+
 	private void removeOrphans(String itemKey, Set<String> seeded, Instant now) {
 		Set<TypedTuple<String>> current = redis.opsForZSet().rangeWithScores(itemKey, 0, -1);
 		if (current == null) {
