@@ -80,8 +80,11 @@ public class ReadBrokerService {
 			throw new ApiException(mapDenyReason(decision.reason()), "You do not have access to this title.");
 		}
 
-		// ── Step 3: Device cap check ──
-		if (subject != null && subject.userId() != null && !devices.admit(subject.userId(), deviceKey)) {
+		// ── Step 3: Device cap check (ELITE only) ──
+		// Open access and subscription access are not copy/device limited. Only an Elite
+		// entitlement consumes a concurrent-reading device slot.
+		if (decision.accessLevel() == AccessLevel.ENTITLED_CONCURRENT
+				&& subject != null && subject.userId() != null && !devices.admit(subject.userId(), deviceKey)) {
 			throw new ApiException(ErrorCode.DEVICE_LIMIT_REACHED, "This account is already reading on the maximum number of devices.");
 		}
 
