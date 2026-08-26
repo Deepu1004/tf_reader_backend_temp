@@ -1,6 +1,7 @@
 package com.tf.reader.hold.controller;
 
 import com.tf.reader.auth.model.CurrentUser;
+import com.tf.reader.hold.dto.AcceptedLoanResponse;
 import com.tf.reader.hold.dto.HoldRequest;
 import com.tf.reader.hold.dto.HoldResponse;
 import com.tf.reader.hold.service.QueueService;
@@ -14,8 +15,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 
-// HTTP endpoints for placing, reading and cancelling holds. Accept lands in
-// a later commit, once QueueService grows that lifecycle transition.
+// HTTP endpoints for placing, reading, cancelling and accepting holds.
 @RestController
 @RequestMapping("/api/v1/holds")
 public class HoldController {
@@ -52,5 +52,13 @@ public class HoldController {
     public ResponseEntity<Void> leave(@AuthenticationPrincipal CurrentUser me, @PathVariable String holdId) {
         queue.leave(me, holdId);
         return ResponseEntity.noContent().build();
+    }
+
+    // Turn an offer into a loan. 201, same shape as POST /api/v1/loans —
+    // the copy is already leased in this reader's name.
+    @PostMapping("/{holdId}/accept")
+    public ResponseEntity<AcceptedLoanResponse> accept(@AuthenticationPrincipal CurrentUser me, @PathVariable String holdId) {
+        AcceptedLoanResponse loan = queue.accept(me, holdId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(loan);
     }
 }

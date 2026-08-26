@@ -29,4 +29,27 @@ public class CatalogueUrlBuilder {
     public String searchUrlTemplateFor(String institutionId) {
         return baseUrl + "/opds/v1/institutions/" + institutionId + "/search{?query}";
     }
+
+    /** The bare search path, for a concrete self/next link on an actual result page -
+     * {@link #searchUrlTemplateFor(String)} is for the untemplated signpost only. */
+    public String searchUrlFor(String institutionId) {
+        return baseUrl + "/opds/v1/institutions/" + institutionId + "/search";
+    }
+
+    public String publicCatalogueUrlFor() {
+        return baseUrl + "/opds/v1/public/catalogue";
+    }
+
+    public String publicPublicationUrlFor(String itemId) {
+        return baseUrl + "/opds/v1/public/publications/" + itemId;
+    }
+
+    public String publicSearchUrlFor() {
+        return baseUrl + "/opds/v1/public/search";
+    }
+
+    /** Where a book this caller cannot obtain sends them, per the {@code subscribe} link. */
+    public String institutionsUrl() {
+        return baseUrl + "/api/v1/institutions";
+    }
 }

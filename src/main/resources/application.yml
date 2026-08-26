@@ -41,6 +41,10 @@ server:
 tf:
   catalogue:
     base-url: ${BASE_URL}
+  crypto:
+    master-key: ${TF_MASTER_KEY}
+    master-key-id: master-v1
+    device-key-min-bits: 2048
   security:
     jwt:
       issuer: tf-reader

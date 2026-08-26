@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "OpdsPublicationDocument, hand-derived from api-docs/wokay-api.yaml's components.schemas - the allOf of {'@context'} and OpdsPublication, flattened. Not the canonical copy vendored from the docs repo - that file was not reachable when this was written. Swap it in at this same path when it is; the test does not need to change.",
+  "type": "object",
+  "required": ["@context", "metadata", "links"],
+  "properties": {
+    "@context": { "type": "string" },
+    "metadata": { "$ref": "#/$defs/OpdsPublicationMetadata" },
+    "links": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/OpdsLink" }
+    },
+    "images": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/OpdsImageLink" }
+    }
+  },
+  "$defs": {
+    "OpdsLink": {
+      "type": "object",
+      "required": ["href"],
+      "properties": {
+        "rel": { "type": "string" },
+        "href": { "type": "string" },
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "templated": { "type": "boolean" },
+        "properties": { "$ref": "#/$defs/OpdsLinkProperties" }
+      }
+    },
+    "OpdsContributor": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "sortAs": { "type": "string" }
+      }
+    },
+    "OpdsPublicationMetadata": {
+      "type": "object",
+      "required": ["title"],
+      "properties": {
+        "@type": { "type": "string", "enum": ["http://schema.org/Book", "http://schema.org/Audiobook"] },
+        "identifier": { "type": "string" },
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "author": { "type": "array", "items": { "$ref": "#/$defs/OpdsContributor" } },
+        "editor": { "type": "array", "items": { "$ref": "#/$defs/OpdsContributor" } },
+        "narrator": { "type": "array", "items": { "$ref": "#/$defs/OpdsContributor" } },
+        "publisher": { "$ref": "#/$defs/OpdsContributor" },
+        "language": { "type": "string" },
+        "published": { "type": "string", "format": "date" },
+        "modified": { "type": "string", "format": "date-time" },
+        "description": { "type": "string" },
+        "numberOfPages": { "type": "integer" },
+        "duration": { "type": "integer" },
+        "subject": { "type": "array", "maxItems": 20, "items": { "$ref": "#/$defs/OpdsContributor" } }
+      }
+    },
+    "OpdsImageLink": {
+      "type": "object",
+      "required": ["href"],
+      "properties": {
+        "href": { "type": "string" },
+        "type": { "type": "string" },
+        "width": { "type": "integer" },
+        "height": { "type": "integer" }
+      }
+    },
+    "OpdsLinkProperties": {
+      "type": "object",
+      "required": ["licenceModel"],
+      "properties": {
+        "licenceModel": { "type": "string", "enum": ["OPEN_ACCESS", "SUBSCRIPTION", "ELITE"] },
+        "indirectAcquisition": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["type"],
+            "properties": { "type": { "type": "string" } }
+          }
+        },
+        "availability": {
+          "type": "object",
+          "required": ["state"],
+          "properties": { "state": { "type": "string", "enum": ["available", "unavailable"] } }
+        },
+        "copies": {
+          "type": "object",
+          "properties": { "total": { "type": "integer", "minimum": 1 } }
+        },
+        "encrypted": { "$ref": "#/$defs/EncryptedInfo" },
+        "hasSearchIndex": { "type": "boolean" },
+        "canPersist": { "type": "boolean" },
+        "fileSize": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "EncryptedInfo": {
+      "type": "object",
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["http://www.w3.org/2009/xmlenc11#aes256-gcm"] },
+        "originalLength": { "type": "integer" }
+      }
+    }
+  }
+}
