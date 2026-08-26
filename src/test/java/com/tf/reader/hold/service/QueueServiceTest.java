@@ -13,6 +13,9 @@ import com.tf.reader.hold.entity.HoldStatus;
 import com.tf.reader.hold.entity.Offer;
 import com.tf.reader.hold.repository.HoldRepository;
 import com.tf.reader.hold.repository.HoldWrites;
+import com.tf.reader.library.api.ChangeLog;
+import com.tf.reader.library.api.ChangeReason;
+import com.tf.reader.library.api.ChangeRecord;
 import com.tf.reader.loan.api.LicenceCommand;
 import com.tf.reader.loan.api.LicenceView;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,6 +50,7 @@ class QueueServiceTest {
     private final EntitlementQuery entitlements = mock(EntitlementQuery.class);
     private final PromotionService promotion = mock(PromotionService.class);
     private final LicenceCommand loans = mock(LicenceCommand.class);
+    private final ChangeLog changeLog = mock(ChangeLog.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-08-17T09:00:00Z"), ZoneOffset.UTC);
     @SuppressWarnings("unchecked")
     private final ZSetOperations<String, String> zsetOps = mock(ZSetOperations.class);
@@ -56,7 +60,7 @@ class QueueServiceTest {
     @BeforeEach
     void setUp() {
         when(redis.opsForZSet()).thenReturn(zsetOps);
-        queue = new QueueService(holds, writes, redis, entitlements, promotion, loans, clock);
+        queue = new QueueService(holds, writes, redis, entitlements, promotion, loans, changeLog, clock);
     }
 
     @Test
@@ -110,6 +114,7 @@ class QueueServiceTest {
 
         verify(zsetOps).remove(anyString(), eq(QueueKeys.member("user_a")));
         verify(promotion).promoteNext("inst_1", "item_1", "lease_1");
+        verify(changeLog).record(ChangeRecord.forHold("user_a", ChangeReason.HOLD_CANCELLED, "item_1", hold.getHoldId(), clock.instant()));
     }
 
     @Test
@@ -145,6 +150,7 @@ class QueueServiceTest {
         assertThat(response.licenceModel()).isEqualTo("ELITE");
         assertThat(response.status()).isEqualTo("ACTIVE");
         assertThat(response.dueAt()).isEqualTo(Instant.parse("2026-08-31T09:00:00Z"));
+        verify(changeLog).record(ChangeRecord.forLoan("user_a", ChangeReason.LOAN_CREATED, "item_1", "loan_1", clock.instant()));
     }
 
     @Test
