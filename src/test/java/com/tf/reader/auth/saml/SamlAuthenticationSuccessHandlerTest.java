@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -15,11 +16,11 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.saml2.provider.service.authentication.Saml2AssertionAuthentication;
 import org.springframework.security.saml2.provider.service.authentication.Saml2ResponseAssertionAccessor;
 
-import com.tf.reader.auth.repository.MockInstitutionRepository;
 import com.tf.reader.auth.repository.MockUserRepository;
 import com.tf.reader.auth.token.JwtProperties;
 import com.tf.reader.auth.token.JwtTokenService;
 import com.tf.reader.auth.transaction.AuthTransactionStore;
+import com.tf.reader.catalogue.api.InstitutionRef;
 
 import tools.jackson.databind.json.JsonMapper;
 
@@ -40,10 +41,15 @@ class SamlAuthenticationSuccessHandlerTest {
 	private static final String EMAIL_CLAIM =
 			"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress";
 
+	private static final Map<String, InstitutionRef> INSTITUTIONS = Map.of(
+			"inst_7f3", new InstitutionRef("inst_7f3", "Imperial College London"),
+			"inst_ucl", new InstitutionRef("inst_ucl", "University College London"));
+
 	private final AuthTransactionStore transactions = new AuthTransactionStore(Clock.systemUTC());
 
 	private final SamlAuthenticationSuccessHandler handler = new SamlAuthenticationSuccessHandler(
-			new SamlAuthenticationService(transactions, new MockInstitutionRepository(),
+			new SamlAuthenticationService(transactions,
+					institutionId -> Optional.ofNullable(INSTITUTIONS.get(institutionId)),
 					new SamlUserMapper(new MockUserRepository()),
 					JwtTokenService.forTest(SECRET, Duration.ofHours(1), Clock.systemUTC()),
 					Clock.systemUTC()),
@@ -51,7 +57,7 @@ class SamlAuthenticationSuccessHandlerTest {
 
 	@Test
 	void aSuccessfulSignInEndsTheSessionItNeeded() throws Exception {
-		String relayState = transactions.open("inst_imperial").id();
+		String relayState = transactions.open("inst_7f3").id();
 		MockHttpSession session = new MockHttpSession();
 		MockHttpServletRequest request = requestWith(session, relayState);
 		MockHttpServletResponse response = new MockHttpServletResponse();
@@ -83,7 +89,7 @@ class SamlAuthenticationSuccessHandlerTest {
 	@Test
 	void aSignInWithNoSessionAtAllIsNotAnError() throws Exception {
 		// getSession(false) returning null is normal - nothing must blow up on the way out.
-		MockHttpServletRequest request = requestWith(null, transactions.open("inst_dsu").id());
+		MockHttpServletRequest request = requestWith(null, transactions.open("inst_ucl").id());
 		MockHttpServletResponse response = new MockHttpServletResponse();
 
 		handler.onAuthenticationSuccess(request, response, samlAuthentication());

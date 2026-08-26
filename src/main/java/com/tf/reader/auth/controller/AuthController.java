@@ -18,13 +18,13 @@ import org.springframework.web.util.UriComponentsBuilder;
 import com.tf.reader.auth.dto.AuthMeResponse;
 import com.tf.reader.auth.saml.SamlStartRequest;
 import com.tf.reader.auth.saml.SamlStartResponse;
-import com.tf.reader.auth.security.UserSecurityConfig;
 import com.tf.reader.auth.model.CurrentUser;
 import com.tf.reader.auth.model.Institution;
 import com.tf.reader.auth.model.TnfUser;
 import com.tf.reader.auth.model.UserType;
-import com.tf.reader.auth.repository.MockInstitutionRepository;
 import com.tf.reader.auth.security.UserSecurityConfig;
+import com.tf.reader.catalogue.api.InstitutionLookup;
+import com.tf.reader.catalogue.api.InstitutionRef;
 import com.tf.reader.auth.token.IssuedToken;
 import com.tf.reader.auth.token.TokenService;
 import com.tf.reader.auth.transaction.AuthTransaction;
@@ -47,11 +47,11 @@ public class AuthController {
 	static final String REGISTRATION_ID = "tf-reader";
 
 	private final AuthTransactionStore transactions;
-	private final MockInstitutionRepository institutions;
+	private final InstitutionLookup institutions;
 	private final TokenService tokenService;
 	private final Clock clock;
 
-	public AuthController(AuthTransactionStore transactions, MockInstitutionRepository institutions,
+	public AuthController(AuthTransactionStore transactions, InstitutionLookup institutions,
 			TokenService tokenService, Clock clock) {
 		this.transactions = transactions;
 		this.institutions = institutions;
@@ -115,9 +115,10 @@ public class AuthController {
 
 	@PostMapping("/saml/start")
 	public SamlStartResponse samlStart(@Valid @RequestBody SamlStartRequest request) {
-		Institution institution = institutions.find(request.institutionId())
+		InstitutionRef institutionRef = institutions.find(request.institutionId())
 				.orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND,
 						"No institution is registered with id '" + request.institutionId() + "'."));
+		Institution institution = new Institution(institutionRef.institutionId(), institutionRef.name());
 
 		AuthTransaction transaction = transactions.open(institution.institutionId());
 

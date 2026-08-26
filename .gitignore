@@ -121,8 +121,6 @@ docker-compose.override.yml
 mongo-data/
 
 
-.claude/settings.local.json
-
 
 /docs/
 /documents
@@ -153,3 +151,6 @@ master-key*
 
 # temp
 temp/
+
+probe.sh
+dump.rdb

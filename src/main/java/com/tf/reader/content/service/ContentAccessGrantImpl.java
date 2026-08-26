@@ -35,12 +35,13 @@ import java.util.Map;
 /**
  * Mock content grant, until wokay's real object-storage-backed signed URLs and per-book keys land.
  *
- * <p>The content itself is real: four encrypted fixtures under classpath
+ * <p>The content itself is real: five encrypted fixtures under classpath
  * {@code static/mock-content/}) are genuine AES-256-GCM whole-file ciphertext, {@code nonce(12) ||
  * ciphertext || tag(16)}, under {@link #MOCK_BEK}. {@code wrappedBek} is a real RSA-OAEP-256 wrap of
  * that key under THIS request's device public key, so the app's real on-device unwrap+decrypt
  * genuinely works — matching the shape this seam commits to (see {@code shared.md}'s two-interface
- * seam), not a placeholder string a real client could never open.
+ * seam), not a placeholder string a real client could never open. One of the five is audio — see
+ * {@link #AUDIO_ENCRYPTED_SMALL_FIXTURE}'s comment for why that diverges from {@code shared.md}.
  *
  * <p>Per-itemId routing: the app's dev fixture IDs (dev-sample-*, dev-fixture-*) map to specific
  * encrypted files so each book opens a different title. Unrecognised IDs fall back to format-based
@@ -62,9 +63,19 @@ class ContentAccessGrantImpl implements ContentAccessGrant {
     private static final byte[] MOCK_BEK =
             Base64.getDecoder().decode("hvVWs7CKbTSCYXSFQmUtOIOLYe7cjeZgilJ16YpKdB0=");
 
-    // Fixture classpath locations — four files, two sizes (small dev stand-ins + big measurement books).
+    // Fixture classpath locations — two sizes (small dev stand-ins + big measurement books),
+    // three formats. `shared.md` says audio is never encrypted, in any tier (whole-file encryption
+    // cannot seek). OVERRIDDEN for dev-sample-audio-encrypted by team1/t4targaryen (2026-08-25):
+    // their client's decrypt is already whole-file/RAM-bound for every format (the same
+    // MAX_DECRYPTED_BYTES cap EPUB/PDF hit), so treating audio as "just another encrypted format"
+    // costs them nothing they weren't already paying, below that cap. It does NOT restore seeking
+    // during a from-scratch decrypt of something long — this fixture stays small on purpose so
+    // that never comes up. AUDIO_SMALL_FIXTURE (unencrypted) is untouched; this is a second,
+    // separate fixture, not a change to the first.
     private static final String EPUB_SMALL_FIXTURE = "static/mock-content/sample-small.epub.enc";
     private static final String PDF_SMALL_FIXTURE  = "static/mock-content/sample-small.pdf.enc";
+    private static final String AUDIO_SMALL_FIXTURE = "static/mock-content/sample-small.wav";
+    private static final String AUDIO_ENCRYPTED_SMALL_FIXTURE = "static/mock-content/sample-small.wav.enc";
     private static final String EPUB_BIG_FIXTURE   = "static/mock-content/sample.epub.enc";
     private static final String PDF_BIG_FIXTURE    = "static/mock-content/sample.pdf.enc";
 
@@ -75,6 +86,8 @@ class ContentAccessGrantImpl implements ContentAccessGrant {
     private static final Map<String, String> ITEM_FIXTURE_MAP = Map.of(
             "dev-sample-epub", EPUB_SMALL_FIXTURE,
             "dev-sample-pdf",  PDF_SMALL_FIXTURE,
+            "dev-sample-audio", AUDIO_SMALL_FIXTURE,
+            "dev-sample-audio-encrypted", AUDIO_ENCRYPTED_SMALL_FIXTURE,
             "dev-fixture-epub", EPUB_BIG_FIXTURE,
             "dev-fixture-pdf",  PDF_BIG_FIXTURE
     );
@@ -82,6 +95,8 @@ class ContentAccessGrantImpl implements ContentAccessGrant {
     private final String baseUrl;
     private final Fixture epubSmallFixture;
     private final Fixture pdfSmallFixture;
+    private final Fixture audioSmallFixture;
+    private final Fixture audioEncryptedSmallFixture;
     private final Fixture epubBigFixture;
     private final Fixture pdfBigFixture;
 
@@ -89,6 +104,8 @@ class ContentAccessGrantImpl implements ContentAccessGrant {
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.epubSmallFixture = loadFixture(EPUB_SMALL_FIXTURE);
         this.pdfSmallFixture = loadFixture(PDF_SMALL_FIXTURE);
+        this.audioSmallFixture = loadFixture(AUDIO_SMALL_FIXTURE);
+        this.audioEncryptedSmallFixture = loadFixture(AUDIO_ENCRYPTED_SMALL_FIXTURE);
         this.epubBigFixture = loadFixture(EPUB_BIG_FIXTURE);
         this.pdfBigFixture = loadFixture(PDF_BIG_FIXTURE);
     }
@@ -105,29 +122,37 @@ class ContentAccessGrantImpl implements ContentAccessGrant {
         Instant expiresAt = Instant.now().plus(URL_TTL);
         boolean isAudio = request.format() == Format.AUDIO;
         Fixture fixture = resolveFixture(request.itemId(), request.format());
+        // Encryption now follows the RESOLVED FIXTURE, not the format — see AUDIO_ENCRYPTED_SMALL_
+        // FIXTURE's comment above. dev-sample-audio still resolves to the unencrypted fixture and
+        // is completely unaffected; only dev-sample-audio-encrypted takes this branch.
+        boolean isEncrypted = fixture.path().endsWith(".enc");
 
+        // Unencrypted (open access, or the audio override above): cipherLength is null (no
+        // ciphertext), originalLength is the file size. Encrypted: file IS the ciphertext
+        // (nonce || ciphertext || tag), so cipherLength is the file size and originalLength
+        // subtracts the 28-byte overhead.
         SignedUrl content = new SignedUrl(
                 baseUrl + "/" + fixture.path(),
                 expiresAt,
-                fixture.cipherLength(),
-                fixture.cipherLength() - CIPHER_OVERHEAD_BYTES,
+                isEncrypted ? fixture.cipherLength() : null,
+                isEncrypted ? fixture.cipherLength() - CIPHER_OVERHEAD_BYTES : fixture.cipherLength(),
                 mimeTypeFor(request.format())
         );
 
+        // Audio is never indexable regardless of encryption — this stays keyed on format, not on
+        // isEncrypted.
         IndexUrl index = (request.wantSearchIndex() && !isAudio)
                 ? new IndexUrl(content.url(), true, TERM_COUNT)
                 : null;
 
-        // Audio carries no encryption in any tier (whole-file encryption cannot seek) — see
-        // shared.md. Every other format is wrapped for real against the caller's own key.
-        Encryption encryption = isAudio ? null : new Encryption(
+        Encryption encryption = isEncrypted ? new Encryption(
                 "AES-256-GCM",
                 "nonce(12) || ciphertext || tag(16)",
                 wrapBekForDevice(request.devicePublicKey()),
                 "RSA-OAEP-256",
                 KEY_ID,
                 fingerprintOf(request.devicePublicKey())
-        );
+        ) : null;
 
         return new ContentGrant(content, index, encryption);
     }
@@ -142,10 +167,16 @@ class ContentAccessGrantImpl implements ContentAccessGrant {
         if (classpathLocation != null) {
             if (classpathLocation.equals(EPUB_SMALL_FIXTURE)) return epubSmallFixture;
             if (classpathLocation.equals(PDF_SMALL_FIXTURE)) return pdfSmallFixture;
+            if (classpathLocation.equals(AUDIO_SMALL_FIXTURE)) return audioSmallFixture;
+            if (classpathLocation.equals(AUDIO_ENCRYPTED_SMALL_FIXTURE)) return audioEncryptedSmallFixture;
             if (classpathLocation.equals(EPUB_BIG_FIXTURE)) return epubBigFixture;
             if (classpathLocation.equals(PDF_BIG_FIXTURE)) return pdfBigFixture;
         }
-        return format == Format.PDF ? pdfBigFixture : epubBigFixture;
+        return switch (format) {
+            case PDF -> pdfBigFixture;
+            case AUDIO -> audioSmallFixture;
+            case EPUB -> epubBigFixture;
+        };
     }
 
     // The transformation NAME "OAEPWithSHA-256AndMGF1Padding" is misleading: without an explicit
