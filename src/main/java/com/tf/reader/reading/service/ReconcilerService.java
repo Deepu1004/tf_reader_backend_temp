@@ -51,6 +51,12 @@ public class ReconcilerService {
 				.computeIfAbsent(new ItemScope(offer.scope(), offer.itemId()), k -> new ArrayList<>())
 				.add(new LeaseSeed(offer.leaseToken(), offer.expiresAt())));
 
+		// An item with zero live loans or offers still needs a visit: that is exactly the
+		// state a fully-lapsed, never-released lease leaves behind, and only rebuild() with
+		// an empty seed list purges it.
+		lease.knownItems().forEach(known -> seedsByItem
+				.computeIfAbsent(new ItemScope(known.scope(), known.itemId()), k -> new ArrayList<>()));
+
 		seedsByItem.forEach((item, seeds) -> lease.rebuild(item.scope(), item.itemId(), seeds, now));
 	}
 

@@ -16,7 +16,13 @@ public record OpdsLinkProperties(
         List<IndirectAcquisition> indirectAcquisition,
         Copies copies,
         EncryptedInfo encrypted,
-        boolean hasSearchIndex,
-        boolean canPersist,
-        Long fileSize) {
+        Boolean hasSearchIndex,
+        Boolean canPersist,
+        Long fileSize,
+        OpdsAvailability availability) {
+
+    // A subscribe link on a public discovery route: no file to describe, just where to get one.
+    public OpdsLinkProperties(AccessTier licenceModel, OpdsAvailability availability) {
+        this(licenceModel, null, null, null, null, null, null, availability);
+    }
 }

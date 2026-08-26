@@ -3,6 +3,7 @@ package com.tf.reader.catalogue.opds.service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
@@ -43,6 +44,20 @@ class OpdsEntitlementFilter {
             }
         }
         return result;
+    }
+
+    // Single-item version of mapEntitled, for the publication-detail endpoint - unknown,
+    // archived and not-entitled all end up here as an empty Optional, so the caller can turn
+    // all three into the same 404 without telling them apart.
+    Optional<OpdsPublication> mapIfEntitled(CatalogueItem item, String institutionId, SubjectRef subject) {
+        EntitlementDecision decision = entitlementQuery.check(subject, item.getId());
+        if (!decision.entitled()) {
+            return Optional.empty();
+        }
+        Map<String, Publisher> publishersById = publisherRepository.findById(item.getPublisherId())
+                .map(publisher -> Map.of(publisher.getId(), publisher))
+                .orElseGet(Map::of);
+        return Optional.of(publicationMapper.toPublication(item, decision, institutionId, publishersById));
     }
 
     // Same entitlement pass as mapEntitled, without the publisher lookup or the mapping -

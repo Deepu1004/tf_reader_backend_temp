@@ -68,7 +68,10 @@ class AuthorizationCoverageTest {
 			// Public institution discovery, so a reader can choose where to sign in before they
 			// hold a token - see shared.md.
 			"GET /api/v1/institutions",
-			"GET /api/v1/institutions/{institutionId}");
+			"GET /api/v1/institutions/{institutionId}",
+			"GET /opds/v1/public/catalogue",
+			"GET /opds/v1/public/search",
+			"GET /opds/v1/public/publications/{itemId}");
 
 	/** Only our own controllers. Spring's {@code /error} forward target is not ours to protect. */
 	private static final String OUR_PACKAGE = "com.tf.reader";
