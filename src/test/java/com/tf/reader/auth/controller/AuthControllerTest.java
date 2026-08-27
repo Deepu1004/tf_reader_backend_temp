@@ -1,5 +1,7 @@
 package com.tf.reader.auth.controller;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -9,6 +11,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -20,9 +23,15 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.tf.reader.auth.token.JwtProperties;
+import com.tf.reader.auth.dto.TokenResponse;
+import com.tf.reader.auth.entity.ReaderSession;
+import com.tf.reader.auth.model.UserType;
+import com.tf.reader.auth.service.ReaderSessionService;
+import com.tf.reader.auth.service.ReaderSessionService.IssuedRefreshToken;
+import com.tf.reader.auth.token.AuthorizationCodeStore;
 import com.tf.reader.auth.token.JwtTokenService;
 import com.tf.reader.auth.token.TokenService;
 import com.tf.reader.auth.transaction.AuthTransactionStore;
@@ -50,6 +59,14 @@ class AuthControllerTest {
 	@Autowired
 	private MockMvc mockMvc;
 
+	// The refresh/exchange endpoints live on this controller too, but neither is exercised by
+	// this slice's tests - the beans only need to exist for the controller to be constructed.
+	@MockitoBean
+	private ReaderSessionService readerSessions;
+
+	@MockitoBean
+	private AuthorizationCodeStore authorizationCodes;
+
 	@TestConfiguration
 	static class FixedClockConfig {
 
@@ -59,7 +76,7 @@ class AuthControllerTest {
 		}
 
 		/**
-		 * The controller now also issues a token, for {@code /auth/me}. This slice covers
+		 * The controller now also issues a token, for {@code /auth/refresh}. This slice covers
 		 * {@code /saml/start}, which does not mint one - but the bean still has to exist for the
 		 * controller to be constructed.
 		 */
@@ -82,10 +99,8 @@ class AuthControllerTest {
 	@Test
 	void startsASamlTransactionForASeededInstitution() throws Exception {
 		mockMvc.perform(post("/api/v1/auth/saml/start")
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("""
-								{ "institutionId": "inst_7f3", "idpHint": "imperial-sso" }
-								"""))
+						.param("institutionId", "inst_7f3")
+						.param("idpHint", "imperial-sso"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.authTxnId").value(org.hamcrest.Matchers.startsWith("authTxn_")))
 				.andExpect(jsonPath("$.institution.institutionId").value("inst_7f3"))
@@ -99,9 +114,7 @@ class AuthControllerTest {
 		// Every institution must produce the same registrationId. A per-institution
 		// registration id appearing here is the architecture regressing.
 		for (String institutionId : new String[] { "inst_7f3", "inst_ucl", "inst_leeds" }) {
-			mockMvc.perform(post("/api/v1/auth/saml/start")
-							.contentType(MediaType.APPLICATION_JSON)
-							.content("{ \"institutionId\": \"" + institutionId + "\" }"))
+			mockMvc.perform(post("/api/v1/auth/saml/start").param("institutionId", institutionId))
 					.andExpect(status().isOk())
 					.andExpect(jsonPath("$.authorizationUrl")
 							.value(org.hamcrest.Matchers.startsWith(
@@ -114,11 +127,7 @@ class AuthControllerTest {
 		// This endpoint only starts a SAML flow; nobody is authenticated yet. The token is minted
 		// at the ACS, once an assertion has been validated - never here, where the only input is
 		// an institution id anyone could type.
-		mockMvc.perform(post("/api/v1/auth/saml/start")
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("""
-								{ "institutionId": "inst_7f3" }
-								"""))
+		mockMvc.perform(post("/api/v1/auth/saml/start").param("institutionId", "inst_7f3"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.token").doesNotExist())
 				.andExpect(jsonPath("$.accessToken").doesNotExist())
@@ -142,11 +151,7 @@ class AuthControllerTest {
 
 	@Test
 	void refusesAnUnknownInstitution() throws Exception {
-		mockMvc.perform(post("/api/v1/auth/saml/start")
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("""
-								{ "institutionId": "inst_nowhere" }
-								"""))
+		mockMvc.perform(post("/api/v1/auth/saml/start").param("institutionId", "inst_nowhere"))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("NOT_FOUND"))
 				.andExpect(jsonPath("$.traceId").isNotEmpty());
@@ -154,11 +159,7 @@ class AuthControllerTest {
 
 	@Test
 	void refusesAMissingInstitutionId() throws Exception {
-		mockMvc.perform(post("/api/v1/auth/saml/start")
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("""
-								{ "idpHint": "imperial-sso" }
-								"""))
+		mockMvc.perform(post("/api/v1/auth/saml/start").param("idpHint", "imperial-sso"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
 				.andExpect(jsonPath("$.message").value("institutionId is required"));
@@ -166,19 +167,67 @@ class AuthControllerTest {
 
 	@Test
 	void refusesABlankInstitutionId() throws Exception {
-		mockMvc.perform(post("/api/v1/auth/saml/start")
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("""
-								{ "institutionId": "   " }
-								"""))
+		mockMvc.perform(post("/api/v1/auth/saml/start").param("institutionId", "   "))
 				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+				.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+				.andExpect(jsonPath("$.message").value("institutionId is required"));
 	}
 
 	@Test
-	void refusesAnAbsentBody() throws Exception {
-		mockMvc.perform(post("/api/v1/auth/saml/start").contentType(MediaType.APPLICATION_JSON))
-				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+	void exchangesACodeForTheTokenPairItWasIssuedFor() throws Exception {
+		when(authorizationCodes.consume("good-code"))
+				.thenReturn(Optional.of(new TokenResponse("access-abc", "refresh-xyz", 900)));
+
+		mockMvc.perform(post("/api/v1/auth/token")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{ \"code\": \"good-code\" }"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.accessToken").value("access-abc"))
+				.andExpect(jsonPath("$.refreshToken").value("refresh-xyz"))
+				.andExpect(jsonPath("$.expiresIn").value(900));
+	}
+
+	@Test
+	void refusesAnUnknownOrAlreadyUsedCode() throws Exception {
+		when(authorizationCodes.consume("stale-code")).thenReturn(Optional.empty());
+
+		mockMvc.perform(post("/api/v1/auth/token")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{ \"code\": \"stale-code\" }"))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.code").value("TOKEN_INVALID"));
+	}
+
+	@Test
+	void refreshRotatesTheSessionAndMintsAFreshAccessToken() throws Exception {
+		ReaderSession claimed = new ReaderSession();
+		claimed.setUserId("usr_6712ab");
+		claimed.setType(UserType.INSTITUTION);
+		claimed.setInstitutionId("inst_7f3");
+		claimed.setRoles(List.of("MEMBER"));
+		claimed.setCollections(List.of("col_medicine"));
+
+		when(readerSessions.revokeForExchange("good-refresh")).thenReturn(Optional.of(claimed));
+		when(readerSessions.createSession(any()))
+				.thenReturn(new IssuedRefreshToken("rotated-refresh", claimed));
+
+		mockMvc.perform(post("/api/v1/auth/refresh")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{ \"refreshToken\": \"good-refresh\" }"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.accessToken").isNotEmpty())
+				.andExpect(jsonPath("$.refreshToken").value("rotated-refresh"))
+				.andExpect(jsonPath("$.expiresIn").value(3600));
+	}
+
+	@Test
+	void refusesAnUnknownOrExpiredRefreshToken() throws Exception {
+		when(readerSessions.revokeForExchange("stale-refresh")).thenReturn(Optional.empty());
+
+		mockMvc.perform(post("/api/v1/auth/refresh")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{ \"refreshToken\": \"stale-refresh\" }"))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.code").value("TOKEN_EXPIRED"));
 	}
 }

@@ -17,7 +17,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContext;
@@ -112,8 +111,7 @@ class StatelessApiTest {
 	@Test
 	void theOpenSignInRouteCreatesNoSessionEither() throws Exception {
 		MvcResult result = mockMvc.perform(post("/api/v1/auth/saml/start")
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"institutionId\":\"inst_7f3\"}"))
+						.param("institutionId", "inst_7f3"))
 				.andExpect(status().isOk())
 				.andReturn();
 

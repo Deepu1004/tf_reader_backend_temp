@@ -160,9 +160,7 @@ class EndToEndAuthFlowTest {
 
 		@Test
 		void case2_unknownInstitutionCannotEvenStart() throws Exception {
-			mockMvc.perform(post("/api/v1/auth/saml/start")
-							.contentType(MediaType.APPLICATION_JSON)
-							.content("{\"institutionId\":\"inst_nowhere\"}"))
+			mockMvc.perform(post("/api/v1/auth/saml/start").param("institutionId", "inst_nowhere"))
 					.andExpect(status().isNotFound())
 					.andExpect(jsonPath("$.code").value("NOT_FOUND"));
 		}
