@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -18,9 +19,11 @@ import com.tf.reader.auth.model.UserType;
 import com.tf.reader.catalogue.entity.Institution;
 import com.tf.reader.catalogue.opds.dto.OpdsFeedMetadata;
 import com.tf.reader.catalogue.opds.dto.OpdsNavigationFeed;
+import com.tf.reader.catalogue.opds.dto.OpdsPublicationFeed;
 import com.tf.reader.catalogue.opds.service.OpdsFeedService;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
+import com.tf.reader.common.page.PageQuery;
 
 // Plain unit test calling the controller directly, same pattern as HoldControllerTest - the
 // mismatch check and the ETag short-circuit are this class's own logic, not the security
@@ -82,5 +85,91 @@ class OpdsCatalogueControllerTest {
 				.isInstanceOf(ApiException.class)
 				.satisfies(ex -> assertThat(((ApiException) ex).getCode())
 						.isEqualTo(ErrorCode.FORBIDDEN_INSTITUTION_MISMATCH));
+	}
+
+	@Test
+	void searchRejectsATokenForADifferentInstitution() {
+		CurrentUser otherInstitution = new CurrentUser("user_2", UserType.INSTITUTION, "inst_2", List.of(), List.of());
+
+		assertThatThrownBy(() -> controller.search("inst_1", otherInstitution, "robots",
+				new PageQuery(0, 20), null, null))
+				.isInstanceOf(ApiException.class)
+				.satisfies(ex -> assertThat(((ApiException) ex).getCode())
+						.isEqualTo(ErrorCode.FORBIDDEN_INSTITUTION_MISMATCH));
+	}
+
+	@Test
+	void searchReturnsWhateverTheServiceBuilds() {
+		Institution institution = institution(3);
+		when(feedService.loadInstitution("inst_1")).thenReturn(institution);
+		OpdsPublicationFeed feed = new OpdsPublicationFeed(
+				new OpdsFeedMetadata("Search: robots", 0, 20, 0, null), List.of(), null, List.of());
+		when(feedService.searchFeed(eq(institution), any(), eq("robots"), any(), eq(null), eq(null)))
+				.thenReturn(feed);
+
+		ResponseEntity<OpdsPublicationFeed> response = controller.search("inst_1", member, "robots",
+				new PageQuery(0, 20), null, null);
+
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+		assertThat(response.getBody()).isSameAs(feed);
+	}
+
+	@Test
+	void searchRejectsAnEmptyQueryInsteadOfMatchingEveryBook() {
+		assertThatThrownBy(() -> controller.search("inst_1", member, "", new PageQuery(0, 20), null, null))
+				.isInstanceOf(ApiException.class)
+				.satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+	}
+
+	@Test
+	void searchRejectsAWhitespaceOnlyQuery() {
+		assertThatThrownBy(() -> controller.search("inst_1", member, "   ", new PageQuery(0, 20), null, null))
+				.isInstanceOf(ApiException.class)
+				.satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+	}
+
+	// String.trim() strips any character <= U+0020, which includes a bare NUL byte - so this
+	// takes the same path as "" and "   " rather than needing its own special case.
+	@Test
+	void searchRejectsANullByteTheSameAsABlankQuery() {
+		assertThatThrownBy(() -> controller.search("inst_1", member, "\0", new PageQuery(0, 20), null, null))
+				.isInstanceOf(ApiException.class)
+				.satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+	}
+
+	@Test
+	void searchTrimsLeadingAndTrailingWhitespaceBeforeQueryingTheService() {
+		Institution institution = institution(3);
+		when(feedService.loadInstitution("inst_1")).thenReturn(institution);
+		OpdsPublicationFeed feed = new OpdsPublicationFeed(
+				new OpdsFeedMetadata("Search: robots", 0, 20, 0, null), List.of(), null, List.of());
+		when(feedService.searchFeed(eq(institution), any(), eq("robots"), any(), eq(null), eq(null)))
+				.thenReturn(feed);
+
+		controller.search("inst_1", member, "  robots  ", new PageQuery(0, 20), null, null);
+
+		verify(feedService).searchFeed(eq(institution), any(), eq("robots"), any(), eq(null), eq(null));
+	}
+
+	@Test
+	void publicationDetailRejectsATokenForADifferentInstitution() {
+		CurrentUser otherInstitution = new CurrentUser("user_2", UserType.INSTITUTION, "inst_2", List.of(), List.of());
+
+		assertThatThrownBy(() -> controller.publicationDetail("inst_1", "item_1", otherInstitution))
+				.isInstanceOf(ApiException.class)
+				.satisfies(ex -> assertThat(((ApiException) ex).getCode())
+						.isEqualTo(ErrorCode.FORBIDDEN_INSTITUTION_MISMATCH));
+	}
+
+	@Test
+	void publicationDetailPropagatesNotFoundFromTheService() {
+		Institution institution = institution(3);
+		when(feedService.loadInstitution("inst_1")).thenReturn(institution);
+		when(feedService.publicationDocument(eq(institution), eq("item_1"), any()))
+				.thenThrow(new ApiException(ErrorCode.NOT_FOUND, "No such publication"));
+
+		assertThatThrownBy(() -> controller.publicationDetail("inst_1", "item_1", member))
+				.isInstanceOf(ApiException.class)
+				.satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.NOT_FOUND));
 	}
 }

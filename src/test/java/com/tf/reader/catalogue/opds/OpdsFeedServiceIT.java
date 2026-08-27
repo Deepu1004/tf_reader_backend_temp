@@ -8,6 +8,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
@@ -27,6 +29,7 @@ import com.tf.reader.catalogue.entity.Publisher;
 import com.tf.reader.catalogue.entity.ScopeType;
 import com.tf.reader.catalogue.entity.Shelf;
 import com.tf.reader.catalogue.opds.dto.OpdsNavigationFeed;
+import com.tf.reader.catalogue.opds.dto.OpdsPublicationDocument;
 import com.tf.reader.catalogue.opds.dto.OpdsPublicationFeed;
 import com.tf.reader.catalogue.opds.service.OpdsFeedService;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
@@ -315,5 +318,191 @@ class OpdsFeedServiceIT extends ContainerisedInfrastructure {
 				.orElseThrow(() -> new AssertionError("expected a next link since more than one page exists"))
 				.href();
 		assertThat(next).contains("page=1", "size=1", "sort=title.asc", "contentType=EPUB", "accessTier=OPEN_ACCESS");
+	}
+
+	// ----------------------------------------------------------------------------------- search
+
+	@Test
+	void searchFindsAnEntitledBookByTitleAndHidesAnUnentitledOne() {
+		Institution institution = newInstitution("OPDS-SEARCH-TITLE");
+		Publisher publisher = newPublisher("OPDS-SEARCH-TITLE-PUB");
+		newItem(publisher.getId(), "Rights for Robots", AccessTier.OPEN_ACCESS);
+		newItem(publisher.getId(), "Locked Robots Book", AccessTier.SUBSCRIPTION);
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, subjectFor(institution), "robots",
+				new PageQuery(0, 20), null, null);
+
+		assertThat(feed.publications()).extracting(p -> p.metadata().title())
+				.containsExactly("Rights for Robots");
+	}
+
+	@Test
+	void searchMatchesAHyphenatedIsbnAgainstTheStoredUnhyphenatedOne() {
+		Institution institution = newInstitution("OPDS-SEARCH-ISBN");
+		Publisher publisher = newPublisher("OPDS-SEARCH-ISBN-PUB");
+		CatalogueItem item = newItem(publisher.getId(), "Rights for Robots", AccessTier.OPEN_ACCESS);
+		item.setIsbn("9780367211745");
+		catalogueItemRepository.save(item);
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, subjectFor(institution),
+				"978-0-367-21174-5", new PageQuery(0, 20), null, null);
+
+		assertThat(feed.publications()).extracting(p -> p.metadata().title())
+				.containsExactly("Rights for Robots");
+	}
+
+	// A user-supplied regex metacharacter must never reach Mongo's $regex unescaped - a naive
+	// pattern would either throw (unbalanced "(") or, worse, silently widen the match (unescaped
+	// ".*" becomes a real wildcard). Confirms these are searched for literally.
+	@Test
+	void searchTreatsRegexMetacharactersAsLiteralTextNotAsAPattern() {
+		Institution institution = newInstitution("OPDS-SEARCH-REGEX");
+		Publisher publisher = newPublisher("OPDS-SEARCH-REGEX-PUB");
+		newItem(publisher.getId(), "Robots (2020 edition)", AccessTier.OPEN_ACCESS);
+		newItem(publisher.getId(), "Robots without parentheses", AccessTier.OPEN_ACCESS);
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, subjectFor(institution),
+				"Robots (2020 edition)", new PageQuery(0, 20), null, null);
+
+		assertThat(feed.publications()).extracting(p -> p.metadata().title())
+				.containsExactly("Robots (2020 edition)");
+	}
+
+	@Test
+	void searchWithOnlyRegexMetacharactersDoesNotThrowAndDoesNotMatchEverything() {
+		Institution institution = newInstitution("OPDS-SEARCH-SYMBOLS");
+		Publisher publisher = newPublisher("OPDS-SEARCH-SYMBOLS-PUB");
+		newItem(publisher.getId(), "An Ordinary Title", AccessTier.OPEN_ACCESS);
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, subjectFor(institution),
+				"*.?[]{}", new PageQuery(0, 20), null, null);
+
+		assertThat(feed.publications()).isNull();
+		assertThat(feed.navigation()).hasSize(1);
+	}
+
+	// Not SQL, so these are not an injection vector, but the search must still run to
+	// completion and simply find nothing rather than erroring on the punctuation.
+	@Test
+	void searchWithSqlLikeInputFindsNothingRatherThanErroring() {
+		Institution institution = newInstitution("OPDS-SEARCH-SQLI");
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, subjectFor(institution),
+				"'; DROP TABLE users; --", new PageQuery(0, 20), null, null);
+
+		assertThat(feed.publications()).isNull();
+		assertThat(feed.navigation()).hasSize(1);
+	}
+
+	@Test
+	void searchWithAVeryLongQueryDoesNotThrow() {
+		Institution institution = newInstitution("OPDS-SEARCH-LONG");
+		String longQuery = "a".repeat(3000);
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, subjectFor(institution), longQuery,
+				new PageQuery(0, 20), null, null);
+
+		assertThat(feed.publications()).isNull();
+		assertThat(feed.navigation()).hasSize(1);
+	}
+
+	@Test
+	void searchIsCaseInsensitive() {
+		Institution institution = newInstitution("OPDS-SEARCH-CASE");
+		Publisher publisher = newPublisher("OPDS-SEARCH-CASE-PUB");
+		newItem(publisher.getId(), "Ethereum Explained", AccessTier.OPEN_ACCESS);
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, subjectFor(institution), "ETHEREUM",
+				new PageQuery(0, 20), null, null);
+
+		assertThat(feed.publications()).extracting(p -> p.metadata().title())
+				.containsExactly("Ethereum Explained");
+	}
+
+	// Open access has no institution filter (same as the "all" group - see the comment on
+	// this shared, never-reset test database further up), so this uses a title unique to this
+	// test rather than "Ethereum Explained", which searchIsCaseInsensitive also seeds and would
+	// then double-count.
+	@Test
+	void searchMatchesAPrefixOrSubstringNotJustTheWholeWord() {
+		Institution institution = newInstitution("OPDS-SEARCH-PREFIX");
+		Publisher publisher = newPublisher("OPDS-SEARCH-PREFIX-PUB");
+		newItem(publisher.getId(), "Zynthex Quantum Primer", AccessTier.OPEN_ACCESS);
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, subjectFor(institution), "zynth",
+				new PageQuery(0, 20), null, null);
+
+		assertThat(feed.publications()).extracting(p -> p.metadata().title())
+				.containsExactly("Zynthex Quantum Primer");
+	}
+
+	// The full battery from the edge-case review: every character class a search box can
+	// receive, run against real Mongo. None of these may throw - a search endpoint that 500s
+	// on a stray character or a pasted SQL/HTML/regex payload is worse than one that just
+	// finds nothing. Metacharacter *escaping correctness* itself is InstitutionSearchRegexTest's
+	// job (same escape() method, no Mongo needed there); this only proves the query completes.
+	@ParameterizedTest
+	@ValueSource(strings = {
+			"ethereum blockchain", "12345", "abc123", "block-chain", "block_chain", "test.com", "foo/bar",
+			"foo\\bar", "\"ethereum\"", "user's", "(ethereum)", "[ethereum]", "{ethereum}", "*", "eth*", "?",
+			"%", "eth%", "_", "eth_", "' OR 1=1 --", "'; DROP TABLE users; --", "<script>alert(1)</script>",
+			"é", "ñ", "中文", "தமிழ்", "🔥", "🚀", "ethereum\nblockchain", "ethereum\tblockchain",
+			"aaaaaaaaaaaaaaaa", "!@#$%^&*()"
+	})
+	void searchNeverThrowsForAnyCharacterClass(String query) {
+		Institution institution = newInstitution("OPDS-SEARCH-SWEEP-" + Math.abs(query.hashCode()));
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, subjectFor(institution), query,
+				new PageQuery(0, 20), null, null);
+
+		assertThat(feed).isNotNull();
+	}
+
+	@Test
+	void searchWithNoMatchesReturnsANavigationLinkBackToTheCatalogueNotAnEmptyArray() {
+		Institution institution = newInstitution("OPDS-SEARCH-EMPTY");
+
+		OpdsPublicationFeed feed = feedService.searchFeed(institution, subjectFor(institution),
+				"quantum knitting nonsense", new PageQuery(0, 20), null, null);
+
+		assertThat(feed.publications()).isNull();
+		assertThat(feed.navigation()).hasSize(1);
+		assertThat(feed.metadata().numberOfItems()).isZero();
+	}
+
+	// --------------------------------------------------------------------------- publicationDocument
+
+	@Test
+	void publicationDocumentReturnsTheEntitledBookAsAStandaloneDocument() {
+		Institution institution = newInstitution("OPDS-PUB-OK");
+		Publisher publisher = newPublisher("OPDS-PUB-OK-PUB");
+		CatalogueItem item = newItem(publisher.getId(), "Open Book", AccessTier.OPEN_ACCESS);
+
+		OpdsPublicationDocument document = feedService.publicationDocument(institution, item.getId(),
+				subjectFor(institution));
+
+		assertThat(document.context()).isEqualTo("https://readium.org/webpub-manifest/context.jsonld");
+		assertThat(document.metadata().title()).isEqualTo("Open Book");
+	}
+
+	@Test
+	void publicationDocumentIs404WhenTheItemIsNotEntitled() {
+		Institution institution = newInstitution("OPDS-PUB-LOCKED");
+		Publisher publisher = newPublisher("OPDS-PUB-LOCKED-PUB");
+		CatalogueItem item = newItem(publisher.getId(), "Locked Book", AccessTier.SUBSCRIPTION);
+
+		assertThatThrownBy(() -> feedService.publicationDocument(institution, item.getId(), subjectFor(institution)))
+				.isInstanceOf(ApiException.class)
+				.satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.NOT_FOUND));
+	}
+
+	@Test
+	void publicationDocumentIs404ForAnUnknownItem() {
+		Institution institution = newInstitution("OPDS-PUB-UNKNOWN");
+
+		assertThatThrownBy(() -> feedService.publicationDocument(institution, "does-not-exist",
+				subjectFor(institution)))
+				.isInstanceOf(ApiException.class)
+				.satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.NOT_FOUND));
 	}
 }

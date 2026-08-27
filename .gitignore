@@ -153,3 +153,4 @@ master-key*
 temp/
 
 probe.sh
+dump.rdb

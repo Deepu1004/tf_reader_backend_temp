@@ -27,6 +27,10 @@ public interface CatalogueItemRepository extends MongoRepository<CatalogueItem, 
 
 	List<CatalogueItem> findByAccessTierAndStatus(AccessTier accessTier, ItemStatus status);
 
+	// Backs the anonymous public catalogue: open access only, no institution to scope by.
+	List<CatalogueItem> findByAccessTierAndStatusAndContentState(AccessTier accessTier, ItemStatus status,
+			ContentState contentState, Sort sort);
+
 	Optional<CatalogueItem> findByIsbn(String isbn);
 
 	List<CatalogueItem> findAllBy(TextCriteria criteria);
