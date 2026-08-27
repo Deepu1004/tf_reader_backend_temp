@@ -344,8 +344,13 @@ class OidcEndToEndAuthFlowTest extends MockOidcTestProfile {
 		@Test
 		void bothStartEndpointsReturnTheSameEnvelope() {
 			// The contract requires it: the app routes on the sign-in method and then writes one
-			// flow. Same field names, different authorization url.
-			Map<String, Object> saml = post("/api/v1/auth/saml/start", "{\"institutionId\":\"inst_ucl\"}");
+			// flow. Same field names, different authorization url. SAML now takes institutionId
+			// as a query parameter (the RN integration shape) while OIDC still takes a body -
+			// the two no longer share a request shape, only a response one.
+			@SuppressWarnings("unchecked")
+			Map<String, Object> saml = http.post()
+					.uri(uri("/api/v1/auth/saml/start?institutionId=inst_ucl"))
+					.retrieve().body(Map.class);
 			Map<String, Object> oidc = startSignIn("inst_ucl");
 
 			assertThat(oidc.keySet()).isEqualTo(saml.keySet());

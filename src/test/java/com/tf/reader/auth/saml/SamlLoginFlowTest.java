@@ -102,7 +102,8 @@ class SamlLoginFlowTest {
 	@Test
 	void theAcsRejectsAResponseTheIdpDidNotSign() throws Exception {
 		// The assertion is neither signed by the configured certificate nor well formed, so it
-		// must be refused - and refused as our error shape, not a redirect to a login page.
+		// must be refused - and refused by sending the browser back to the app with an error,
+		// which is the only thing that can act on a refusal reached by IdP redirect.
 		String forged = java.util.Base64.getEncoder().encodeToString(
 				"<samlp:Response xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\"/>"
 						.getBytes(StandardCharsets.UTF_8));
@@ -110,9 +111,9 @@ class SamlLoginFlowTest {
 		mockMvc.perform(post("/login/saml2/sso/tf-reader")
 						.contentType(MediaType.APPLICATION_FORM_URLENCODED)
 						.param("SAMLResponse", forged))
-				.andExpect(status().isUnauthorized())
-				.andExpect(jsonPath("$.code").value("SAML_AUTHENTICATION_FAILED"))
-				.andExpect(jsonPath("$.traceId").isNotEmpty());
+				.andExpect(status().is3xxRedirection())
+				.andExpect(header().string("Location",
+						"tfreader://auth/callback?error=SAML_AUTHENTICATION_FAILED"));
 	}
 
 	@Test
@@ -121,15 +122,14 @@ class SamlLoginFlowTest {
 						.contentType(MediaType.APPLICATION_FORM_URLENCODED)
 						.param("SAMLResponse", "not-even-base64")
 						.param("RelayState", transactions.open("inst_7f3").id()))
-				.andExpect(status().isUnauthorized())
-				.andExpect(jsonPath("$.code").value("SAML_AUTHENTICATION_FAILED"));
+				.andExpect(status().is3xxRedirection())
+				.andExpect(header().string("Location",
+						"tfreader://auth/callback?error=SAML_AUTHENTICATION_FAILED"));
 	}
 
 	@Test
 	void theStartEndpointNeedsNoTokenButEverythingElseDoes() throws Exception {
-		mockMvc.perform(post("/api/v1/auth/saml/start")
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("{ \"institutionId\": \"inst_7f3\" }"))
+		mockMvc.perform(post("/api/v1/auth/saml/start").param("institutionId", "inst_7f3"))
 				.andExpect(status().isOk());
 
 		// Deny by default, and refused as JSON the app can read rather than a redirect to the
