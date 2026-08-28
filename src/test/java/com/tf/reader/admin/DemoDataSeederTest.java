@@ -242,15 +242,11 @@ class DemoDataSeederTest {
     }
 
     @Test
-    @DisplayName("audio is never encrypted, at any tier, except the one deliberate override fixture")
-    void audioIsNeverEncrypted() {
-        // The single most likely wrong assumption on both client teams, so it is data, not prose.
-        //
-        // dev-sample-audio-encrypted is EXCLUDED on purpose: team1/t4targaryen overrode shared.md's
-        // rule 2026-08-25 (see ContentAccessGrantImpl's AUDIO_ENCRYPTED_SMALL_FIXTURE comment) so
-        // their client can exercise whole-file decrypt-into-RAM for audio, same as EPUB/PDF, within
-        // their RAM budget. Every OTHER audio item must still hold the original invariant — this
-        // is a single named carve-out, not a loosening of the rule.
+    @DisplayName("seeded audio assets are loaded exactly as authored: unencrypted, unindexed")
+    void seededAudioAssetsAreUnencryptedAndUnindexed() {
+        // This pins the fixture's own content, not a live business rule - a freshly ingested
+        // SUBSCRIPTION/ELITE audiobook is encrypted like any other locked asset (see TierRules).
+        // No audio asset ever gets a search index, seeded or live, since there is no text to index.
         dataset.catalogueItems().stream()
                 .filter(i -> !"dev-sample-audio-encrypted".equals(i.id()))
                 .flatMap(i -> i.assets().stream())
