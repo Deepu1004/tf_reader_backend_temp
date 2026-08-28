@@ -1426,6 +1426,42 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /api/admin/v1/collections:
+    get:
+      tags: [Admin · collections]
+      operationId: listCollectionsWithEntitlementStatus
+      summary: List collections across every publisher, tagged with entitlement status
+      description: >-
+        The collection counterpart of `GET /api/admin/v1/catalogue-items`. Callable by
+        SUPER_ADMIN, PUBLISHER_ADMIN or INSTITUTION_ADMIN. For an INSTITUTION_ADMIN caller
+        (or a SUPER_ADMIN who passes `institutionId`), each collection carries
+        `entitlementStatus` for that institution, resolved only from that institution's
+        COLLECTION- and PUBLISHER-scoped entitlements - an ITEM-scoped entitlement on one
+        of the collection's books never counts toward the collection's own status. An
+        INSTITUTION_ADMIN always sees their own institution; any `institutionId` they pass
+        is ignored. Distinct from `GET /api/admin/v1/publishers/{publisherId}/collections`,
+        which stays publisher-scoped and has no entitlement awareness.
+      x-stability: DRAFT
+      security: [{ adminToken: [] }]
+      parameters:
+        - { name: publisherId, in: query, schema: { type: string } }
+        - name: institutionId
+          in: query
+          description: >-
+            SUPER_ADMIN only. Views collections as that institution would see them, with
+            `entitlementStatus` resolved against its entitlements. Ignored for any other
+            role.
+          schema: { type: string }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: A page of collections
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectionEntitlementPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
   # ────────────────────────────────────────────────────────────────
   # ADMIN · CATALOGUE ITEMS
   # ────────────────────────────────────────────────────────────────
@@ -3387,6 +3423,43 @@ components:
         name: { type: string, minLength: 1, maxLength: 200 }
         description: { type: string, maxLength: 1000 }
 
+    CollectionEntitlementView:
+      type: object
+      description: >-
+        A collection as GET /api/admin/v1/collections sees it: identity plus, when the
+        caller is viewing as an institution, that institution's entitlementStatus for the
+        collection as a whole. Unlike Collection, this carries no itemCount - the
+        entitlement request screen has no use for it.
+      required: [id, publisherId, code, name]
+      properties:
+        id: { type: string }
+        publisherId: { type: string }
+        code: { type: string }
+        name: { type: string }
+        description: { type: string }
+        entitlementStatus:
+          type: [string, 'null']
+          enum: [none, pending, active, suspended, revoked, null]
+          description: >-
+            Only present when the caller is viewing as an institution (an
+            INSTITUTION_ADMIN, or a SUPER_ADMIN who passed `institutionId`): `none`,
+            `pending`, `active`, `suspended` or `revoked`, resolved from that institution's
+            COLLECTION- and PUBLISHER-scoped entitlements only - an ITEM-scoped entitlement
+            is never considered. Null for any other caller (a PUBLISHER_ADMIN, or a
+            SUPER_ADMIN with no `institutionId`) - not the same as `none`, which means the
+            institution has zero matching COLLECTION or PUBLISHER entitlements for this
+            collection.
+
+    CollectionEntitlementPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/CollectionEntitlementView' }
+
     Asset:
       type: object
       description: |
@@ -3471,13 +3544,14 @@ components:
           description: Touched by every write, including ingest state changes. `IngestStatus` returns it.
         entitlementStatus:
           type: [string, 'null']
-          enum: [none, pending, active, revoked, null]
+          enum: [none, pending, active, suspended, revoked, null]
           description: >-
             Only present when the caller is viewing as an institution (an
             INSTITUTION_ADMIN, or a SUPER_ADMIN who passed `institutionId`): `none`,
-            `pending`, `active` or `revoked`, resolved against that institution's
-            entitlements. Null for any other caller (a PUBLISHER_ADMIN, or a SUPER_ADMIN
-            with no `institutionId`) - not the same as `none`, which means the institution
+            `pending`, `active`, `suspended` or `revoked`, resolved against that
+            institution's entitlements. Null for any other caller (a PUBLISHER_ADMIN, or a
+            SUPER_ADMIN with no `institutionId`) - not the same as `none`, which means the
+            institution
             has zero matching entitlements for this item.
 
     CatalogueItemWrite:

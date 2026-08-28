@@ -81,8 +81,12 @@ public class CatalogueItemAdminService {
 		}
 
 		// An institution admin always sees their own institution's view, never one they pass in.
-		String resolvedInstitutionId = role == AdminRole.INSTITUTION_ADMIN ? adminScope.currentInstitutionScope()
-				: institutionId;
+		// A publisher admin has no institution view at all: institutionId is SUPER_ADMIN only.
+		String resolvedInstitutionId = switch (role) {
+			case INSTITUTION_ADMIN -> adminScope.currentInstitutionScope();
+			case SUPER_ADMIN -> institutionId;
+			case PUBLISHER_ADMIN -> null;
+		};
 
 		CatalogueItemSearchRepository.Results results = searchRepository.search(resolvedPublisherId, collectionId,
 				contentType, accessTier, blankToNull(q), resolvedPage, resolvedSize);
