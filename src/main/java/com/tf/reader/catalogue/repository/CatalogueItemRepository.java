@@ -1,5 +1,6 @@
 package com.tf.reader.catalogue.repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -38,5 +39,11 @@ public interface CatalogueItemRepository extends MongoRepository<CatalogueItem, 
 	long countByPublisherId(String publisherId);
 
 	long countByCollectionIds(String collectionId);
+
+	// Backs IngestProcessor's queue drain: every item waiting for background processing.
+	List<CatalogueItem> findByContentState(ContentState contentState);
+
+	// Backs the ingest watchdog: anything left in one of these states past the timeout.
+	List<CatalogueItem> findByContentStateInAndUpdatedAtBefore(List<ContentState> contentStates, Instant updatedAt);
 
 }

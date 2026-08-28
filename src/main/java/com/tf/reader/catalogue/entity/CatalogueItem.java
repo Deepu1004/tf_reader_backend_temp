@@ -74,7 +74,7 @@ public class CatalogueItem {
 	// Never leave the server; excluded from any future DTO.
 	private String storageKey;
 	private String indexKey;
-	private String wrappedBek;
+	private String masterWrappedBek;
 
 	private Instant createdAt;
 	private Instant updatedAt;
