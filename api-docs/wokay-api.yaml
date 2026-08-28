@@ -2689,7 +2689,7 @@ components:
         encrypted:
           allOf:
             - $ref: '#/components/schemas/EncryptedInfo'
-          description: Absent for open access and for all audio.
+          description: Absent for open access. Present for SUBSCRIPTION/ELITE audio, same as any other locked format.
         hasSearchIndex:
           type: boolean
           description: False for audio, and for any book whose text could not be extracted.
@@ -3100,7 +3100,7 @@ components:
     Encryption:
       type: object
       description: |
-        Null for open access and for all audio.
+        Null for open access. Filled in for locked audio exactly as for a locked PDF/EPUB.
 
         The nonce is **the first twelve bytes of the object**. The content file and the
         index file use the same key but different random nonces.
@@ -3163,7 +3163,7 @@ components:
             - $ref: '#/components/schemas/IndexUrl'
             - type: 'null'
         encryption:
-          description: Null for open access and for all audio. The file is then plaintext.
+          description: Null for open access, where the file is plaintext. Filled in for locked audio like any other locked format.
           oneOf:
             - $ref: '#/components/schemas/Encryption'
             - type: 'null'
@@ -3472,7 +3472,7 @@ components:
         cipherLength: { type: [integer, 'null'], minimum: 1 }
         encrypted:
           type: boolean
-          description: False for every open access title and for all audio, whatever the tier.
+          description: False for every open access title, whatever the format. True for SUBSCRIPTION/ELITE, including audio.
         hasSearchIndex: { type: boolean }
         indexSkipReason:
           type: [string, 'null']

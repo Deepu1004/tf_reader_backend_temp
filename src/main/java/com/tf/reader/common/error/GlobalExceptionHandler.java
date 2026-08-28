@@ -71,6 +71,21 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 		return respond(ErrorCode.VALIDATION_FAILED, message, request, ex);
 	}
 
+	@ExceptionHandler(PayloadTooLargeException.class)
+	public ResponseEntity<ErrorResponse> handlePayloadTooLarge(PayloadTooLargeException ex,
+			HttpServletRequest request) {
+		return respond(HttpStatus.CONTENT_TOO_LARGE.value(), ErrorCode.VALIDATION_FAILED, ex.getMessage(), request,
+				ex);
+	}
+
+	// MaxUploadSizeExceededException (Spring's own request-size ceiling, belt-and-braces behind
+	// IngestService's own tier-aware 25MB/100MB checks) is NOT handled with an explicit
+	// @ExceptionHandler here: ResponseEntityExceptionHandler's base handleException(...) already
+	// claims that exact type, and a second declaration for the same type is an "ambiguous
+	// @ExceptionHandler" startup failure, not a silent override. It still ends up VALIDATION_FAILED
+	// with its real status preserved, via handleExceptionInternal's statusCode.is4xxClientError()
+	// fallback below.
+
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ErrorResponse> handleUnexpected(Exception ex, HttpServletRequest request) {
 		return respond(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred.", request, ex);
@@ -108,11 +123,21 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
 	private ResponseEntity<ErrorResponse> respond(ErrorCode code, String message, HttpServletRequest request,
 			Exception ex) {
+		return respond(code.getStatus().value(), code, message, request, ex);
+	}
+
+	/**
+	 * Explicit-status overload, for the cases where the status the client sees must differ from
+	 * the code's own {@link ErrorCode#getStatus()} - a 413 or a 415 still carries
+	 * {@code VALIDATION_FAILED}. Mirrors {@link ErrorResponse}'s own explicit-status overload.
+	 */
+	private ResponseEntity<ErrorResponse> respond(int status, ErrorCode code, String message,
+			HttpServletRequest request, Exception ex) {
 
 		String traceId = newTraceId();
 		String path = request.getRequestURI();
-		logFailure(traceId, code.getStatus().value(), code, path, ex);
-		return ResponseEntity.status(code.getStatus()).body(ErrorResponse.of(code, message, path, traceId));
+		logFailure(traceId, status, code, path, ex);
+		return ResponseEntity.status(status).body(ErrorResponse.of(status, code, message, path, traceId));
 	}
 
 

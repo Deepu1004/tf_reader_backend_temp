@@ -4,7 +4,7 @@ public enum ContentState {
 
 	NONE,
 	QUEUED,
-	ENCRYPTING,
+	PROCESSING,
 	READY,
 	FAILED
 
