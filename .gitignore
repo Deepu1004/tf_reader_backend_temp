@@ -157,3 +157,6 @@ temp/
 
 probe.sh
 dump.rdb
+
+# logs
+logs/
