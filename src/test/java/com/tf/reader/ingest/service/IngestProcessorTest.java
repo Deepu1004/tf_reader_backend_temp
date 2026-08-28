@@ -3,6 +3,7 @@ package com.tf.reader.ingest.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -157,6 +158,34 @@ class IngestProcessorTest {
 		processor.processQueued();
 
 		assertThat(item.getAssets().get(0).getMimeType()).isEqualTo("audio/mp4");
+	}
+
+	@Test
+	void theStagedUploadIsDeletedOnceTheItemReachesReady() {
+		CatalogueItem item = queued("item_clean", AccessTier.OPEN_ACCESS, ContentType.PDF);
+		when(items.findByContentState(ContentState.QUEUED)).thenReturn(List.of(item));
+		when(bookStorage.load("items/item_clean/upload")).thenReturn("plain".getBytes());
+		when(searchIndexBuilder.build(any(), any(), any(), any())).thenReturn(Optional.empty());
+		when(items.save(any())).thenAnswer(i -> i.getArgument(0));
+
+		processor.processQueued();
+
+		verify(bookStorage).delete("items/item_clean/upload");
+	}
+
+	@Test
+	void aStagingDeleteFailureDoesNotUndoAnAlreadySuccessfulIngest() {
+		CatalogueItem item = queued("item_clean2", AccessTier.OPEN_ACCESS, ContentType.PDF);
+		when(items.findByContentState(ContentState.QUEUED)).thenReturn(List.of(item));
+		when(bookStorage.load("items/item_clean2/upload")).thenReturn("plain".getBytes());
+		when(searchIndexBuilder.build(any(), any(), any(), any())).thenReturn(Optional.empty());
+		when(items.save(any())).thenAnswer(i -> i.getArgument(0));
+		doThrow(new RuntimeException("bucket hiccup")).when(bookStorage).delete("items/item_clean2/upload");
+
+		processor.processQueued();
+
+		assertThat(item.getContentState()).isEqualTo(ContentState.READY);
+		assertThat(item.getContentError()).isNull();
 	}
 
 	@Test

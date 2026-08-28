@@ -115,6 +115,22 @@ public class IngestProcessor {
 		item.setUpdatedAt(clock.instant());
 		catalogueItemRepository.save(item);
 		catalogueVersionBumper.bump(CatalogueVersionBumper.Scope.ITEM, itemId);
+
+		deleteStagingBestEffort(stagingKey, itemId);
+	}
+
+	/**
+	 * The staged upload has already been consumed into the final content/index objects by this
+	 * point - nothing reads it again. Deleted best-effort, after the item is durably READY: a
+	 * cleanup failure here must not undo an ingest that already succeeded.
+	 */
+	private void deleteStagingBestEffort(String stagingKey, String itemId) {
+		try {
+			bookStorage.delete(stagingKey);
+		}
+		catch (RuntimeException e) {
+			log.warn("could not delete staging object for item {}", itemId, e);
+		}
 	}
 
 	/**
