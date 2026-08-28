@@ -72,8 +72,12 @@ public class CollectionEntitlementAdminService {
 		}
 
 		// An institution admin always sees their own institution's view, never one they pass in.
-		String resolvedInstitutionId = role == AdminRole.INSTITUTION_ADMIN ? adminScope.currentInstitutionScope()
-				: institutionId;
+		// A publisher admin has no institution view at all: institutionId is SUPER_ADMIN only.
+		String resolvedInstitutionId = switch (role) {
+			case INSTITUTION_ADMIN -> adminScope.currentInstitutionScope();
+			case SUPER_ADMIN -> institutionId;
+			case PUBLISHER_ADMIN -> null;
+		};
 
 		Pageable pageable = PageRequest.of(resolvedPage, resolvedSize, Sort.by(Sort.Direction.ASC, "name"));
 		Page<BookCollection> results = resolvedPublisherId == null ? bookCollectionRepository.findAll(pageable)

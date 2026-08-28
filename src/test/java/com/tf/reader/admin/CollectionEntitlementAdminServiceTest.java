@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -171,6 +172,33 @@ class CollectionEntitlementAdminServiceTest {
 		var result = service.list("pub_rtlg", null, null, null, null);
 
 		assertThat(result.items().get(0).entitlementStatus()).isNull();
+	}
+
+	@Test
+	@DisplayName("a publisher admin passing institutionId still gets no entitlementStatus")
+	void publisherAdminInstitutionIdIsIgnored() {
+		actingAs(AdminRole.PUBLISHER_ADMIN, "pub_rtlg", null);
+		when(bookCollectionRepository.findByPublisherId(eq("pub_rtlg"), any()))
+				.thenReturn(pageOf(collection("col_law2024", "pub_rtlg")));
+
+		var result = service.list("pub_rtlg", null, null, null, "inst_7f3");
+
+		assertThat(result.items().get(0).entitlementStatus()).isNull();
+		verify(entitlementRepository, never()).findByInstitutionId(any(), any());
+	}
+
+	@Test
+	@DisplayName("an institution admin cannot see another institution's entitlementStatus by passing its id")
+	void institutionAdminCannotSpoofAnotherInstitution() {
+		actingAs(AdminRole.INSTITUTION_ADMIN, null, "inst_7f3");
+		when(bookCollectionRepository.findAll(any(Pageable.class)))
+				.thenReturn(pageOf(collection("col_law2024", "pub_rtlg")));
+		when(entitlementRepository.findByInstitutionId(eq("inst_7f3"), any())).thenReturn(new PageImpl<>(List.of()));
+
+		var result = service.list(null, null, null, null, "inst_other");
+
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("none");
+		verify(entitlementRepository, never()).findByInstitutionId(eq("inst_other"), any());
 	}
 
 	@Test
