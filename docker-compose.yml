@@ -1,5 +1,5 @@
 services:
-  mongodb:
+  mongo:
     image: 'mongo:latest'
     ports:
       - '27017:27017'
@@ -8,4 +8,17 @@ services:
     image: 'redis:latest'
     ports:
       - '6379:6379'
+
+  app:
+    build: .
+    ports:
+      - '${SERVER_PORT:-8080}:${SERVER_PORT:-8080}'
+    env_file:
+      - .env
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/tf_reader
+      REDIS_HOST: redis
+    depends_on:
+      - mongo
+      - redis
 
