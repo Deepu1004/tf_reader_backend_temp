@@ -59,9 +59,15 @@ import com.tf.reader.common.error.ErrorCode;
  * <p>The browser is the only thing simulated, and only in the sense that a {@link RestClient}
  * follows the redirect by hand instead of Chrome doing it.
  */
+// spring.profiles.active is forced empty because application.yml defaults it to "local", and a
+// developer's own gitignored application-local.yml (never committed - see CLAUDE.md) points the
+// mock SAML registration theSamlLegIsUntouchedByAnyOfThis checks at their own machine instead of
+// samlmock.dev. The OIDC side of this class is unaffected: MockOidcTestProfile configures it via
+// @DynamicPropertySource, not profile-specific YAML.
 @SpringBootTest(
 		webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT,
-		properties = { "tnf.auth.jwt.secret=" + ContainerisedInfrastructure.JWT_SECRET })
+		properties = { "tnf.auth.jwt.secret=" + ContainerisedInfrastructure.JWT_SECRET,
+				"spring.profiles.active=" })
 class OidcEndToEndAuthFlowTest extends MockOidcTestProfile {
 
 	/** The claim the mock SAML IdP asserts the email in. A wire contract, so stated literally. */
@@ -338,8 +344,13 @@ class OidcEndToEndAuthFlowTest extends MockOidcTestProfile {
 		@Test
 		void bothStartEndpointsReturnTheSameEnvelope() {
 			// The contract requires it: the app routes on the sign-in method and then writes one
-			// flow. Same field names, different authorization url.
-			Map<String, Object> saml = post("/api/v1/auth/saml/start", "{\"institutionId\":\"inst_ucl\"}");
+			// flow. Same field names, different authorization url. SAML now takes institutionId
+			// as a query parameter (the RN integration shape) while OIDC still takes a body -
+			// the two no longer share a request shape, only a response one.
+			@SuppressWarnings("unchecked")
+			Map<String, Object> saml = http.post()
+					.uri(uri("/api/v1/auth/saml/start?institutionId=inst_ucl"))
+					.retrieve().body(Map.class);
 			Map<String, Object> oidc = startSignIn("inst_ucl");
 
 			assertThat(oidc.keySet()).isEqualTo(saml.keySet());

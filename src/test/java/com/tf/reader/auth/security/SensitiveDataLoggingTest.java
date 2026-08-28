@@ -73,9 +73,7 @@ class SensitiveDataLoggingTest extends ContainerisedInfrastructure {
 	@Test
 	void theSigningSecretIsNeverWrittenToTheLog(CapturedOutput output) throws Exception {
 		// Reached the widest set of code paths first: sign-in, a good token, a bad token.
-		mockMvc.perform(post("/api/v1/auth/saml/start")
-				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"institutionId\":\"inst_7f3\"}"));
+		mockMvc.perform(post("/api/v1/auth/saml/start").param("institutionId", "inst_7f3"));
 		mockMvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + tokenFor(MEMBER)));
 		mockMvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer not-a-jwt"));
 

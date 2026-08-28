@@ -14,10 +14,11 @@ import com.tf.reader.hold.entity.Hold;
 import com.tf.reader.hold.entity.HoldStatus;
 import com.tf.reader.hold.repository.HoldRepository;
 import com.tf.reader.hold.repository.HoldWrites;
+import com.tf.reader.library.api.ChangeLog;
+import com.tf.reader.library.api.ChangeReason;
+import com.tf.reader.library.api.ChangeRecord;
 import com.tf.reader.loan.api.LicenceCommand;
 import com.tf.reader.loan.api.LicenceView;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -33,24 +34,24 @@ import java.util.Optional;
 @Service
 public class QueueService {
 
-    private static final Logger log = LoggerFactory.getLogger(QueueService.class);
-
     private final HoldRepository holds;
     private final HoldWrites writes;
     private final StringRedisTemplate redis;
     private final EntitlementQuery entitlements;
     private final PromotionService promotion;
     private final LicenceCommand loans;
+    private final ChangeLog changeLog;
     private final Clock clock;
 
     public QueueService(HoldRepository holds, HoldWrites writes, StringRedisTemplate redis, EntitlementQuery entitlements,
-                         PromotionService promotion, LicenceCommand loans, Clock clock) {
+                         PromotionService promotion, LicenceCommand loans, ChangeLog changeLog, Clock clock) {
         this.holds = holds;
         this.writes = writes;
         this.redis = redis;
         this.entitlements = entitlements;
         this.promotion = promotion;
         this.loans = loans;
+        this.changeLog = changeLog;
         this.clock = clock;
     }
 
@@ -92,7 +93,7 @@ public class QueueService {
         }
 
         redis.opsForZSet().add(QueueKeys.queueKey(scope, itemId), QueueKeys.member(me.userId()), ticket);
-        log.info("HOLD_PLACED user={} item={}", me.userId(), itemId); // becomes ChangeLog.record() once the port exists
+        changeLog.record(ChangeRecord.forHold(me.userId(), ChangeReason.HOLD_PLACED, itemId, saved.getHoldId(), clock.instant()));
         return new Placed(viewOf(saved, decision), true);
     }
 
@@ -109,7 +110,7 @@ public class QueueService {
                 // take a slot someone else is queued for.
                 promotion.promoteNext(hold.getScope(), hold.getItemId(), hold.getOffer().getLeaseToken());
             }
-            log.info("HOLD_CANCELLED user={} item={}", hold.getUserId(), hold.getItemId()); // becomes ChangeLog.record() once the port exists
+            changeLog.record(ChangeRecord.forHold(hold.getUserId(), ChangeReason.HOLD_CANCELLED, hold.getItemId(), hold.getHoldId(), clock.instant()));
         });
     }
 
@@ -126,8 +127,11 @@ public class QueueService {
         LicenceView licence = loans.create(subject, hold.getItemId(),
                 AccessLevel.ENTITLED_CONCURRENT, decision.loanPeriodDays(), hold.getOffer().getLeaseToken());
 
-        log.info("HOLD_ACCEPTED user={} item={}", me.userId(), hold.getItemId()); // becomes ChangeLog.record() once the port exists
         Instant now = clock.instant();
+        // The offer becoming a loan is a loan-created event, not a hold event —
+        // there's no HOLD_ACCEPTED reason on the wire, and this is the only
+        // place that knows the new loanId.
+        changeLog.record(ChangeRecord.forLoan(me.userId(), ChangeReason.LOAN_CREATED, hold.getItemId(), licence.licenceId(), now));
         return new AcceptedLoanResponse(licence.licenceId(), subject.userId(), subject.institutionId(), licence.itemId(),
                 "ELITE", "ACTIVE", licence.canPersist(), now, licence.expiresAt(), now);
     }
