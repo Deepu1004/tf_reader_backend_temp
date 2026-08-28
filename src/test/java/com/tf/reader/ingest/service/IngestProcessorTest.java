@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
@@ -23,6 +24,7 @@ import com.tf.reader.catalogue.entity.ContentType;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.service.CatalogueVersionBumper;
 import com.tf.reader.ingest.api.BookStorage;
+import com.tf.reader.ingest.index.BuiltSearchIndex;
 
 /** The background half of ingest: queue draining and the watchdog. */
 class IngestProcessorTest {
@@ -33,9 +35,10 @@ class IngestProcessorTest {
 	private final CatalogueItemRepository items = mock(CatalogueItemRepository.class);
 	private final BookStorage bookStorage = mock(BookStorage.class);
 	private final AssetLocker assetLocker = mock(AssetLocker.class);
+	private final SearchIndexBuilder searchIndexBuilder = mock(SearchIndexBuilder.class);
 	private final CatalogueVersionBumper bumper = mock(CatalogueVersionBumper.class);
-	private final IngestProcessor processor = new IngestProcessor(items, bookStorage, assetLocker, bumper, CLOCK,
-			Duration.ofMinutes(15));
+	private final IngestProcessor processor = new IngestProcessor(items, bookStorage, assetLocker, searchIndexBuilder,
+			bumper, CLOCK, Duration.ofMinutes(15));
 
 	private static CatalogueItem queued(String id, AccessTier tier, ContentType type) {
 		CatalogueItem item = new CatalogueItem();
@@ -48,10 +51,16 @@ class IngestProcessorTest {
 	}
 
 	@Test
-	void openAccessPdfReachesReadyWithNoKeyAndNoIndexCall() {
+	void openAccessPdfReachesReadyWithNoKeyButStillGetsAPlaintextIndex() {
 		CatalogueItem item = queued("item_1", AccessTier.OPEN_ACCESS, ContentType.PDF);
 		when(items.findByContentState(ContentState.QUEUED)).thenReturn(List.of(item));
 		when(bookStorage.load("items/item_1/upload")).thenReturn("plain".getBytes());
+		when(searchIndexBuilder.build(eq("item_1"), eq(ContentType.PDF), any(), any())).thenAnswer(invocation -> {
+			CatalogueItem.Asset asset = invocation.getArgument(3);
+			asset.setHasSearchIndex(true);
+			asset.setIndexTerms(10);
+			return Optional.of(new BuiltSearchIndex("index-json".getBytes(), 10));
+		});
 		when(items.save(any())).thenAnswer(i -> i.getArgument(0));
 
 		processor.processQueued();
@@ -59,8 +68,25 @@ class IngestProcessorTest {
 		assertThat(item.getContentState()).isEqualTo(ContentState.READY);
 		assertThat(item.getMasterWrappedBek()).isNull();
 		assertThat(item.getAssets().get(0).isEncrypted()).isFalse();
-		verify(assetLocker, never()).lock(any(), any(), any());
+		assertThat(item.getIndexKey()).isEqualTo("items/item_1/index");
+		verify(bookStorage).store("items/item_1/index", "index-json".getBytes(), "application/json");
+		verify(assetLocker, never()).lock(any(), any(), any(), any());
 		verify(bumper).bump(CatalogueVersionBumper.Scope.ITEM, "item_1");
+	}
+
+	@Test
+	void openAccessPdfWithNoTextLayerReachesReadyWithNoIndexAtAll() {
+		CatalogueItem item = queued("item_1b", AccessTier.OPEN_ACCESS, ContentType.PDF);
+		when(items.findByContentState(ContentState.QUEUED)).thenReturn(List.of(item));
+		when(bookStorage.load("items/item_1b/upload")).thenReturn("plain".getBytes());
+		when(searchIndexBuilder.build(any(), any(), any(), any())).thenReturn(Optional.empty());
+		when(items.save(any())).thenAnswer(i -> i.getArgument(0));
+
+		processor.processQueued();
+
+		assertThat(item.getContentState()).isEqualTo(ContentState.READY);
+		assertThat(item.getIndexKey()).isNull();
+		verify(bookStorage, never()).store(eq("items/item_1b/index"), any(), any());
 	}
 
 	@Test
@@ -70,7 +96,7 @@ class IngestProcessorTest {
 		asset.setEncrypted(true);
 		when(items.findByContentState(ContentState.QUEUED)).thenReturn(List.of(item));
 		when(bookStorage.load("items/item_2/upload")).thenReturn("plain".getBytes());
-		when(assetLocker.lock("item_2", ContentType.PDF, "plain".getBytes()))
+		when(assetLocker.lock(eq("item_2"), eq(ContentType.PDF), any(), any()))
 				.thenReturn(new AssetLocker.Result(asset, "cipher".getBytes(), null, "wrapped-bek"));
 		when(items.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -84,17 +110,53 @@ class IngestProcessorTest {
 	}
 
 	@Test
-	void audioIsNeverLockedRegardlessOfTier() {
-		CatalogueItem item = queued("item_3", AccessTier.ELITE, ContentType.AUDIO);
+	void openAccessAudioIsNeverLockedAndNeverIndexed() {
+		CatalogueItem item = queued("item_3", AccessTier.OPEN_ACCESS, ContentType.AUDIO);
 		when(items.findByContentState(ContentState.QUEUED)).thenReturn(List.of(item));
 		when(bookStorage.load("items/item_3/upload")).thenReturn("plain".getBytes());
+		when(searchIndexBuilder.build(any(), any(), any(), any())).thenReturn(Optional.empty());
 		when(items.save(any())).thenAnswer(i -> i.getArgument(0));
 
 		processor.processQueued();
 
-		verify(assetLocker, never()).lock(any(), any(), any());
+		verify(assetLocker, never()).lock(any(), any(), any(), any());
 		assertThat(item.getAssets().get(0).isEncrypted()).isFalse();
+		assertThat(item.getIndexKey()).isNull();
 		assertThat(item.getContentState()).isEqualTo(ContentState.READY);
+	}
+
+	@Test
+	void subscriptionAndEliteAudioIsNowLockedLikeAnyOtherFormatButStillNeverIndexed() {
+		CatalogueItem item = queued("item_3b", AccessTier.ELITE, ContentType.AUDIO);
+		CatalogueItem.Asset asset = new CatalogueItem.Asset();
+		asset.setEncrypted(true);
+		when(items.findByContentState(ContentState.QUEUED)).thenReturn(List.of(item));
+		when(bookStorage.load("items/item_3b/upload")).thenReturn("plain".getBytes());
+		when(assetLocker.lock(eq("item_3b"), eq(ContentType.AUDIO), any(), any()))
+				.thenReturn(new AssetLocker.Result(asset, "cipher".getBytes(), null, "wrapped-bek"));
+		when(items.save(any())).thenAnswer(i -> i.getArgument(0));
+
+		processor.processQueued();
+
+		assertThat(item.getContentState()).isEqualTo(ContentState.READY);
+		assertThat(item.getMasterWrappedBek()).isEqualTo("wrapped-bek");
+		assertThat(item.getAssets().get(0).isEncrypted()).isTrue();
+		assertThat(item.getIndexKey()).isNull();
+		verify(bookStorage).store("items/item_3b/content", "cipher".getBytes(), asset.getMimeType());
+	}
+
+	@Test
+	void audioUsesTheRealUploadedMimeTypeNotAHardcodedGuess() {
+		CatalogueItem item = queued("item_audio", AccessTier.OPEN_ACCESS, ContentType.AUDIO);
+		when(items.findByContentState(ContentState.QUEUED)).thenReturn(List.of(item));
+		when(bookStorage.load("items/item_audio/upload")).thenReturn("plain".getBytes());
+		when(bookStorage.contentType("items/item_audio/upload")).thenReturn("audio/mp4");
+		when(searchIndexBuilder.build(any(), any(), any(), any())).thenReturn(Optional.empty());
+		when(items.save(any())).thenAnswer(i -> i.getArgument(0));
+
+		processor.processQueued();
+
+		assertThat(item.getAssets().get(0).getMimeType()).isEqualTo("audio/mp4");
 	}
 
 	@Test
@@ -104,6 +166,7 @@ class IngestProcessorTest {
 		when(items.findByContentState(ContentState.QUEUED)).thenReturn(List.of(bad, good));
 		when(bookStorage.load("items/item_bad/upload")).thenThrow(new RuntimeException("storage hiccup"));
 		when(bookStorage.load("items/item_good/upload")).thenReturn("plain".getBytes());
+		when(searchIndexBuilder.build(any(), any(), any(), any())).thenReturn(Optional.empty());
 		when(items.save(any())).thenAnswer(i -> i.getArgument(0));
 
 		processor.processQueued();

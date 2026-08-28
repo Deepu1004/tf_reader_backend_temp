@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +18,7 @@ import com.tf.reader.catalogue.entity.ContentType;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.service.CatalogueVersionBumper;
 import com.tf.reader.ingest.api.BookStorage;
+import com.tf.reader.ingest.index.BuiltSearchIndex;
 import com.tf.reader.ingest.storage.StorageKeys;
 
 /**
@@ -26,10 +28,14 @@ import com.tf.reader.ingest.storage.StorageKeys;
  * is a Mongo-driven poll. A second {@code @Scheduled} method is the watchdog: anything stuck in
  * {@code QUEUED} or {@code PROCESSING} past the timeout is failed with a reason naming it.
  *
- * <p>Every {@code QUEUED} item is set to {@code PROCESSING} before any tier branching - the
- * contract's own {@code ContentState} description says open access and audio "pass through it
- * without ever being encrypted," not that they skip it, so they get the same momentary state
- * transition as a locked asset; only the encryption/indexing sub-step is skipped for them.
+ * <p>Every {@code QUEUED} item is set to {@code PROCESSING} before any tier branching, whether or
+ * not it ends up locked - open access is the one case that never gets a key, for any format,
+ * because handing a key to an anonymous reader protects nothing. Audio is otherwise treated like
+ * any other format: SUBSCRIPTION/ELITE audio is now locked the same way a PDF or EPUB is, even
+ * though whole-file encryption means the device must fully decrypt before it can play or seek -
+ * an accepted tradeoff, not an oversight. A search index is built for every PDF/EPUB regardless of
+ * tier - audio never gets one, locked or not, since there's no text to extract - via the same
+ * {@link SearchIndexBuilder} both branches share.
  */
 @Service
 public class IngestProcessor {
@@ -39,16 +45,19 @@ public class IngestProcessor {
 	private final CatalogueItemRepository catalogueItemRepository;
 	private final BookStorage bookStorage;
 	private final AssetLocker assetLocker;
+	private final SearchIndexBuilder searchIndexBuilder;
 	private final CatalogueVersionBumper catalogueVersionBumper;
 	private final Clock clock;
 	private final Duration watchdogTimeout;
 
 	public IngestProcessor(CatalogueItemRepository catalogueItemRepository, BookStorage bookStorage,
-			AssetLocker assetLocker, CatalogueVersionBumper catalogueVersionBumper, Clock clock,
+			AssetLocker assetLocker, SearchIndexBuilder searchIndexBuilder,
+			CatalogueVersionBumper catalogueVersionBumper, Clock clock,
 			@Value("${tf.ingest.watchdog-timeout:15m}") Duration watchdogTimeout) {
 		this.catalogueItemRepository = catalogueItemRepository;
 		this.bookStorage = bookStorage;
 		this.assetLocker = assetLocker;
+		this.searchIndexBuilder = searchIndexBuilder;
 		this.catalogueVersionBumper = catalogueVersionBumper;
 		this.clock = clock;
 		this.watchdogTimeout = watchdogTimeout;
@@ -90,13 +99,15 @@ public class IngestProcessor {
 
 		String itemId = item.getId();
 		ContentType contentType = item.getContentType();
-		byte[] plaintext = bookStorage.load(StorageKeys.staging(itemId));
+		String stagingKey = StorageKeys.staging(itemId);
+		byte[] plaintext = bookStorage.load(stagingKey);
+		String uploadedMimeType = bookStorage.contentType(stagingKey);
 
 		if (TierRules.requiresLocking(item.getAccessTier(), contentType)) {
-			storeLocked(item, contentType, plaintext);
+			storeLocked(item, contentType, plaintext, uploadedMimeType);
 		}
 		else {
-			storeUnlocked(item, contentType, plaintext);
+			storeUnlocked(item, contentType, plaintext, uploadedMimeType);
 		}
 
 		item.setContentState(ContentState.READY);
@@ -106,9 +117,14 @@ public class IngestProcessor {
 		catalogueVersionBumper.bump(CatalogueVersionBumper.Scope.ITEM, itemId);
 	}
 
-	private void storeUnlocked(CatalogueItem item, ContentType contentType, byte[] plaintext) {
+	/**
+	 * Open access, any format: no key, no lock - but PDF/EPUB still gets a search index, built and
+	 * stored plaintext, exactly like the content itself. A key handed to an anonymous reader
+	 * protects nothing, so there is nothing to encrypt the index under either.
+	 */
+	private void storeUnlocked(CatalogueItem item, ContentType contentType, byte[] plaintext, String uploadedMimeType) {
 		String contentKey = StorageKeys.content(item.getId());
-		String mimeType = mimeTypeFor(contentType);
+		String mimeType = AssetLocker.resolveMimeType(uploadedMimeType, contentType);
 		bookStorage.store(contentKey, plaintext, mimeType);
 
 		CatalogueItem.Asset asset = new CatalogueItem.Asset();
@@ -118,13 +134,20 @@ public class IngestProcessor {
 		asset.setCipherLength(plaintext.length);
 		asset.setEncrypted(false);
 
+		String indexKey = null;
+		Optional<BuiltSearchIndex> built = searchIndexBuilder.build(item.getId(), contentType, plaintext, asset);
+		if (built.isPresent()) {
+			indexKey = StorageKeys.index(item.getId());
+			bookStorage.store(indexKey, built.get().json(), "application/json");
+		}
+
 		item.setStorageKey(contentKey);
-		item.setIndexKey(null);
+		item.setIndexKey(indexKey);
 		item.setAssets(List.of(asset));
 	}
 
-	private void storeLocked(CatalogueItem item, ContentType contentType, byte[] plaintext) {
-		AssetLocker.Result locked = assetLocker.lock(item.getId(), contentType, plaintext);
+	private void storeLocked(CatalogueItem item, ContentType contentType, byte[] plaintext, String uploadedMimeType) {
+		AssetLocker.Result locked = assetLocker.lock(item.getId(), contentType, plaintext, uploadedMimeType);
 
 		String contentKey = StorageKeys.content(item.getId());
 		bookStorage.store(contentKey, locked.cipherContent(), locked.asset().getMimeType());
@@ -151,14 +174,6 @@ public class IngestProcessor {
 	private static String shortReason(RuntimeException e) {
 		String message = e.getMessage();
 		return message == null ? e.getClass().getSimpleName() : message;
-	}
-
-	private static String mimeTypeFor(ContentType type) {
-		return switch (type) {
-			case PDF -> "application/pdf";
-			case EPUB -> "application/epub+zip";
-			case AUDIO -> "audio/mpeg";
-		};
 	}
 
 }

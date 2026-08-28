@@ -14,6 +14,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
@@ -39,6 +40,11 @@ class B2BookStorage implements BookStorage {
 		ResponseBytes<GetObjectResponse> response = s3
 				.getObjectAsBytes(GetObjectRequest.builder().bucket(properties.bucket()).key(key).build());
 		return response.asByteArray();
+	}
+
+	@Override
+	public String contentType(String key) {
+		return s3.headObject(HeadObjectRequest.builder().bucket(properties.bucket()).key(key).build()).contentType();
 	}
 
 	@Override

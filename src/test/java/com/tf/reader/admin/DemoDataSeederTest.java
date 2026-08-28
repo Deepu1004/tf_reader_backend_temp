@@ -236,9 +236,11 @@ class DemoDataSeederTest {
     }
 
     @Test
-    @DisplayName("audio is never encrypted, at any tier")
-    void audioIsNeverEncrypted() {
-        // The single most likely wrong assumption on both client teams, so it is data, not prose.
+    @DisplayName("seeded audio assets are loaded exactly as authored: unencrypted, unindexed")
+    void seededAudioAssetsAreUnencryptedAndUnindexed() {
+        // This pins the fixture's own content, not a live business rule - a freshly ingested
+        // SUBSCRIPTION/ELITE audiobook is encrypted like any other locked asset (see TierRules).
+        // No audio asset ever gets a search index, seeded or live, since there is no text to index.
         dataset.catalogueItems().stream()
                 .flatMap(i -> i.assets().stream())
                 .filter(a -> "AUDIO".equals(a.format()))

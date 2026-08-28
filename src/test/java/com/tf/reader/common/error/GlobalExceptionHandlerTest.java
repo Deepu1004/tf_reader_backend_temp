@@ -207,12 +207,12 @@ class GlobalExceptionHandlerTest {
 		request.setRequestURI("/api/admin/v1/catalogue-items/item_42/content");
 
 		ResponseEntity<ErrorResponse> response = handler.handlePayloadTooLarge(
-				new PayloadTooLargeException("A file that will be locked may not exceed 20 MB"), request);
+				new PayloadTooLargeException("A file that will be locked may not exceed 25 MB"), request);
 
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE);
 		assertThat(response.getBody().status()).isEqualTo(413);
 		assertThat(response.getBody().code()).isEqualTo("VALIDATION_FAILED");
-		assertThat(response.getBody().message()).isEqualTo("A file that will be locked may not exceed 20 MB");
+		assertThat(response.getBody().message()).isEqualTo("A file that will be locked may not exceed 25 MB");
 	}
 
 	/**

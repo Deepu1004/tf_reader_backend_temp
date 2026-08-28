@@ -231,10 +231,11 @@ class DemoDataSeederIT {
         assertThat(openAccess.getAssets().get(0).getCipherLength()).isZero();
         assertThat(openAccess.getMasterWrappedBek()).as("plaintext, so no wrapped key").isNull();
 
+        // This fixture predates locked audio being supported at all, so it was seeded unencrypted -
+        // that is fixture history, not a rule; a freshly ingested SUBSCRIPTION/ELITE audiobook is
+        // encrypted like any other locked asset (see TierRules).
         CatalogueItem audio = items.findById("item_stat").orElseThrow();
-        assertThat(audio.getAccessTier())
-                .as("a paid tier that is still not encrypted, because audio never is")
-                .isEqualTo(AccessTier.SUBSCRIPTION);
+        assertThat(audio.getAccessTier()).isEqualTo(AccessTier.SUBSCRIPTION);
         assertThat(audio.getAssets().get(0).isEncrypted()).isFalse();
         assertThat(audio.getAssets().get(0).isHasSearchIndex()).isFalse();
         assertThat(audio.getAssets().get(0).getIndexTerms()).isZero();

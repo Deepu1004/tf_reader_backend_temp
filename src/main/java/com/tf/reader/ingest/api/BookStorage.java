@@ -14,6 +14,10 @@ public interface BookStorage {
 
 	byte[] load(String key);
 
+	/** The Content-Type declared when {@code key} was stored - the real client-declared upload
+	 * type, not a guess derived from format alone. */
+	String contentType(String key);
+
 	void delete(String key);
 
 	/**

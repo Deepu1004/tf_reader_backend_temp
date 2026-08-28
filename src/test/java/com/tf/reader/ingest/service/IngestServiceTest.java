@@ -115,14 +115,14 @@ class IngestServiceTest {
 	}
 
 	@Test
-	void aFileThatWillBeLockedOverTwentyMegabytesIs413WithTheContractMessage() {
+	void aFileThatWillBeLockedOverTwentyFiveMegabytesIs413WithTheContractMessage() {
 		CatalogueItem item = item(AccessTier.ELITE, ContentType.PDF);
 		when(items.findById("item_42")).thenReturn(Optional.of(item));
 		when(adminScope.canAccessPublisher("pub_rtlg")).thenReturn(true);
 		MockMultipartFile oversized = new MockMultipartFile("file", "book.pdf", "application/pdf", new byte[0]) {
 			@Override
 			public long getSize() {
-				return 21L * 1024 * 1024;
+				return 26L * 1024 * 1024;
 			}
 
 			@Override
@@ -133,7 +133,43 @@ class IngestServiceTest {
 
 		assertThatExceptionOfType(PayloadTooLargeException.class)
 				.isThrownBy(() -> service.accept("item_42", oversized, AssetFormat.PDF))
-				.withMessage("A file that will be locked may not exceed 20 MB");
+				.withMessage("A file that will be locked may not exceed 25 MB");
+	}
+
+	@Test
+	void lockedAudioIsAlsoCappedAtTwentyFiveMegabytesNotTheGeneralCap() {
+		CatalogueItem item = item(AccessTier.ELITE, ContentType.AUDIO);
+		when(items.findById("item_42")).thenReturn(Optional.of(item));
+		when(adminScope.canAccessPublisher("pub_rtlg")).thenReturn(true);
+		MockMultipartFile oversized = new MockMultipartFile("file", "book.mp3", "audio/mpeg", new byte[0]) {
+			@Override
+			public long getSize() {
+				return 26L * 1024 * 1024;
+			}
+
+			@Override
+			public boolean isEmpty() {
+				return false;
+			}
+		};
+
+		assertThatExceptionOfType(PayloadTooLargeException.class)
+				.isThrownBy(() -> service.accept("item_42", oversized, AssetFormat.AUDIO))
+				.withMessage("A file that will be locked may not exceed 25 MB");
+	}
+
+	@Test
+	void lockedAudioWithinTheCapQueuesLikeAnyOtherLockedAsset() throws java.io.IOException {
+		CatalogueItem item = item(AccessTier.SUBSCRIPTION, ContentType.AUDIO);
+		when(items.findById("item_42")).thenReturn(Optional.of(item));
+		when(adminScope.canAccessPublisher("pub_rtlg")).thenReturn(true);
+		when(items.save(any())).thenAnswer(i -> i.getArgument(0));
+		MockMultipartFile file = new MockMultipartFile("file", "book.mp3", "audio/mpeg", new byte[10]);
+
+		IngestStatus status = service.accept("item_42", file, AssetFormat.AUDIO);
+
+		assertThat(status.contentState()).isEqualTo(ContentState.QUEUED);
+		verify(bookStorage).store("items/item_42/upload", file.getBytes(), "audio/mpeg");
 	}
 
 	@Test

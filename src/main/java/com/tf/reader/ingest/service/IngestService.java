@@ -34,7 +34,7 @@ import lombok.RequiredArgsConstructor;
 public class IngestService {
 
 	private static final long GENERAL_MAX_BYTES = 100L * 1024 * 1024;
-	private static final long LOCKED_MAX_BYTES = 20L * 1024 * 1024;
+	private static final long LOCKED_MAX_BYTES = 25L * 1024 * 1024;
 
 	private final CatalogueItemRepository catalogueItemRepository;
 	private final AdminScopeAuthorizer adminScope;
@@ -61,7 +61,7 @@ public class IngestService {
 		long limit = locked ? LOCKED_MAX_BYTES : GENERAL_MAX_BYTES;
 		if (file.getSize() > limit) {
 			throw new PayloadTooLargeException(
-					locked ? "A file that will be locked may not exceed 20 MB" : "A file may not exceed 100 MB");
+					locked ? "A file that will be locked may not exceed 25 MB" : "A file may not exceed 100 MB");
 		}
 
 		byte[] bytes = readBytes(file);

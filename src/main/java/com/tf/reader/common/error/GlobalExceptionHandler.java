@@ -79,7 +79,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 	}
 
 	// MaxUploadSizeExceededException (Spring's own request-size ceiling, belt-and-braces behind
-	// IngestService's own tier-aware 20MB/100MB checks) is NOT handled with an explicit
+	// IngestService's own tier-aware 25MB/100MB checks) is NOT handled with an explicit
 	// @ExceptionHandler here: ResponseEntityExceptionHandler's base handleException(...) already
 	// claims that exact type, and a second declaration for the same type is an "ambiguous
 	// @ExceptionHandler" startup failure, not a silent override. It still ends up VALIDATION_FAILED
