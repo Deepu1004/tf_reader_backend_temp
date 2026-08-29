@@ -5,6 +5,7 @@ import java.time.Duration;
 import org.springframework.stereotype.Component;
 
 import com.tf.reader.ingest.api.BookStorage;
+import com.tf.reader.ingest.api.ObjectNotFoundException;
 import com.tf.reader.ingest.api.PresignedObject;
 
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,7 @@ import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
@@ -37,9 +39,14 @@ class B2BookStorage implements BookStorage {
 
 	@Override
 	public byte[] load(String key) {
-		ResponseBytes<GetObjectResponse> response = s3
-				.getObjectAsBytes(GetObjectRequest.builder().bucket(properties.bucket()).key(key).build());
-		return response.asByteArray();
+		try {
+			ResponseBytes<GetObjectResponse> response = s3
+					.getObjectAsBytes(GetObjectRequest.builder().bucket(properties.bucket()).key(key).build());
+			return response.asByteArray();
+		}
+		catch (NoSuchKeyException e) {
+			throw new ObjectNotFoundException(key);
+		}
 	}
 
 	@Override

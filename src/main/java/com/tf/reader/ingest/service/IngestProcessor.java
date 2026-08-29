@@ -18,6 +18,7 @@ import com.tf.reader.catalogue.entity.ContentType;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.service.CatalogueVersionBumper;
 import com.tf.reader.ingest.api.BookStorage;
+import com.tf.reader.ingest.api.ObjectNotFoundException;
 import com.tf.reader.ingest.index.BuiltSearchIndex;
 import com.tf.reader.ingest.storage.StorageKeys;
 
@@ -93,6 +94,7 @@ public class IngestProcessor {
 	}
 
 	private void processOne(CatalogueItem item) {
+		Instant queuedAt = item.getUpdatedAt();
 		item.setContentState(ContentState.PROCESSING);
 		item.setUpdatedAt(clock.instant());
 		catalogueItemRepository.save(item);
@@ -100,8 +102,22 @@ public class IngestProcessor {
 		String itemId = item.getId();
 		ContentType contentType = item.getContentType();
 		String stagingKey = StorageKeys.staging(itemId);
-		byte[] plaintext = bookStorage.load(stagingKey);
-		String uploadedMimeType = bookStorage.contentType(stagingKey);
+		byte[] plaintext;
+		String uploadedMimeType;
+		try {
+			plaintext = bookStorage.load(stagingKey);
+			uploadedMimeType = bookStorage.contentType(stagingKey);
+		}
+		catch (ObjectNotFoundException e) {
+			// The staged upload has not landed yet - a slow client upload, or a brief storage
+			// blip, not a real failure. Go back to QUEUED for the next poll, keeping the
+			// original queued timestamp rather than the one just set above, so the watchdog
+			// still fails it if it is genuinely never coming, instead of retrying forever.
+			item.setContentState(ContentState.QUEUED);
+			item.setUpdatedAt(queuedAt);
+			catalogueItemRepository.save(item);
+			return;
+		}
 
 		if (TierRules.requiresLocking(item.getAccessTier(), contentType)) {
 			storeLocked(item, contentType, plaintext, uploadedMimeType);
