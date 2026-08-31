@@ -60,7 +60,7 @@ public class LoanSeedRunner implements ApplicationRunner {
 		Instant now = clock.instant();
 
 		// One ACTIVE per tier so every licence model shows on the library screen.
-		loans.save(active(SENTINEL_LOAN_ID, "item_env", LicenceModel.SUBSCRIPTION, true, null, now));
+		loans.save(active(SENTINEL_LOAN_ID, "item_q7", LicenceModel.SUBSCRIPTION, true, null, now));
 		loans.save(active("loan_seed_elite", "item_42", LicenceModel.ELITE, false,
 				now.plus(Duration.ofDays(14)), now));
 		loans.save(active("loan_seed_oa", "item_ab6", LicenceModel.OPEN_ACCESS, true, null, now));
