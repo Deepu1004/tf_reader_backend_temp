@@ -180,7 +180,7 @@
       ],
       "storageKey": "seed/pub_rtlg/item_42.pdf.enc",
       "indexKey": "seed/pub_rtlg/item_42.index.json.enc",
-      "wrappedBek": "seed-placeholder-not-a-real-key",
+      "wrappedBek": "XwA+Nhfhplz6EW51LBCy5ws+tEVmZN+C74RuycVSgxx6N7w14QsHTg==",
       "createdAt": "2026-08-10T09:00:00Z",
       "updatedAt": "2026-08-10T09:00:00Z"
     },
@@ -220,7 +220,7 @@
       ],
       "storageKey": "seed/pub_rtlg/item_env.pdf.enc",
       "indexKey": "seed/pub_rtlg/item_env.index.json.enc",
-      "wrappedBek": "seed-placeholder-not-a-real-key",
+      "wrappedBek": "XwA+Nhfhplz6EW51LBCy5ws+tEVmZN+C74RuycVSgxx6N7w14QsHTg==",
       "createdAt": "2026-08-10T09:00:00Z",
       "updatedAt": "2026-08-10T09:00:00Z"
     },
@@ -351,7 +351,7 @@
       ],
       "storageKey": "seed/pub_rtlg/item_dual.pdf.enc",
       "indexKey": "seed/pub_rtlg/item_dual.index.json.enc",
-      "wrappedBek": "seed-placeholder-not-a-real-key",
+      "wrappedBek": "XwA+Nhfhplz6EW51LBCy5ws+tEVmZN+C74RuycVSgxx6N7w14QsHTg==",
       "createdAt": "2026-08-10T09:00:00Z",
       "updatedAt": "2026-08-10T09:00:00Z"
     },
@@ -488,7 +488,7 @@
       ],
       "storageKey": "static/mock-content/sample-small.epub.enc",
       "indexKey": null,
-      "wrappedBek": "seed-placeholder-not-a-real-key",
+      "wrappedBek": "XwA+Nhfhplz6EW51LBCy5ws+tEVmZN+C74RuycVSgxx6N7w14QsHTg==",
       "createdAt": "2026-08-10T09:00:00Z",
       "updatedAt": "2026-08-10T09:00:00Z"
     },
@@ -528,7 +528,7 @@
       ],
       "storageKey": "static/mock-content/sample-small.pdf.enc",
       "indexKey": null,
-      "wrappedBek": "seed-placeholder-not-a-real-key",
+      "wrappedBek": "XwA+Nhfhplz6EW51LBCy5ws+tEVmZN+C74RuycVSgxx6N7w14QsHTg==",
       "createdAt": "2026-08-10T09:00:00Z",
       "updatedAt": "2026-08-10T09:00:00Z"
     },
@@ -608,7 +608,7 @@
       ],
       "storageKey": "static/mock-content/sample-small.wav.enc",
       "indexKey": null,
-      "wrappedBek": "seed-placeholder-not-a-real-key",
+      "wrappedBek": "XwA+Nhfhplz6EW51LBCy5ws+tEVmZN+C74RuycVSgxx6N7w14QsHTg==",
       "createdAt": "2026-08-10T09:00:00Z",
       "updatedAt": "2026-08-10T09:00:00Z"
     },
@@ -648,7 +648,7 @@
       ],
       "storageKey": "static/mock-content/sample.epub.enc",
       "indexKey": null,
-      "wrappedBek": "seed-placeholder-not-a-real-key",
+      "wrappedBek": "XwA+Nhfhplz6EW51LBCy5ws+tEVmZN+C74RuycVSgxx6N7w14QsHTg==",
       "createdAt": "2026-08-10T09:00:00Z",
       "updatedAt": "2026-08-10T09:00:00Z"
     },
@@ -688,7 +688,7 @@
       ],
       "storageKey": "static/mock-content/sample.pdf.enc",
       "indexKey": null,
-      "wrappedBek": "seed-placeholder-not-a-real-key",
+      "wrappedBek": "XwA+Nhfhplz6EW51LBCy5ws+tEVmZN+C74RuycVSgxx6N7w14QsHTg==",
       "createdAt": "2026-08-10T09:00:00Z",
       "updatedAt": "2026-08-10T09:00:00Z"
     }
