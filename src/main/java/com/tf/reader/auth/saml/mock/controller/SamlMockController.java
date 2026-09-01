@@ -4,10 +4,12 @@ import java.net.URI;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -55,7 +57,14 @@ public class SamlMockController {
 
 	public SamlMockController(SamlMockResponseBuilder responses) {
 		this.responses = responses;
-		this.restClient = RestClient.create();
+		// Redirects disabled: on success the ACS answers with a 302 to tfreader://auth/callback,
+		// not JSON - the default client tries to follow it and fails, because that scheme is not
+		// one an HTTP client can route to. The 3xx and its Location header are what this endpoint
+		// hands back instead.
+		this.restClient = RestClient.builder()
+				.requestFactory(new HttpComponentsClientHttpRequestFactory(
+						HttpClients.custom().disableRedirectHandling().build()))
+				.build();
 	}
 
 	/**
@@ -82,9 +91,18 @@ public class SamlMockController {
 				.header(HttpHeaders.COOKIE, request.getHeader(HttpHeaders.COOKIE))
 				.contentType(MediaType.APPLICATION_FORM_URLENCODED)
 				.body(body)
-				.exchange((acsRequest, acsResponse) -> ResponseEntity
-						.status(acsResponse.getStatusCode())
-						.contentType(acsResponse.getHeaders().getContentType())
-						.body(acsResponse.getBody().readAllBytes()));
+				.exchange((acsRequest, acsResponse) -> {
+					ResponseEntity.BodyBuilder responseBuilder =
+							ResponseEntity.status(acsResponse.getStatusCode());
+					String location = acsResponse.getHeaders().getFirst(HttpHeaders.LOCATION);
+					if (location != null) {
+						responseBuilder.header(HttpHeaders.LOCATION, location);
+					}
+					MediaType contentType = acsResponse.getHeaders().getContentType();
+					if (contentType != null) {
+						responseBuilder.contentType(contentType);
+					}
+					return responseBuilder.body(acsResponse.getBody().readAllBytes());
+				});
 	}
 }
