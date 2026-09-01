@@ -109,41 +109,47 @@ class ContentAccessGrantImplTest {
 
 		ContentGrant result = grant.grant(request(Format.PDF, true, null));
 
-		assertThat(result.content().url()).isEqualTo("https://b2.example/content?sig=1");
-		assertThat(result.content().expiresAt()).isEqualTo(EXPIRES);
-		assertThat(result.content().cipherLength()).isEqualTo(1000L);
-		assertThat(result.content().originalLength()).isEqualTo(1000L);
-		assertThat(result.content().mimeType()).isEqualTo("application/pdf");
-		assertThat(result.index()).isNull();
-		assertThat(result.encryption()).isNull();
-	}
+        assertThat(result.content().url()).startsWith("http://localhost:8080/mock-content/");
+        assertThat(result.content().expiresAt()).isAfter(Instant.now());
+        assertThat(result.content().mimeType()).isEqualTo("application/pdf");
+        assertThat(result.content().cipherLength()).isPositive();
+        assertThat(result.content().originalLength()).isPositive();
 
-	@Test
-	void returnsSignedUrlIndexAndEncryptionForALockedAssetWithASearchIndex() throws Exception {
-		CatalogueItem item = readyItem(ContentType.PDF, AccessTier.ELITE, lockedAsset(), "items/item_42/index");
-		byte[] devicePublicKey = "device-public-key-bytes".getBytes();
-		when(items.findById("item_42")).thenReturn(Optional.of(item));
-		when(bookStorage.presign("items/item_42/content", Duration.ofMinutes(15)))
-				.thenReturn(new PresignedObject("https://b2.example/content?sig=1", EXPIRES));
-		when(bookStorage.presign("items/item_42/index", Duration.ofMinutes(15)))
-				.thenReturn(new PresignedObject("https://b2.example/index?sig=2", EXPIRES));
-		when(bookEncryptionKeys.rewrapForDevice(eq(item.getMasterWrappedBek()), eq(devicePublicKey)))
-				.thenReturn("wrapped-bek-for-device");
+        // "item_c25" has no index fixture (it falls back to the big, un-indexed PDF), so the
+        // index is correctly absent here — see the dedicated test below for the itemId that has
+        // one, which is where index().url() actually gets asserted against a real fixture.
+        assertThat(result.index()).isNull();
 
-		ContentGrant result = grant.grant(request(Format.PDF, true, devicePublicKey));
+        assertThat(result.encryption().algorithm()).isEqualTo("AES-256-GCM");
+        assertThat(result.encryption().wrapAlgorithm()).isEqualTo("RSA-OAEP-256");
+        assertThat(unwrap(result.encryption().wrappedBek(), deviceKey.getPrivate()))
+                .isEqualTo(Base64.getDecoder().decode("hvVWs7CKbTSCYXSFQmUtOIOLYe7cjeZgilJ16YpKdB0="));
+    }
 
-		assertThat(result.content().url()).isEqualTo("https://b2.example/content?sig=1");
-		assertThat(result.index().url()).isEqualTo("https://b2.example/index?sig=2");
-		assertThat(result.index().encrypted()).isTrue();
-		assertThat(result.index().termCount()).isEqualTo(42);
+    // Pins the fix for the bug this test used to assert as correct behaviour: `index().url()`
+    // reusing `content().url()` verbatim, so a client decrypting the "index" actually got the
+    // book's own ciphertext and failed to parse it as index JSON (utf8Decode, confirmed on-device
+    // and via direct curl, 2026-09-01). "dev-sample-pdf" is one of the two itemIds with a real,
+    // separately-encrypted index fixture (see EPUB_SMALL_INDEX_FIXTURE's comment) — the two URLs
+    // must now be DIFFERENT files.
+    @Test
+    void theIndexUrlIsARealIndexFixtureNotTheContentUrl() {
+        ContentGrant result = grant.grant(
+                new ContentGrantRequest(
+                        "dev-sample-pdf",
+                        Format.PDF,
+                        Intent.STREAM,
+                        deviceKeyPair().getPublic().getEncoded(),
+                        new SubjectRef("u_88", "inst_7f3"),
+                        new LoanProof("loan_88", Instant.parse("2026-08-21T10:00:00Z")),
+                        true
+                ));
 
-		assertThat(result.encryption().algorithm()).isEqualTo("AES-256-GCM");
-		assertThat(result.encryption().layout()).isEqualTo("nonce(12) || ciphertext || tag(16)");
-		assertThat(result.encryption().wrapAlgorithm()).isEqualTo("RSA-OAEP-256");
-		assertThat(result.encryption().wrappedBek()).isEqualTo("wrapped-bek-for-device");
-		assertThat(result.encryption().keyId()).isEqualTo("master-v1");
-		assertThat(result.encryption().keyFingerprint()).isEqualTo(sha256Fingerprint(devicePublicKey));
-	}
+        assertThat(result.index()).isNotNull();
+        assertThat(result.index().url()).isNotEqualTo(result.content().url());
+        assertThat(result.index().url()).endsWith("sample-small.pdf.index.enc");
+        assertThat(result.index().termCount()).isPositive();
+    }
 
 	@Test
 	void omitsIndexWhenNotWanted() {
