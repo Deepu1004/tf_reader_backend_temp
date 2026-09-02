@@ -34,6 +34,7 @@ import com.tf.reader.catalogue.repository.FeedSettingsRepository;
 import com.tf.reader.catalogue.repository.InstitutionRepository;
 import com.tf.reader.catalogue.repository.PublisherRepository;
 import com.tf.reader.common.model.RecordStatus;
+import com.tf.reader.crypto.api.BookEncryptionKeys;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,10 +47,12 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Component;
 
+import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
@@ -70,6 +73,15 @@ public class DemoDataSeeder implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(DemoDataSeeder.class);
     static final String DATASET_PATH = "seed/demo-dataset.json";
 
+    // The AES-256 key the static/mock-content/*.enc fixtures were actually encrypted under
+    // (recovered from the retired mock ContentAccessGrantImpl). The dataset's own "wrappedBek"
+    // string is a documented fake for the Week-1 catalogue-only items ("unwrap to nothing", see
+    // demo-dataset.json's _readme) - real dev fixture files need masterWrappedBek to be a genuine
+    // wrap of THIS key, computed against whichever TF_MASTER_KEY is active, not a value baked into
+    // the JSON that would only unwrap under one developer's key.
+    private static final String MOCK_BEK_BASE64 = "hvVWs7CKbTSCYXSFQmUtOIOLYe7cjeZgilJ16YpKdB0=";
+    private static final String DEV_FIXTURE_STORAGE_PREFIX = "static/mock-content/";
+
     private final PublisherRepository publishers;
     private final BookCollectionRepository collections;
     private final InstitutionRepository institutions;
@@ -77,7 +89,7 @@ public class DemoDataSeeder implements ApplicationRunner {
     private final EntitlementRepository entitlements;
     private final AdminUserRepository adminUsers;
     private final FeedSettingsRepository feedSettings;
-    
+    private final BookEncryptionKeys bookEncryptionKeys;
 
     private final ObjectMapper mapper;
 
@@ -95,6 +107,7 @@ public class DemoDataSeeder implements ApplicationRunner {
             EntitlementRepository entitlements,
             AdminUserRepository adminUsers,
             FeedSettingsRepository feedSettings,
+            BookEncryptionKeys bookEncryptionKeys,
             ObjectMapper mapper,
             MongoClient mongoClient,
             MongoDatabaseFactory mongoDatabaseFactory,
@@ -108,6 +121,7 @@ public class DemoDataSeeder implements ApplicationRunner {
         this.entitlements = entitlements;
         this.adminUsers = adminUsers;
         this.feedSettings = feedSettings;
+        this.bookEncryptionKeys = bookEncryptionKeys;
         this.mapper = mapper;
         this.mongoClient = mongoClient;
         this.mongoDatabaseFactory = mongoDatabaseFactory;
@@ -400,9 +414,28 @@ public class DemoDataSeeder implements ApplicationRunner {
                 // These three sit on the item, not on each asset. B's shape, not the handbook's.
                 s.storageKey(),
                 s.indexKey(),
-                s.wrappedBek(),
+                resolveMasterWrappedBek(s),
                 s.createdAt(),
                 s.updatedAt());
+    }
+
+    /**
+     * The dataset's "wrappedBek" is a documented fake for the Week-1 catalogue-only items, whose
+     * storageKey has nothing behind it. The dev fixtures under static/mock-content/ are real
+     * AES-256-GCM ciphertext under {@link #MOCK_BEK_BASE64}, so those get a genuine wrap of that
+     * key instead - one that actually unwraps under whichever TF_MASTER_KEY this instance has,
+     * rather than a string that only ever unwraps under whoever authored the JSON's key.
+     */
+    private String resolveMasterWrappedBek(SeedDataset.SeedItem s) {
+        if (s.storageKey() == null || !s.storageKey().startsWith(DEV_FIXTURE_STORAGE_PREFIX)) {
+            return s.wrappedBek();
+        }
+        boolean anyEncrypted = s.assets().stream().anyMatch(SeedDataset.SeedAsset::encrypted);
+        if (!anyEncrypted) {
+            return s.wrappedBek();
+        }
+        SecretKeySpec mockBek = new SecretKeySpec(Base64.getDecoder().decode(MOCK_BEK_BASE64), "AES");
+        return bookEncryptionKeys.wrapWithMasterKey(mockBek);
     }
 
     private CatalogueItem.Asset toAsset(SeedDataset.SeedAsset a) {
