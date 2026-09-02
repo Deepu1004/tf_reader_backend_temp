@@ -114,8 +114,9 @@ Worth knowing so you don't rediscover them:
   comment — should probably be `/api/v1/changes`. Deferred, not yet fixed.
 - Whether `reading` ever emits `ENTITLEMENT_REVOKED` into the change feed is still an open question
   (matters for downloaded/offline titles that never call back into the broker on revocation).
-- `auth.api.SessionQuery`/`SessionView` are explicitly marked **PROPOSED**, not frozen — `library`
+- ~~`auth.api.SessionQuery`/`SessionView` are explicitly marked **PROPOSED**, not frozen — `library`
   already depends on them existing eventually but currently reaches into `auth.model` directly as a
-  documented workaround.
+  documented workaround.~~ Closed: `SessionQueryImpl` exists and `library.support.CurrentReaderResolver`
+  now delegates to it instead of importing `auth.model`.
 
 Read `.claude/context/shared.md` and `docs/FORK-SYNC.md` as well.

@@ -10,6 +10,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import com.tf.reader.auth.model.CurrentUser;
 import com.tf.reader.auth.model.UserType;
 import com.tf.reader.auth.security.CurrentUserAuthenticationToken;
+import com.tf.reader.auth.service.SessionQueryImpl;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.library.support.CurrentReaderResolver;
@@ -20,7 +21,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CurrentReaderResolverTest {
 
-	private final CurrentReaderResolver resolver = new CurrentReaderResolver();
+	// SessionQueryImpl has no dependencies of its own, so this stays a Spring-context-free test.
+	private final CurrentReaderResolver resolver = new CurrentReaderResolver(new SessionQueryImpl());
 
 	@Test
 	@DisplayName("identity is taken from the principal the auth module already built")

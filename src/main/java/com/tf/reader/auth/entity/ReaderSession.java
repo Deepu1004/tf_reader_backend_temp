@@ -22,9 +22,10 @@ import lombok.Setter;
  * {@link #refreshTokenHash}.
  *
  * <p><b>Carries a snapshot of the identity, not just a user id.</b> Unlike {@code AdminSession},
- * which re-reads {@code AdminUserRepository} on every refresh, there is no reader user store keyed
- * by id yet - institutional readers resolve through {@code MockUserRepository}, keyed by
- * {@code (email, institutionId)}. Snapshotting {@code type}/{@code institutionId}/{@code roles}/
+ * which re-reads {@code AdminUserRepository} on every refresh, this row does not re-read
+ * {@code ReaderUserRepository} on refresh - institutional readers resolve by
+ * {@code (email, institutionId)}, not by the id this row carries, so refresh would still need a
+ * snapshot of which email that id resolved from. Snapshotting {@code type}/{@code institutionId}/{@code roles}/
  * {@code collections} here at sign-in time is what lets refresh mint a new access token without
  * that lookup. The trade-off: a role or collection change does not reach an already-refreshed
  * session until the reader signs in again.

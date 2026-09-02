@@ -20,7 +20,8 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.saml2.provider.service.authentication.Saml2AssertionAuthentication;
 import org.springframework.security.saml2.provider.service.authentication.Saml2ResponseAssertionAccessor;
 
-import com.tf.reader.auth.repository.MockUserRepository;
+import com.tf.reader.auth.ReaderUserRepositoryFixtures;
+import com.tf.reader.auth.repository.ReaderUserDirectory;
 import com.tf.reader.auth.security.TnfJwtValidator;
 import com.tf.reader.auth.saml.SamlAuthenticationService.SamlLoginResult;
 import com.tf.reader.auth.token.JwtProperties;
@@ -51,7 +52,7 @@ class SamlAuthenticationServiceTest {
 
 	private final SamlAuthenticationService service = new SamlAuthenticationService(transactions,
 			institutionId -> Optional.ofNullable(INSTITUTIONS.get(institutionId)),
-			new SamlUserMapper(new MockUserRepository()),
+			new SamlUserMapper(new ReaderUserDirectory(ReaderUserRepositoryFixtures.demoUsers())),
 			JwtTokenService.forTest(SECRET, java.time.Duration.ofHours(1),
 					Clock.fixed(NOW, ZoneOffset.UTC)),
 			Clock.fixed(NOW, ZoneOffset.UTC));
