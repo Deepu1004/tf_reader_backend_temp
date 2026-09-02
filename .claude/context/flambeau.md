@@ -112,8 +112,16 @@ Worth knowing so you don't rediscover them:
 - `AvailabilitySnapshot.myPosition` is declared, never populated.
 - `library`'s change-feed path (`GET /api/v1/loans/changes`) is acknowledged-wrong in its own code
   comment — should probably be `/api/v1/changes`. Deferred, not yet fixed.
-- Whether `reading` ever emits `ENTITLEMENT_REVOKED` into the change feed is still an open question
-  (matters for downloaded/offline titles that never call back into the broker on revocation).
+- `ENTITLEMENT_REVOKED` feed entry — **resolved (2026-09-02).** `ReadBrokerService.open()` now
+  writes a best-effort `ChangeReason.ENTITLEMENT_REVOKED` entry via `library.api.ChangeLog` at
+  Step 2 when `EntitlementQuery` returns `ENTITLEMENT_EXPIRED` or `ENTITLEMENT_SUSPENDED`. Only
+  those two reasons qualify — they mean the reader held a loan whose underlying right was revoked.
+  `NO_ENTITLEMENT`, `NOT_FOUND`, `INSTITUTION_INACTIVE`, `CONTENT_NOT_READY` do not emit the
+  entry (no active loan to revoke, or a system/catalogue state rather than an individual
+  withdrawal). The entry is written after the `ApiException` is constructed; any failure is
+  swallowed per the `ChangeLog` contract and logged at error — it never converts a clean 4xx into
+  a 500. Downloaded/offline titles learn about the revocation via the next `GET /api/v1/changes`
+  poll rather than having to open a new session.
 - `auth.api.SessionQuery`/`SessionView` are explicitly marked **PROPOSED**, not frozen — `library`
   already depends on them existing eventually but currently reaches into `auth.model` directly as a
   documented workaround.

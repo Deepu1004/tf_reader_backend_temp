@@ -16,6 +16,11 @@ import com.tf.reader.content.api.Intent;
 import com.tf.reader.content.api.SignedUrl;
 import com.tf.reader.hold.api.AvailabilityQuery;
 import com.tf.reader.hold.api.AvailabilitySnapshot;
+import com.tf.reader.library.api.ChangeLog;
+import com.tf.reader.library.api.ChangeReason;
+import com.tf.reader.library.api.ChangeRecord;
+import com.tf.reader.loan.api.ActiveLoanQuery;
+import com.tf.reader.loan.api.ActiveLoanView;
 import com.tf.reader.loan.api.LicenceCommand;
 import com.tf.reader.loan.api.LicenceView;
 import com.tf.reader.reading.api.CopyLease;
@@ -38,6 +43,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -64,6 +70,8 @@ class ReadBrokerServiceTest {
 	private ReconcilerService reconciler;
 	private DeviceCapService devices;
 	private RightsService rights;
+	private ActiveLoanQuery activeLoans;
+	private ChangeLog changeLog;
 	private ReadBrokerService broker;
 
 	@BeforeEach
@@ -76,12 +84,16 @@ class ReadBrokerServiceTest {
 		reconciler = mock(ReconcilerService.class);
 		devices = mock(DeviceCapService.class);
 		rights = new RightsService(); // real: it is pure and cheap, no reason to fake it
+		activeLoans = mock(ActiveLoanQuery.class);
+		changeLog = mock(ChangeLog.class);
 
 		// Default: device cap always admits, unless a test says otherwise.
 		when(devices.admit(anyString(), any())).thenReturn(true);
+		// Default: no active loan found — revocation tests override this where needed.
+		when(activeLoans.findActive(anyString(), anyString())).thenReturn(Optional.empty());
 
 		broker = new ReadBrokerService(entitlements, content, licences, lease, availability,
-				reconciler, devices, rights, CLOCK);
+				reconciler, devices, rights, activeLoans, changeLog, CLOCK);
 	}
 
 	private ReadingSessionRequest request(Intent intent) {
@@ -166,6 +178,63 @@ class ReadBrokerServiceTest {
 		assertThatThrownBy(() -> broker.open(MEMBER, request(Intent.STREAM)))
 				.extracting(e -> ((ApiException) e).code())
 				.isEqualTo(ErrorCode.NOT_FOUND);
+	}
+
+	// ── step 2 — ENTITLEMENT_REVOKED feed entry ──────────────────────────────
+
+	@Test
+	void expiredEntitlementWritesRevocationFeedEntryWhenAnActiveLoanExists() {
+		ActiveLoanView activeLoan = new ActiveLoanView(
+				"loan_revoked_1", ITEM, "ELITE", false,
+				CLOCK.instant().plusSeconds(86400), MEMBER.institutionId(), "lease_1",
+				CLOCK.instant().minusSeconds(3600), "ACTIVE");
+		when(entitlements.check(MEMBER, ITEM)).thenReturn(denied(DenyReason.ENTITLEMENT_EXPIRED));
+		when(activeLoans.findActive(MEMBER.userId(), ITEM)).thenReturn(Optional.of(activeLoan));
+
+		assertThatThrownBy(() -> broker.open(MEMBER, request(Intent.STREAM)))
+				.isInstanceOf(ApiException.class)
+				.extracting(e -> ((ApiException) e).code())
+				.isEqualTo(ErrorCode.ENTITLEMENT_EXPIRED);
+
+		// The 4xx is thrown AND the feed entry is written.
+		verify(changeLog).record(org.mockito.ArgumentMatchers.argThat(r ->
+				r.reason() == ChangeReason.ENTITLEMENT_REVOKED
+						&& r.userId().equals(MEMBER.userId())
+						&& r.itemId().equals(ITEM)
+						&& r.loanId().equals("loan_revoked_1")));
+	}
+
+	@Test
+	void suspendedEntitlementAlsoWritesRevocationFeedEntry() {
+		ActiveLoanView activeLoan = new ActiveLoanView(
+				"loan_revoked_2", ITEM, "SUBSCRIPTION", true,
+				CLOCK.instant().plusSeconds(86400), MEMBER.institutionId(), null,
+				CLOCK.instant().minusSeconds(3600), "ACTIVE");
+		when(entitlements.check(MEMBER, ITEM)).thenReturn(denied(DenyReason.ENTITLEMENT_SUSPENDED));
+		when(activeLoans.findActive(MEMBER.userId(), ITEM)).thenReturn(Optional.of(activeLoan));
+
+		assertThatThrownBy(() -> broker.open(MEMBER, request(Intent.STREAM)))
+				.isInstanceOf(ApiException.class)
+				.extracting(e -> ((ApiException) e).code())
+				.isEqualTo(ErrorCode.ENTITLEMENT_SUSPENDED);
+
+		verify(changeLog).record(org.mockito.ArgumentMatchers.argThat(r ->
+				r.reason() == ChangeReason.ENTITLEMENT_REVOKED
+						&& r.loanId().equals("loan_revoked_2")));
+	}
+
+	@Test
+	void noEntitlementDoesNotWriteRevocationBecauseThereWasNoLoanToRevoke() {
+		when(entitlements.check(MEMBER, ITEM)).thenReturn(denied(DenyReason.NO_ENTITLEMENT));
+
+		assertThatThrownBy(() -> broker.open(MEMBER, request(Intent.STREAM)))
+				.isInstanceOf(ApiException.class)
+				.extracting(e -> ((ApiException) e).code())
+				.isEqualTo(ErrorCode.NO_ENTITLEMENT);
+
+		// No feed entry: the reader never had a loan to revoke.
+		verify(changeLog, never()).record(any());
+		verify(activeLoans, never()).findActive(anyString(), anyString());
 	}
 
 	// ── step 3 ──────────────────────────────────────────────────────────────

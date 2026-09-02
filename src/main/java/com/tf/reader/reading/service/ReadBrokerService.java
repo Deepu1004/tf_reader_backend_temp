@@ -21,6 +21,9 @@ import com.tf.reader.content.api.ContentGrantRequest;
 import com.tf.reader.content.api.LoanProof;
 import com.tf.reader.hold.api.AvailabilityQuery;
 import com.tf.reader.hold.api.AvailabilitySnapshot;
+import com.tf.reader.library.api.ChangeLog;
+import com.tf.reader.library.api.ChangeRecord;
+import com.tf.reader.loan.api.ActiveLoanQuery;
 import com.tf.reader.loan.api.LicenceCommand;
 import com.tf.reader.loan.api.LicenceView;
 import com.tf.reader.reading.api.CopyLease;
@@ -28,11 +31,29 @@ import com.tf.reader.reading.api.LeaseHandle;
 import com.tf.reader.reading.dto.ReadingSessionRequest;
 import com.tf.reader.reading.dto.ReadingSessionResponse;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * The read broker orchestrator for reading and downloading.
  *
  * <p>Executes all 9 steps of the read and download flow, stopping at the first refusal.
+ *
+ * <p><b>ENTITLEMENT_REVOKED feed entry (task 29 — resolved).</b> When Step 2 finds that the
+ * reader's entitlement has been withdrawn ({@link DenyReason#ENTITLEMENT_EXPIRED} or
+ * {@link DenyReason#ENTITLEMENT_SUSPENDED}), the broker writes a best-effort
+ * {@link com.tf.reader.library.api.ChangeReason#ENTITLEMENT_REVOKED} entry into the change feed
+ * before throwing the 4xx refusal. This is the only way an offline or downloaded title can learn
+ * its access has been removed — a device that never calls back into the broker would never receive
+ * the denial otherwise. The entry is written after the exception is constructed (never before),
+ * and any failure to write it is logged and silently swallowed per the ChangeLog contract —
+ * it never converts a clean 403 into a 500.
+ *
+ * <p>Reasons that do <em>not</em> emit the entry: {@link DenyReason#NO_ENTITLEMENT} (the reader
+ * never had access — there is no active loan to revoke), {@link DenyReason#NOT_FOUND},
+ * {@link DenyReason#INSTITUTION_INACTIVE}, {@link DenyReason#CONTENT_NOT_READY} (system/catalogue
+ * states, not revocations of a held right).
  */
+@Slf4j
 @Service
 public class ReadBrokerService {
 
@@ -46,6 +67,8 @@ public class ReadBrokerService {
 	private final ReconcilerService reconciler;
 	private final DeviceCapService devices;
 	private final RightsService rights;
+	private final ActiveLoanQuery activeLoans;
+	private final ChangeLog changeLog;
 	private final Clock clock;
 
 	public ReadBrokerService(
@@ -57,6 +80,8 @@ public class ReadBrokerService {
 			ReconcilerService reconciler,
 			DeviceCapService devices,
 			RightsService rights,
+			ActiveLoanQuery activeLoans,
+			ChangeLog changeLog,
 			Clock clock) {
 		this.entitlements = entitlements;
 		this.content = content;
@@ -66,6 +91,8 @@ public class ReadBrokerService {
 		this.reconciler = reconciler;
 		this.devices = devices;
 		this.rights = rights;
+		this.activeLoans = activeLoans;
+		this.changeLog = changeLog;
 		this.clock = clock;
 	}
 
@@ -77,7 +104,14 @@ public class ReadBrokerService {
 		// ── Step 2: Entitlement check ──
 		EntitlementDecision decision = entitlements.check(subject, request.itemId());
 		if (!decision.entitled()) {
-			throw new ApiException(mapDenyReason(decision.reason()), "You do not have access to this title.");
+			ApiException refusal = new ApiException(
+					mapDenyReason(decision.reason()), "You do not have access to this title.");
+			// A revocation (expired or suspended) is the one denial the device cannot infer from
+			// its own actions — it may be mid-read on a downloaded copy that will never call back
+			// into the broker. Write the feed entry AFTER constructing the exception so any feed
+			// failure never converts this into a 500. Best-effort: ChangeLog never throws.
+			recordRevocationIfActive(decision.reason(), subject, request.itemId());
+			throw refusal;
 		}
 
 		// ── Step 3: Device cap check (ELITE only) ──
@@ -188,6 +222,40 @@ public class ReadBrokerService {
 			return raw;
 		} catch (IllegalArgumentException e) {
 			throw new ApiException(ErrorCode.INVALID_DEVICE_PUBLIC_KEY, "devicePublicKey must be valid base64 of the raw public key bytes.");
+		}
+	}
+
+	/**
+	 * Writes an {@code ENTITLEMENT_REVOKED} entry into the change feed when the denial reason is
+	 * a true revocation — the reader's right was withdrawn while they still held a loan.
+	 *
+	 * <p>Only {@link DenyReason#ENTITLEMENT_EXPIRED} and {@link DenyReason#ENTITLEMENT_SUSPENDED}
+	 * qualify. The other reasons ({@code NO_ENTITLEMENT}, {@code NOT_FOUND},
+	 * {@code INSTITUTION_INACTIVE}, {@code CONTENT_NOT_READY}) are not revocations — there was
+	 * either never a held loan to revoke, or the state is a catalogue/system issue unrelated to
+	 * the reader's individual entitlement.
+	 *
+	 * <p>The active-loan lookup is best-effort: if the reader has no active loan for this item
+	 * (possible if the loan was already swept), the entry is skipped rather than written with a
+	 * null loanId that {@link ChangeRecord} would reject.
+	 */
+	private void recordRevocationIfActive(DenyReason reason, SubjectRef subject, String itemId) {
+		if (reason != DenyReason.ENTITLEMENT_EXPIRED && reason != DenyReason.ENTITLEMENT_SUSPENDED) {
+			return;
+		}
+		if (subject == null || subject.userId() == null) {
+			return;
+		}
+		try {
+			activeLoans.findActive(subject.userId(), itemId).ifPresent(loan ->
+					changeLog.record(ChangeRecord.forRevocation(
+							subject.userId(), itemId, loan.loanId(), clock.instant())));
+		} catch (RuntimeException ex) {
+			// Best-effort: a feed write failure must never convert a clean 4xx into a 5xx.
+			// ChangeLog.record() itself already swallows, but the ActiveLoanQuery call can
+			// still throw (Mongo unreachable, etc.) — catch here so the refusal stays clean.
+			log.error("revocation feed write failed, reader={} item={} — entry lost",
+					subject.userId(), itemId, ex);
 		}
 	}
 
