@@ -480,15 +480,15 @@
           "sizeBytes": 3638,
           "cipherLength": 3666,
           "encrypted": true,
-          "hasSearchIndex": false,
-          "indexTerms": null,
-          "indexSkipReason": "DevFixture",
+          "hasSearchIndex": true,
+          "indexTerms": 2139,
+          "indexSkipReason": null,
           "keyId": "master-v1"
         }
       ],
       "storageKey": "static/mock-content/sample-small.epub.enc",
-      "indexKey": null,
-      "wrappedBek": "XwA+Nhfhplz6EW51LBCy5ws+tEVmZN+C74RuycVSgxx6N7w14QsHTg==",
+      "indexKey": "static/mock-content/sample-small.epub.index.enc",
+      "wrappedBek": "seed-placeholder-not-a-real-key",
       "createdAt": "2026-08-10T09:00:00Z",
       "updatedAt": "2026-08-10T09:00:00Z"
     },
@@ -520,15 +520,15 @@
           "sizeBytes": 2922,
           "cipherLength": 2950,
           "encrypted": true,
-          "hasSearchIndex": false,
-          "indexTerms": null,
-          "indexSkipReason": "DevFixture",
+          "hasSearchIndex": true,
+          "indexTerms": 153,
+          "indexSkipReason": null,
           "keyId": "master-v1"
         }
       ],
       "storageKey": "static/mock-content/sample-small.pdf.enc",
-      "indexKey": null,
-      "wrappedBek": "XwA+Nhfhplz6EW51LBCy5ws+tEVmZN+C74RuycVSgxx6N7w14QsHTg==",
+      "indexKey": "static/mock-content/sample-small.pdf.index.enc",
+      "wrappedBek": "seed-placeholder-not-a-real-key",
       "createdAt": "2026-08-10T09:00:00Z",
       "updatedAt": "2026-08-10T09:00:00Z"
     },
