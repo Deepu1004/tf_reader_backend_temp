@@ -8,6 +8,8 @@ import com.tf.reader.hold.entity.HoldStatus;
 import com.tf.reader.hold.entity.Offer;
 import com.tf.reader.hold.repository.HoldRepository;
 import com.tf.reader.hold.repository.HoldWrites;
+import com.tf.reader.library.api.ChangeReason;
+import com.tf.reader.library.repository.ChangeLogRepository;
 import com.tf.reader.reading.api.CopyLease;
 import org.bson.Document;
 import org.junit.jupiter.api.AfterEach;
@@ -59,6 +61,8 @@ class PromotionIT extends HoldContainerTest {
     RedisConnectionFactory redisConnectionFactory;
     @Autowired
     MongoTemplate mongo;
+    @Autowired
+    ChangeLogRepository changeLog;
 
     @BeforeEach
     void seedCatalogueAndEntitlement() {
@@ -114,6 +118,11 @@ class PromotionIT extends HoldContainerTest {
         assertThat(offered).hasSize(2);
         assertThat(offered).extracting(Hold::getUserId).containsExactly("user_a", "user_b");
         assertThat(queue.holdsFor("user_c").get(0).status()).isEqualTo("QUEUED");
+
+        assertThat(changeLog.findFirstByUserIdOrderBySequenceDesc("user_a").orElseThrow().getReason())
+                .isEqualTo(ChangeReason.HOLD_PROMOTED);
+        assertThat(changeLog.findFirstByUserIdOrderBySequenceDesc("user_b").orElseThrow().getReason())
+                .isEqualTo(ChangeReason.HOLD_PROMOTED);
     }
 
     @Test
@@ -201,6 +210,8 @@ class PromotionIT extends HoldContainerTest {
         sweeper.sweep();
 
         assertThat(queue.holdsFor("user_b")).as("the lapsed hold is gone entirely").isEmpty();
+        assertThat(changeLog.findFirstByUserIdOrderBySequenceDesc("user_b").orElseThrow().getReason())
+                .isEqualTo(ChangeReason.HOLD_OFFER_EXPIRED);
         var rejoined = queue.join(user("b"), ITEM);
         assertThat(rejoined.view().position()).as("behind user_d, who's still genuinely queued").isEqualTo(2);
     }

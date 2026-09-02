@@ -172,8 +172,7 @@ class JwtAuthenticationTest {
 		// The JWT filter must not stand in front of the way you get a JWT.
 		mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
 						.post("/api/v1/auth/saml/start")
-						.contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-						.content("{\"institutionId\":\"inst_7f3\"}"))
+						.param("institutionId", "inst_7f3"))
 				.andExpect(status().isOk());
 	}
 

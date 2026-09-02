@@ -18,16 +18,11 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.tf.reader.ContainerisedInfrastructure;
 import com.tf.reader.auth.model.TnfUser;
 import com.tf.reader.auth.model.UserType;
-import com.tf.reader.auth.security.TnfJwtValidator;
-import com.tf.reader.auth.token.JwtProperties;
 import com.tf.reader.auth.token.JwtTokenService;
 
 /**
@@ -89,39 +84,23 @@ class AuthMeTest extends ContainerisedInfrastructure {
 	}
 
 	@Test
-	void expiresAtDescribesTheNewlyIssuedToken() throws Exception {
-		// One hour from now, per JwtProperties - not the incoming token's expiry, and not a
-		// duration written down a second time in the controller.
+	void expiresAtDescribesThePresentedTokenNotANewOne() throws Exception {
+		// tokenFor mints a one-hour token at NOW, so expiresAt must describe exactly that token -
+		// nothing is minted by this endpoint any more, so there is no other value it could report.
 		mockMvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + tokenFor(MEMBER)))
 				.andExpect(jsonPath("$.expiresAt").value("2026-08-13T15:42:00Z"));
 	}
 
 	@Test
-	void theReissuedTokenIsUsableAndCarriesTheSameIdentity() throws Exception {
-		// Proves the session can actually slide: the token handed back authenticates on its own.
-		String body = mockMvc.perform(get("/api/v1/auth/me")
-						.header("Authorization", "Bearer " + tokenFor(MEMBER)))
-				.andReturn().getResponse().getContentAsString();
-		String reissued = body.replaceAll(".*\"token\"\\s*:\\s*\"([^\"]+)\".*", "$1");
+	void callingMeTwiceReturnsTheSameExpiryBecauseNothingIsReissued() throws Exception {
+		// The session no longer slides here: a real refresh token exists now (POST /auth/refresh),
+		// so repeated reads must not extend the token's life.
+		String token = tokenFor(MEMBER);
 
-		// The decoder is pinned to the test's clock. Left at Spring's defaults it would judge
-		// expiry by the SYSTEM clock, and this token was minted by a fixed one - so the test would
-		// pass for an hour after NOW and then fail forever with "Jwt expired", which reads like a
-		// production bug rather than a test pinned to a date.
-		NimbusJwtDecoder decoder =
-				NimbusJwtDecoder.withSecretKey(new JwtProperties(SECRET, null).signingKey())
-						.macAlgorithm(MacAlgorithm.HS256)
-						.build();
-		decoder.setJwtValidator(new TnfJwtValidator(Clock.fixed(NOW, ZoneOffset.UTC)));
-
-		Jwt decoded = decoder.decode(reissued);
-
-		assertThat(decoded.getClaimAsString("userId")).isEqualTo("usr_6712ab");
-		assertThat(decoded.getExpiresAt()).isEqualTo(NOW.plus(Duration.ofHours(1)));
-
-		mockMvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + reissued))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.userId").value("usr_6712ab"));
+		mockMvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + token))
+				.andExpect(jsonPath("$.expiresAt").value("2026-08-13T15:42:00Z"));
+		mockMvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + token))
+				.andExpect(jsonPath("$.expiresAt").value("2026-08-13T15:42:00Z"));
 	}
 
 	@Test
@@ -140,10 +119,11 @@ class AuthMeTest extends ContainerisedInfrastructure {
 
 	@Test
 	void returnsExactlyTheContractFields() throws Exception {
-		// Nothing invented beyond the documented shape except token, which is flagged as an
-		// open contract point on AuthMeResponse.
+		// Nothing invented beyond the documented shape. No token of any kind is minted here any
+		// more - that is POST /auth/refresh's job now.
 		mockMvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + tokenFor(MEMBER)))
-				.andExpect(jsonPath("$.*", org.hamcrest.Matchers.hasSize(8)))
+				.andExpect(jsonPath("$.*", org.hamcrest.Matchers.hasSize(7)))
+				.andExpect(jsonPath("$.token").doesNotExist())
 				.andExpect(jsonPath("$.refreshToken").doesNotExist())
 				.andExpect(jsonPath("$.accessToken").doesNotExist())
 				.andExpect(jsonPath("$.idToken").doesNotExist());

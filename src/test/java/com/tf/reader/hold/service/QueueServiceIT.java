@@ -4,6 +4,8 @@ import com.tf.reader.auth.model.CurrentUser;
 import com.tf.reader.auth.model.UserType;
 import com.tf.reader.hold.HoldContainerTest;
 import com.tf.reader.hold.repository.HoldRepository;
+import com.tf.reader.library.api.ChangeReason;
+import com.tf.reader.library.repository.ChangeLogRepository;
 import org.bson.Document;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,6 +45,8 @@ class QueueServiceIT extends HoldContainerTest {
     RedisConnectionFactory redisConnectionFactory;
     @Autowired
     MongoTemplate mongo;
+    @Autowired
+    ChangeLogRepository changeLog;
 
     @BeforeEach
     void seedCatalogueAndEntitlement() {
@@ -91,6 +95,10 @@ class QueueServiceIT extends HoldContainerTest {
         assertThat(second.created()).as("200, not 201, the second time").isFalse();
         assertThat(second.view().holdId()).isEqualTo(first.view().holdId());
         assertThat(second.view().position()).isEqualTo(first.view().position());
+
+        var entry = changeLog.findFirstByUserIdOrderBySequenceDesc("user_a").orElseThrow();
+        assertThat(entry.getReason()).as("only the real join writes a change-log entry").isEqualTo(ChangeReason.HOLD_PLACED);
+        assertThat(entry.getHoldId()).isEqualTo(first.view().holdId());
     }
 
     @Test
@@ -105,6 +113,10 @@ class QueueServiceIT extends HoldContainerTest {
 
         assertThat(queue.holdsFor("user_a").get(0).position()).as("unmoved").isEqualTo(1);
         assertThat(queue.holdsFor("user_c").get(0).position()).as("moved up one").isEqualTo(2);
+
+        var entry = changeLog.findFirstByUserIdOrderBySequenceDesc("user_b").orElseThrow();
+        assertThat(entry.getReason()).isEqualTo(ChangeReason.HOLD_CANCELLED);
+        assertThat(entry.getHoldId()).isEqualTo(b.view().holdId());
     }
 
     @Test
