@@ -154,6 +154,12 @@ public class ReadBrokerService {
 			Instant sessionExpiresAt = now.plus(SESSION_TTL);
 			if (copyLimited && !lease.extend(held, sessionExpiresAt)) {
 				reconciler.reconcile(request.itemId());
+				// ACCEPTED GAP: the response is returned even if reconcile() does not restore
+				// the lease. Design intent is "recover, never rollback" — the reader has the
+				// licence and already holds the title; refusing now would be worse than a copy
+				// count that is temporarily one short. The 30-second claim TTL self-heals the
+				// slot without any action from the caller. Tested by
+				// ReadBrokerServiceTest.returnsSessionEvenWhenExtendAndReconcileBothFail.
 			}
 
 			// ── Step 9: Forward payload unchanged ──

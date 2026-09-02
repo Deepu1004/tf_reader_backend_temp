@@ -387,6 +387,31 @@ class ReadBrokerServiceTest {
 	}
 
 	@Test
+	void returnsSessionEvenWhenExtendAndReconcileBothFail() {
+		// ACCEPTED GAP — see ReadBrokerService Step 8 comment.
+		// Design: "recover, never rollback". The reader holds the licence; refusing now
+		// would be worse than a copy count that is temporarily one short. The 30-second
+		// claim TTL self-heals the slot without any action from the caller.
+		LeaseHandle handle = new LeaseHandle("token_1", MEMBER.institutionId(), ITEM, CLOCK.instant().plusSeconds(30));
+		when(entitlements.check(MEMBER, ITEM)).thenReturn(entitled(AccessLevel.ENTITLED_CONCURRENT, 5, 14));
+		when(lease.claim(any(), any(), anyInt())).thenReturn(Optional.of(handle));
+		LicenceView licence = new LicenceView("lic_3b", MEMBER.userId(), ITEM, AccessLevel.ENTITLED_CONCURRENT,
+				false, CLOCK.instant().plusSeconds(1_209_600), "token_1");
+		when(licences.create(any(), any(), any(), anyInt(), any())).thenReturn(licence);
+		when(content.grant(any())).thenReturn(aGrant());
+		when(lease.extend(any(), any())).thenReturn(false); // extend fails
+		// reconciler.reconcile() is a void mock — it does nothing but doesn't throw either.
+		// The response must still be complete and valid.
+
+		ReadingSessionResponse response = broker.open(MEMBER, request(Intent.STREAM));
+
+		assertThat(response).isNotNull();
+		assertThat(response.licenceId()).isEqualTo("lic_3b");
+		assertThat(response.licenceModel()).isEqualTo("ELITE");
+		verify(reconciler).reconcile(ITEM); // reconcile was triggered despite the failed extend
+	}
+
+	@Test
 	void anythingFailingAfterTheClaimGivesTheCopyBack() {
 		LeaseHandle handle = new LeaseHandle("token_1", MEMBER.institutionId(), ITEM, CLOCK.instant().plusSeconds(30));
 		when(entitlements.check(MEMBER, ITEM)).thenReturn(entitled(AccessLevel.ENTITLED_CONCURRENT, 5, 14));

@@ -63,8 +63,19 @@ public class ReconcilerService {
 	/**
 	 * Immediate single-item reconciliation trigger when extending a lease fails.
 	 *
-	 * <p>Rebuilds every item for now — a targeted single-item read is Week 5 polish, not
-	 * needed for the rebuild to be correct.
+	 * <p>Currently delegates to {@link #reconcileAll()} — a full Mongo scan — because neither
+	 * {@code ActiveLoanQuery} nor {@code LiveOfferQuery} expose a per-item read yet.
+	 *
+	 * <p>TODO(2026-W5): scope this down once the targeted queries land:
+	 * <ul>
+	 *   <li>{@code ActiveLoanQuery.findActiveEliteByItem(String institutionId, String itemId)}
+	 *       — Shashank's loan module to add
+	 *   <li>{@code LiveOfferQuery.findByItem(String scope, String itemId)}
+	 *       — Khushi's hold module to add
+	 * </ul>
+	 * The rebuild is still correct in the meantime: it re-derives every item from Mongo truth,
+	 * so a failed extend never leaves the copy count permanently wrong. The cost is an
+	 * unnecessary full scan on a single-item trigger, which only matters under sustained load.
 	 */
 	public void reconcile(String itemId) {
 		reconcileAll();
