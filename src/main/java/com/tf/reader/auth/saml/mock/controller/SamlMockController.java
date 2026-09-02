@@ -57,14 +57,7 @@ public class SamlMockController {
 
 	public SamlMockController(SamlMockResponseBuilder responses) {
 		this.responses = responses;
-		// Redirects disabled: the ACS itself now answers with a 302 to tfreader://auth/callback
-		// on both success and failure. A client that followed that redirect would try to route
-		// an unroutable custom scheme and blow up with a ClientProtocolException; this class's
-		// whole job is to hand that response back untouched, not to chase it.
-		this.restClient = RestClient.builder()
-				.requestFactory(new HttpComponentsClientHttpRequestFactory(
-						HttpClients.custom().disableRedirectHandling().build()))
-				.build();
+		this.restClient = RestClient.create();
 	}
 
 	/**
@@ -96,18 +89,9 @@ public class SamlMockController {
 				.header(HttpHeaders.COOKIE, request.getHeader(HttpHeaders.COOKIE))
 				.contentType(MediaType.APPLICATION_FORM_URLENCODED)
 				.body(body)
-				.exchange((acsRequest, acsResponse) -> {
-					HttpHeaders forwarded = new HttpHeaders();
-					forwarded.addAll(acsResponse.getHeaders());
-					// Recomputed from the body actually sent below, not copied: forwarding the
-					// ACS's own framing headers would fight with whatever length this response's
-					// byte[] body ends up being written with.
-					forwarded.remove(HttpHeaders.CONTENT_LENGTH);
-					forwarded.remove(HttpHeaders.TRANSFER_ENCODING);
-
-					return ResponseEntity.status(acsResponse.getStatusCode())
-							.headers(forwarded)
-							.body(acsResponse.getBody().readAllBytes());
-				});
+				.exchange((acsRequest, acsResponse) -> ResponseEntity
+						.status(acsResponse.getStatusCode())
+						.contentType(acsResponse.getHeaders().getContentType())
+						.body(acsResponse.getBody().readAllBytes()));
 	}
 }

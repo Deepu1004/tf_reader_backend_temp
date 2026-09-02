@@ -8,6 +8,14 @@ spring:
     name: reader
   profiles:
     active: local
+  servlet:
+    multipart:
+      # No multipart config existed before ingest; Boot's 1MB default would reject every real
+      # upload before the controller ever ran. Set comfortably above the contract's own 100MB
+      # general cap so IngestService's own size checks are what actually reject an oversized file
+      # (with the tier-aware message), not this ceiling.
+      max-file-size: 110MB
+      max-request-size: 110MB
   mongodb:
     uri: ${MONGODB_URI}
   data:
@@ -45,6 +53,19 @@ tf:
     master-key: ${TF_MASTER_KEY}
     master-key-id: master-v1
     device-key-min-bits: 2048
+  storage:
+    endpoint: ${B2_ENDPOINT}
+    region: ${B2_REGION}
+    bucket: ${B2_BUCKET}
+    access-key-id: ${B2_KEY_ID}
+    secret-access-key: ${B2_APPLICATION_KEY}
+    path-style: true
+  ingest:
+    poll-interval: 5s
+    watchdog-interval: 1m
+    # The contract's own number: "Anything stuck for more than fifteen minutes is moved to
+    # FAILED by a watchdog."
+    watchdog-timeout: 15m
   security:
     jwt:
       issuer: tf-reader

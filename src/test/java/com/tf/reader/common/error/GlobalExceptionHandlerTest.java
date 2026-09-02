@@ -19,6 +19,7 @@ import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.context.request.ServletWebRequest;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -198,6 +199,42 @@ class GlobalExceptionHandlerTest {
 		ResponseEntity<ErrorResponse> response = handler.handleDuplicateKey(ex, new MockHttpServletRequest());
 
 		assertThat(response.getBody().message()).isEqualTo("A record already exists for this scope.");
+	}
+
+	@Test
+	void mapsAPayloadTooLargeExceptionTo413WithValidationFailed() {
+		MockHttpServletRequest request = new MockHttpServletRequest();
+		request.setRequestURI("/api/admin/v1/catalogue-items/item_42/content");
+
+		ResponseEntity<ErrorResponse> response = handler.handlePayloadTooLarge(
+				new PayloadTooLargeException("A file that will be locked may not exceed 25 MB"), request);
+
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE);
+		assertThat(response.getBody().status()).isEqualTo(413);
+		assertThat(response.getBody().code()).isEqualTo("VALIDATION_FAILED");
+		assertThat(response.getBody().message()).isEqualTo("A file that will be locked may not exceed 25 MB");
+	}
+
+	/**
+	 * {@code MaxUploadSizeExceededException} has no explicit handler here on purpose - the base
+	 * {@code ResponseEntityExceptionHandler} already claims it, so a second declaration is an
+	 * "ambiguous @ExceptionHandler" startup failure, not a silent override. It still reaches
+	 * {@code handleExceptionInternal} through Spring's own resolution, preserving whatever status
+	 * that assigns via the existing 4xx fallback below - proven generically by
+	 * {@link #preservesA405StatusRaisedByTheFrameworkInsteadOfBecoming500()} for the same fallback
+	 * branch, since {@code MaxUploadSizeExceededException} itself needs a real Spring MVC dispatch
+	 * to reach a real status rather than the framework-default 500 a bare unit test would see.
+	 */
+	@Test
+	void preservesA413StatusRaisedByTheFrameworkForAnUploadThatIsTooLarge() {
+		ResponseEntity<Object> response = handler.handleExceptionInternal(
+				new MaxUploadSizeExceededException(115_343_360L), null, new HttpHeaders(),
+				HttpStatus.CONTENT_TOO_LARGE, new ServletWebRequest(new MockHttpServletRequest()));
+
+		ErrorResponse body = (ErrorResponse) response.getBody();
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE);
+		assertThat(body.code()).isEqualTo("VALIDATION_FAILED");
+		assertThat(body.status()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE.value());
 	}
 
 	@SuppressWarnings("unused")

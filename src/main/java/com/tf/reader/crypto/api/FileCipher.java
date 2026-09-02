@@ -7,8 +7,12 @@ import javax.crypto.SecretKey;
  * {@code nonce(12) || ciphertext || tag(16)} — 28 bytes of overhead over the plaintext, whatever
  * its size.
  *
- * <p>Never used for audio (whole-file encryption cannot seek) or open-access content (a key
- * handed to an anonymous reader protects nothing) — that decision belongs to the caller, not here.
+ * <p>Never used for open-access content (a key handed to an anonymous reader protects nothing).
+ * Locked audio (SUBSCRIPTION/ELITE) does go through this cipher like any other locked asset —
+ * whole-file encryption still can't be seeked into without a full decrypt first, which is a real
+ * cost the device pays on playback, accepted deliberately rather than leaving locked audio
+ * unencrypted. That tier/format decision belongs to the caller ({@code ingest.service.TierRules}),
+ * not here.
  */
 public interface FileCipher {
 

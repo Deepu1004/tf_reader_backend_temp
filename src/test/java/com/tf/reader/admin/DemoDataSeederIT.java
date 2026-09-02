@@ -24,6 +24,7 @@ import com.tf.reader.catalogue.repository.FeedSettingsRepository;
 import com.tf.reader.catalogue.repository.InstitutionRepository;
 import com.tf.reader.catalogue.repository.PublisherRepository;
 import com.tf.reader.common.model.RecordStatus;
+import com.tf.reader.crypto.api.BookEncryptionKeys;
 
 import com.mongodb.client.MongoClient;
 
@@ -76,6 +77,7 @@ class DemoDataSeederIT {
     @Autowired FeedSettingsRepository feedSettings;
     @Autowired MongoClient mongoClient;
     @Autowired MongoDatabaseFactory mongoDatabaseFactory;
+    @Autowired BookEncryptionKeys bookEncryptionKeys;
 
     // ------------------------------------------------------------------------------- the basics
 
@@ -205,7 +207,7 @@ class DemoDataSeederIT {
 
         // storageKey, indexKey and wrappedBek are on the item in B's shape, not on the asset.
         assertThat(elite.getStorageKey()).startsWith("seed/");
-        assertThat(elite.getWrappedBek()).isNotNull();
+        assertThat(elite.getMasterWrappedBek()).isNotNull();
 
         CatalogueItem.Asset pdf = elite.getAssets().get(0);
         assertThat(pdf.getFormat()).isEqualTo(ContentType.PDF);
@@ -229,12 +231,13 @@ class DemoDataSeederIT {
         CatalogueItem openAccess = items.findById("item_ab6").orElseThrow();
         assertThat(openAccess.getAssets().get(0).isEncrypted()).isFalse();
         assertThat(openAccess.getAssets().get(0).getCipherLength()).isZero();
-        assertThat(openAccess.getWrappedBek()).as("plaintext, so no wrapped key").isNull();
+        assertThat(openAccess.getMasterWrappedBek()).as("plaintext, so no wrapped key").isNull();
 
+        // This fixture predates locked audio being supported at all, so it was seeded unencrypted -
+        // that is fixture history, not a rule; a freshly ingested SUBSCRIPTION/ELITE audiobook is
+        // encrypted like any other locked asset (see TierRules).
         CatalogueItem audio = items.findById("item_stat").orElseThrow();
-        assertThat(audio.getAccessTier())
-                .as("a paid tier that is still not encrypted, because audio never is")
-                .isEqualTo(AccessTier.SUBSCRIPTION);
+        assertThat(audio.getAccessTier()).isEqualTo(AccessTier.SUBSCRIPTION);
         assertThat(audio.getAssets().get(0).isEncrypted()).isFalse();
         assertThat(audio.getAssets().get(0).isHasSearchIndex()).isFalse();
         assertThat(audio.getAssets().get(0).getIndexTerms()).isZero();
@@ -374,6 +377,7 @@ class DemoDataSeederIT {
                 entitlements,
                 adminUsers,
                 feedSettings,
+                bookEncryptionKeys,
                 tools.jackson.databind.json.JsonMapper.builder().build(),
                 mongoClient,
                 mongoDatabaseFactory,

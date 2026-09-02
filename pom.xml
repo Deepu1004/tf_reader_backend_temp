@@ -175,6 +175,12 @@
 			<artifactId>pdfbox</artifactId>
 			<version>3.0.4</version> <!-- latest 3.0.x; code uses only Loader + PDFTextStripper -->
 		</dependency>
+		<!-- Backblaze B2 is S3-compatible; this client talks to it via endpointOverride, not AWS. -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
+			<version>2.46.18</version>
+		</dependency>
 	</dependencies>
 
 	<build>

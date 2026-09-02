@@ -340,6 +340,36 @@ class CatalogueItemAdminServiceTest {
 	}
 
 	@Test
+	@DisplayName("a publisher admin passing institutionId still gets no entitlementStatus")
+	void publisherAdminInstitutionIdIsIgnored() {
+		actingAs(AdminRole.PUBLISHER_ADMIN, "pub_rtlg", null);
+		CatalogueItem item = pdfItem("item_42", "pub_rtlg");
+		when(searchRepository.search(eq("pub_rtlg"), any(), any(), any(), any(), eq(0), eq(20)))
+				.thenReturn(new CatalogueItemSearchRepository.Results(List.of(item), 1));
+
+		var result = service.list("pub_rtlg", null, null, null, null, null, null, null, "inst_7f3");
+
+		assertThat(result.items().get(0).entitlementStatus()).isNull();
+		verify(entitlementRepository, never()).findByInstitutionId(any(), any());
+	}
+
+	@Test
+	@DisplayName("an institution admin cannot see another institution's entitlementStatus by passing its id")
+	void institutionAdminCannotSpoofAnotherInstitution() {
+		actingAs(AdminRole.INSTITUTION_ADMIN, null, "inst_7f3");
+		CatalogueItem item = pdfItem("item_42", "pub_rtlg");
+		when(searchRepository.search(any(), any(), any(), any(), any(), eq(0), eq(20)))
+				.thenReturn(new CatalogueItemSearchRepository.Results(List.of(item), 1));
+		when(entitlementRepository.findByInstitutionId(eq("inst_7f3"), any()))
+				.thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
+
+		var result = service.list(null, null, null, null, null, null, null, null, "inst_other");
+
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("none");
+		verify(entitlementRepository, never()).findByInstitutionId(eq("inst_other"), any());
+	}
+
+	@Test
 	@DisplayName("the strongest matching entitlement status wins across scopes")
 	void strongestEntitlementStatusWinsAcrossScopes() {
 		actingAs(AdminRole.INSTITUTION_ADMIN, null, "inst_7f3");

@@ -24,6 +24,7 @@ class DemoDataSeederGuardTest {
                 null, // EntitlementRepository
                 null, // AdminUserRepository
                 null, // FeedSettingsRepository
+                null, // BookEncryptionKeys
                 null, // ObjectMapper
                 null, // MongoClient: absent here on purpose, so the URI fallback is what is tested
                 null, // MongoDatabaseFactory: absent here on purpose, so the URI fallback is what is tested
