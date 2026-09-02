@@ -45,7 +45,12 @@ public class CatalogueItem {
 	private List<String> editors;
 	private List<String> narrators;
 
-	@Indexed(sparse = true)
+	// Unique so two admins posting the same book at the same moment cannot both pass
+	// CatalogueItemAdminService's check-then-act duplicate test. Sparse because most items have no
+	// ISBN at all - audio and ingest-first drafts - and a sparse index leaves documents missing the
+	// field out entirely, so any number of them coexist. Mongo's duplicate key error already maps
+	// to CODE_TAKEN in GlobalExceptionHandler, so the race loser sees the ordinary 409.
+	@Indexed(sparse = true, unique = true)
 	private String isbn;
 
 	private String language;
