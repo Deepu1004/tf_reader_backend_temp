@@ -84,6 +84,40 @@ class CopyLeaseImplIT extends ContainerisedInfrastructure {
 	}
 
 	@Test
+	void acquireClaimsOneScopelessSlotAndBlocksASecondCall() {
+		// acquire() is on the published API surface — Khushi's hold module may call it.
+		// Verify it actually claims a slot against real Redis.
+		Optional<LeaseHandle> first = lease.acquire(ITEM);
+		Optional<LeaseHandle> second = lease.acquire(ITEM);
+
+		assertThat(first).isPresent();
+		assertThat(second).isEmpty(); // only 1 copy allowed via acquire()
+	}
+
+	@Test
+	void acquiredSlotIsReleasedByTokenWithNoScopeOrItemIdSupplied() {
+		LeaseHandle held = lease.acquire(ITEM).orElseThrow();
+
+		lease.release(held.token());
+
+		assertThat(lease.acquire(ITEM)).isPresent(); // slot is free again
+	}
+
+	@Test
+	void acquiredSlotCanBeExtendedAndItsKeyIsConsistentWithNullScope() {
+		// This test would fail if itemKey(null, itemId) produced "lease:null:itemId"
+		// (the old code) instead of "lease::itemId" — extend() builds the key from
+		// handle.scope() and handle.itemId(), and if that key differed from the one
+		// claim() wrote into, ZSCORE would find nothing and return false.
+		LeaseHandle held = lease.acquire(ITEM).orElseThrow();
+
+		boolean extended = lease.extend(held, Instant.now().plusSeconds(120));
+
+		assertThat(extended).isTrue(); // key round-trip was consistent
+		assertThat(held.scope()).isNull(); // acquire() explicitly carries no scope
+	}
+
+	@Test
 	void threeClaimantsRacingForOneSlotAdmitExactlyOne() throws Exception {
 		// The race the Lua CLAIM script exists to close atomically: two (or more) threads both
 		// see room under the copy limit and both proceed. A read-then-write implementation
