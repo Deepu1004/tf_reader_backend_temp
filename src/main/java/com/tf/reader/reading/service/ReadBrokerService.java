@@ -21,6 +21,8 @@ import com.tf.reader.content.api.ContentGrantRequest;
 import com.tf.reader.content.api.LoanProof;
 import com.tf.reader.hold.api.AvailabilityQuery;
 import com.tf.reader.hold.api.AvailabilitySnapshot;
+import com.tf.reader.library.api.ChangeLog;
+import com.tf.reader.library.api.ChangeRecord;
 import com.tf.reader.loan.api.LicenceCommand;
 import com.tf.reader.loan.api.LicenceView;
 import com.tf.reader.reading.api.CopyLease;
@@ -46,6 +48,7 @@ public class ReadBrokerService {
 	private final ReconcilerService reconciler;
 	private final DeviceCapService devices;
 	private final RightsService rights;
+	private final ChangeLog changeLog;
 	private final Clock clock;
 
 	public ReadBrokerService(
@@ -57,6 +60,7 @@ public class ReadBrokerService {
 			ReconcilerService reconciler,
 			DeviceCapService devices,
 			RightsService rights,
+			ChangeLog changeLog,
 			Clock clock) {
 		this.entitlements = entitlements;
 		this.content = content;
@@ -66,6 +70,7 @@ public class ReadBrokerService {
 		this.reconciler = reconciler;
 		this.devices = devices;
 		this.rights = rights;
+		this.changeLog = changeLog;
 		this.clock = clock;
 	}
 
@@ -77,6 +82,23 @@ public class ReadBrokerService {
 		// ── Step 2: Entitlement check ──
 		EntitlementDecision decision = entitlements.check(subject, request.itemId());
 		if (!decision.entitled()) {
+			// For downloadable tiers, the change log is the only channel that reaches a device
+			// which already has the title on disk. Write ENTITLEMENT_REVOKED before refusing,
+			// so an offline reader eventually learns the access is gone. Best-effort: ChangeLog
+			// never throws, so a feed failure never converts a clean 403 into a 500.
+			// Elite is online-only — the re-check here IS the enforcement; no feed needed.
+			if (isRevocationReason(decision.reason()) && isDownloadableTier(decision.accessLevel())) {
+				changeLog.record(ChangeRecord.forRevocation(
+						subject.userId(),
+						request.itemId(),
+						"unknown", // loanId is not available at refusal time — see note below
+						clock.instant()));
+				// NOTE: ideally we would pass the existing loanId so the feed entry is richer,
+				// but LicenceCommand only exposes create(), not findByUserAndItem(). Using
+				// "unknown" is acceptable per the ChangeLog contract — the feed consumer uses
+				// the (userId, itemId, reason) triple to act, not the loanId. Track as task-29b
+				// to wire in the loanId once Shashank publishes a read-only query.
+			}
 			throw new ApiException(mapDenyReason(decision.reason()), "You do not have access to this title.");
 		}
 
@@ -132,6 +154,12 @@ public class ReadBrokerService {
 			Instant sessionExpiresAt = now.plus(SESSION_TTL);
 			if (copyLimited && !lease.extend(held, sessionExpiresAt)) {
 				reconciler.reconcile(request.itemId());
+				// ACCEPTED GAP: the response is returned even if reconcile() does not restore
+				// the lease. Design intent is "recover, never rollback" — the reader has the
+				// licence and already holds the title; refusing now would be worse than a copy
+				// count that is temporarily one short. The 30-second claim TTL self-heals the
+				// slot without any action from the caller. Tested by
+				// ReadBrokerServiceTest.returnsSessionEvenWhenExtendAndReconcileBothFail.
 			}
 
 			// ── Step 9: Forward payload unchanged ──
@@ -201,6 +229,35 @@ public class ReadBrokerService {
 			case CONTENT_NOT_READY -> ErrorCode.CONTENT_NOT_READY;
 			case NOT_FOUND -> ErrorCode.NOT_FOUND;
 		};
+	}
+
+	/**
+	 * Whether this deny reason represents an entitlement that was actively withdrawn
+	 * rather than a title that was never accessible or is simply not ready.
+	 *
+	 * <p>Only withdrawn entitlements need a change-log entry: a reader whose institution's
+	 * subscription lapsed has a downloaded title they can no longer open, and the feed is
+	 * the only way to tell them. A reader who never had access, or whose title is not yet
+	 * available, has no downloaded copy to notify about.
+	 */
+	private static boolean isRevocationReason(DenyReason reason) {
+		if (reason == null) return false;
+		return switch (reason) {
+			case ENTITLEMENT_EXPIRED, ENTITLEMENT_SUSPENDED, INSTITUTION_INACTIVE -> true;
+			case NO_ENTITLEMENT, CONTENT_NOT_READY, NOT_FOUND -> false;
+		};
+	}
+
+	/**
+	 * Whether this tier produces a title that can be downloaded to a device.
+	 *
+	 * <p>ELITE (ENTITLED_CONCURRENT) is online-only — the re-check at step 2 IS the
+	 * enforcement for an offline reader, because they can never have a copy on disk.
+	 * The change log entry is therefore only needed for tiers that permit downloading.
+	 */
+	private static boolean isDownloadableTier(AccessLevel level) {
+		if (level == null) return false;
+		return level == AccessLevel.OPEN_ACCESS || level == AccessLevel.ENTITLED_UNLIMITED;
 	}
 
 	private static String licenceModelOf(AccessLevel level) {

@@ -112,9 +112,12 @@ public class CopyLeaseImpl implements CopyLease {
 
 	@Override
 	public Optional<LeaseHandle> acquire(String itemId) {
-		// Nothing in the codebase calls this — no caller has a scope or a copy limit to
-		// give it. Kept working, as a single unscoped slot, rather than deleted, since
-		// it's declared on the api/ seam and another team could already depend on it.
+		// No institution scope — produces key "lease::itemId" (scope segment is empty,
+		// not the string "null"). All operations on the returned handle (extend, release)
+		// use handle.scope() which is null, and LeaseKeys.itemKey() converts that to ""
+		// consistently, so the round-trip is always correct.
+		// No internal caller uses this — it exists for Khushi's hold module, which
+		// promotes a copy to a waiting reader without knowing the copy count.
 		return claim(null, itemId, 1);
 	}
 
