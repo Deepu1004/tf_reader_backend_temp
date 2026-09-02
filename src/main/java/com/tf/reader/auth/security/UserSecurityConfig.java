@@ -123,6 +123,9 @@ public class UserSecurityConfig {
 						.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(requests -> requests
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/saml/start").permitAll()
+						// TempDevAuthController itself is conditional on tnf.dev-auth.enabled - off in
+						// every profile but a developer's own. This entry is harmless when it is off:
+						// with no bean, the path is unmapped and 404s regardless of this matcher.
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/dev-token").permitAll()
 						// OIDC: start cannot require a token; callback is a browser redirect from IdP
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/oidc/start").permitAll()
@@ -130,6 +133,7 @@ public class UserSecurityConfig {
 						// Authenticated by the opaque code/refresh token in the body, not a bearer JWT.
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/token").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/refresh").permitAll()
+						.requestMatchers(HttpMethod.POST, "/api/v1/auth/logout").permitAll()
 						.anyRequest().authenticated())
 				// Every request after sign-in presents the JWT that sign-in produced. Spring
 				// Security's own bearer-token filter does the header parsing and the decoding, so

@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -177,6 +178,20 @@ public class AuthController {
 		// would round the reported lifetime down by up to a second for no reason.
 		return new TokenResponse(accessToken.token(), refreshToken.value(),
 				Duration.between(accessToken.issuedAt(), accessToken.expiresAt()).getSeconds());
+	}
+
+	/**
+	 * Ends the session the presented refresh token belongs to. The one way for a caller to sign
+	 * out, as opposed to {@code /refresh}, which ends a session too but always replaces it.
+	 *
+	 * <p>Idempotent: whether the token was live, already rotated, or never issued, the caller is
+	 * signed out either way, so this never distinguishes those cases in its response.
+	 */
+	@PostMapping("/logout")
+	public ResponseEntity<Void> logout(@Valid @RequestBody RefreshRequest request) {
+		log.info("logout: revoking a session");
+		readerSessions.revoke(request.refreshToken());
+		return ResponseEntity.noContent().build();
 	}
 
 	/**

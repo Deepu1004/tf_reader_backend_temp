@@ -63,6 +63,7 @@ class AuthorizationCoverageTest {
 			// bearer JWT, so there is nothing for this chain to check before the controller runs.
 			"POST /api/v1/auth/token",
 			"POST /api/v1/auth/refresh",
+			"POST /api/v1/auth/logout",
 			// The mock OIDC provider and mock SAML IdP: dev-only fixtures pretending to be an
 			// external party, never enabled outside a local profile. We do not authenticate
 			// against ourselves before answering as the identity provider we are pretending to be.

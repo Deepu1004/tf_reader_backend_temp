@@ -25,10 +25,12 @@ import org.springframework.web.util.UriComponentsBuilder;
 import com.tf.reader.ContainerisedInfrastructure;
 import com.tf.reader.MockOidcTestProfile;
 import com.tf.reader.auth.AuthTestInstitutions;
+import com.tf.reader.auth.AuthTestUsers;
 import com.tf.reader.auth.authorization.AuthorizationService;
 import com.tf.reader.auth.model.CurrentUser;
 import com.tf.reader.auth.model.Role;
 import com.tf.reader.auth.model.UserType;
+import com.tf.reader.auth.repository.ReaderUserRepository;
 import com.tf.reader.auth.saml.SamlAuthenticationService;
 import com.tf.reader.auth.transaction.AuthTransactionStore;
 import com.tf.reader.catalogue.repository.InstitutionRepository;
@@ -46,7 +48,7 @@ import com.tf.reader.common.error.ErrorCode;
  *   → 302  /api/v1/auth/oidc/callback?code=…&amp;state=…
  *   → back channel: POST {provider}/oauth2/token   (code + client secret)
  *   → ID token: JWKS signature, issuer, audience, expiry, nonce
- *   → MockUserRepository
+ *   → ReaderUserDirectory
  *   → application JWT
  *   → GET /api/v1/auth/me with that JWT
  * </pre>
@@ -105,9 +107,13 @@ class OidcEndToEndAuthFlowTest extends MockOidcTestProfile {
 	@Autowired
 	private InstitutionRepository institutions;
 
+	@Autowired
+	private ReaderUserRepository readerUsers;
+
 	@BeforeEach
 	void seedInstitutions() {
 		AuthTestInstitutions.seed(institutions);
+		AuthTestUsers.seed(readerUsers);
 	}
 
 	// ───────────────────────── the whole flow, end to end ─────────────────────────

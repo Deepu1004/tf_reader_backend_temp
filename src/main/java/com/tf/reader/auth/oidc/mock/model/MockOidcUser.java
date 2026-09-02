@@ -9,9 +9,9 @@ package com.tf.reader.auth.oidc.mock.model;
  * property and not a code change.
  *
  * <p><b>The default email is {@code john.doe@example.com} deliberately.</b> It is the address
- * {@code MockUserRepository} is seeded around and the one samlmock.dev asserts by default, so
- * the same person signs in over both protocols and the two legs can be seen converging on one
- * {@code userId} without editing any fixture.
+ * the seeded {@code readerUsers} demo rows are keyed around (see {@code ReaderUserDevDataSeeder})
+ * and the one samlmock.dev asserts by default, so the same person signs in over both protocols
+ * and the two legs can be seen converging on one {@code userId} without editing any fixture.
  *
  * @param sub   the provider's stable identifier for this user. Ends up as the {@code sub} claim
  *              and, through the mapper, as the recorded {@code oidcSubject}
