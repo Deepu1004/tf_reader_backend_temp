@@ -66,7 +66,7 @@ class ReturnServiceTest {
 		InOrder order = inOrder(loans, copyLease, holdPromotion);
 		order.verify(loans).save(any(Loan.class));
 		order.verify(copyLease).release("lease_1");
-		order.verify(holdPromotion).promote("item_1");
+		order.verify(holdPromotion).promote("inst_1", "item_1");
 	}
 
 	@Test
@@ -96,7 +96,7 @@ class ReturnServiceTest {
 		service.returnLoan("user_1", "loan_2");
 
 		verify(copyLease, never()).release(anyString());
-		verify(holdPromotion).promote("item_2");
+		verify(holdPromotion).promote("inst_1", "item_2");
 	}
 
 	@Test
@@ -109,7 +109,7 @@ class ReturnServiceTest {
 
 		verify(loans, never()).save(any());
 		verify(copyLease, never()).release(anyString());
-		verify(holdPromotion, never()).promote(anyString());
+		verify(holdPromotion, never()).promote(anyString(), anyString());
 		verify(changeLog, never()).record(any());
 	}
 

@@ -74,7 +74,7 @@ public class ReturnService {
 		if (closed.getLeaseId() != null) {          // Elite only — release exactly once
 			copyLease.release(closed.getLeaseId());
 		}
-		holdPromotion.promote(closed.getItemId());
+		holdPromotion.promote(closed.getInstitutionId(), closed.getItemId());
 
 		return new ReturnResponse(closed.getLoanId(), closed.getItemId(),
 				closed.getStatus().name(), closed.getReturnedAt(), now);
