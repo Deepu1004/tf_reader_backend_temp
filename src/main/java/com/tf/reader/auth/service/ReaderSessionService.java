@@ -29,6 +29,7 @@ import com.tf.reader.common.security.JwtProperties;
 public class ReaderSessionService {
 
 	public static final String REASON_ROTATED = "ROTATED";
+	public static final String REASON_LOGGED_OUT = "LOGGED_OUT";
 
 	/** The contract prefixes a reader session id with {@code rsess_}. */
 	static final String SESSION_ID_PREFIX = "rsess_";
@@ -87,6 +88,18 @@ public class ReaderSessionService {
 	public Optional<ReaderSession> revokeForExchange(String presentedTokenValue) {
 		return this.readerSessionRepository.revokeForExchange(fingerprint(presentedTokenValue),
 				REASON_ROTATED, this.clock.instant());
+	}
+
+	/**
+	 * Ends a session outright: the row is marked revoked and nothing replaces it.
+	 *
+	 * <p>Idempotent by design. A token that is unknown, already revoked or expired means the
+	 * caller is not signed in through it either way, so this never distinguishes those cases -
+	 * {@code AuthController.logout} always answers the same regardless of which one happened.
+	 */
+	public void revoke(String presentedTokenValue) {
+		this.readerSessionRepository.revokeForExchange(fingerprint(presentedTokenValue),
+				REASON_LOGGED_OUT, this.clock.instant());
 	}
 
 	private static String newSessionId() {

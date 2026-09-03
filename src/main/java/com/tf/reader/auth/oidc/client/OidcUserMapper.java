@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import com.tf.reader.auth.model.TnfUser;
-import com.tf.reader.auth.repository.MockUserRepository;
+import com.tf.reader.auth.repository.ReaderUserDirectory;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 
@@ -19,7 +19,7 @@ import com.tf.reader.common.error.ErrorCode;
  * <p>The exact counterpart of {@link com.tf.reader.auth.saml.SamlUserMapper}, deliberately: the
  * provider tells us who someone is, the institution comes from the sign-in transaction our own
  * backend opened, and this class is the only place those two facts meet. <b>Both mappers end at
- * the same {@link MockUserRepository} lookup</b>, so a SAML sign-in and an OIDC sign-in for the
+ * the same {@link ReaderUserDirectory} lookup</b>, so a SAML sign-in and an OIDC sign-in for the
  * same person at the same institution resolve to the same {@code userId}. That convergence is
  * the point of having one user store rather than one per protocol, and it is what lets every
  * module behind the filter chain stay ignorant of how anybody signed in.
@@ -42,10 +42,10 @@ public class OidcUserMapper {
 	private static final org.slf4j.Logger log =
 			org.slf4j.LoggerFactory.getLogger(OidcUserMapper.class);
 
-	private final MockUserRepository users;
+	private final ReaderUserDirectory users;
 	private final OidcProperties.Claims claims;
 
-	public OidcUserMapper(MockUserRepository users, OidcProperties properties) {
+	public OidcUserMapper(ReaderUserDirectory users, OidcProperties properties) {
 		this.users = users;
 		this.claims = properties.claims();
 	}

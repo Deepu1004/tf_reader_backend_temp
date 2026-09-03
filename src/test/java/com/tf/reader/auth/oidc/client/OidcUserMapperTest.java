@@ -10,9 +10,10 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.jwt.Jwt;
 
+import com.tf.reader.auth.ReaderUserRepositoryFixtures;
 import com.tf.reader.auth.model.TnfUser;
 import com.tf.reader.auth.model.UserType;
-import com.tf.reader.auth.repository.MockUserRepository;
+import com.tf.reader.auth.repository.ReaderUserDirectory;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 
@@ -25,8 +26,8 @@ import com.tf.reader.common.error.ErrorCode;
  */
 class OidcUserMapperTest {
 
-	private final OidcUserMapper mapper =
-			new OidcUserMapper(new MockUserRepository(), OidcProperties.forIssuer(ISSUER));
+	private final OidcUserMapper mapper = new OidcUserMapper(
+			new ReaderUserDirectory(ReaderUserRepositoryFixtures.demoUsers()), OidcProperties.forIssuer(ISSUER));
 
 	private static final String ISSUER = "https://tnf.b2clogin.com/00000000-0000-0000-0000-000000000000/v2.0/";
 
@@ -80,7 +81,8 @@ class OidcUserMapperTest {
 	@Test
 	void theClaimNamesAreConfigurable() {
 		// A tenant emitting its email somewhere else is a configuration change, not a code change.
-		OidcUserMapper custom = new OidcUserMapper(new MockUserRepository(),
+		OidcUserMapper custom = new OidcUserMapper(
+				new ReaderUserDirectory(ReaderUserRepositoryFixtures.demoUsers()),
 				OidcProperties.withClaims(
 						new OidcProperties.Claims(List.of("mail"), List.of("uid"))));
 
