@@ -43,7 +43,12 @@ public record ReadingSessionResponse(
 		/** <b>Use this for the download button, not the tier.</b> The server refuses either way. */
 		boolean canPersist,
 
-		/** Absent entirely for open access and subscription — those tiers have no queue. */
+		/**
+		 * Absent entirely for open access and subscription — those tiers have no queue.
+		 * Present, with {@code content}/{@code index}/{@code encryption} all null, when an
+		 * ELITE title had no free copy — the reader was queued in this same call rather than
+		 * needing a separate {@code POST /api/v1/holds}.
+		 */
 		QueueState queue,
 
 		SignedUrl content,
