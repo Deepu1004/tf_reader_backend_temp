@@ -24,6 +24,7 @@ import com.tf.reader.catalogue.api.DenyReason;
 import com.tf.reader.catalogue.api.EntitlementDecision;
 import com.tf.reader.catalogue.api.EntitlementQuery;
 import com.tf.reader.catalogue.api.SubjectRef;
+import com.tf.reader.library.api.ChangeLog;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.loan.entity.LicenceModel;
@@ -48,7 +49,9 @@ class BorrowFlowTest {
 	private final LoanRepository loans = mock(LoanRepository.class);
 	private final EntitlementQuery entitlement = mock(EntitlementQuery.class);
 	private final CopyLease copyLease = mock(CopyLease.class);
-	private final BorrowService service = new BorrowService(loans, entitlement, copyLease, CLOCK);
+	private final ChangeLog changeLog = mock(ChangeLog.class);
+	private final BorrowService service =
+			new BorrowService(loans, entitlement, copyLease, changeLog, CLOCK);
 
 	@Test
 	void subscriptionBorrowCreatesAnUnlimitedLoanWithNoLease() {
