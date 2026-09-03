@@ -14,8 +14,8 @@ import com.tf.reader.content.api.Format;
 import com.tf.reader.content.api.IndexUrl;
 import com.tf.reader.content.api.Intent;
 import com.tf.reader.content.api.SignedUrl;
-import com.tf.reader.hold.api.AvailabilityQuery;
-import com.tf.reader.hold.api.AvailabilitySnapshot;
+import com.tf.reader.hold.api.HoldView;
+import com.tf.reader.hold.api.QueueJoin;
 import com.tf.reader.library.api.ChangeLog;
 import com.tf.reader.library.api.ChangeReason;
 import com.tf.reader.loan.api.LicenceCommand;
@@ -64,7 +64,7 @@ class ReadBrokerServiceTest {
 	private ContentAccessGrant content;
 	private LicenceCommand licences;
 	private CopyLease lease;
-	private AvailabilityQuery availability;
+	private QueueJoin queue;
 	private ReconcilerService reconciler;
 	private DeviceCapService devices;
 	private RightsService rights;
@@ -77,7 +77,7 @@ class ReadBrokerServiceTest {
 		content = mock(ContentAccessGrant.class);
 		licences = mock(LicenceCommand.class);
 		lease = mock(CopyLease.class);
-		availability = mock(AvailabilityQuery.class);
+		queue = mock(QueueJoin.class);
 		reconciler = mock(ReconcilerService.class);
 		devices = mock(DeviceCapService.class);
 		changeLog = mock(ChangeLog.class);
@@ -86,7 +86,7 @@ class ReadBrokerServiceTest {
 		// Default: device cap always admits, unless a test says otherwise.
 		when(devices.admit(anyString(), any())).thenReturn(true);
 
-		broker = new ReadBrokerService(entitlements, content, licences, lease, availability,
+		broker = new ReadBrokerService(entitlements, content, licences, lease, queue,
 				reconciler, devices, rights, changeLog, CLOCK);
 	}
 
@@ -118,7 +118,7 @@ class ReadBrokerServiceTest {
 				.extracting(e -> ((ApiException) e).code())
 				.isEqualTo(ErrorCode.INVALID_DEVICE_PUBLIC_KEY);
 
-		verifyNoInteractions(entitlements, devices, content, licences, lease, availability);
+		verifyNoInteractions(entitlements, devices, content, licences, lease, queue);
 	}
 
 	// ── step 2 — every DenyReason maps to its own code ───────────────────────
@@ -131,7 +131,7 @@ class ReadBrokerServiceTest {
 				.extracting(e -> ((ApiException) e).code())
 				.isEqualTo(ErrorCode.NO_ENTITLEMENT);
 
-		verifyNoInteractions(devices, content, licences, lease, availability);
+		verifyNoInteractions(devices, content, licences, lease, queue);
 	}
 
 	@Test
@@ -236,7 +236,7 @@ class ReadBrokerServiceTest {
 				.extracting(e -> ((ApiException) e).code())
 				.isEqualTo(ErrorCode.DEVICE_LIMIT_REACHED);
 
-		verifyNoInteractions(content, licences, lease, availability);
+		verifyNoInteractions(content, licences, lease, queue);
 	}
 
 	@Test
@@ -249,7 +249,7 @@ class ReadBrokerServiceTest {
 		when(content.grant(any())).thenReturn(aGrant());
 
 		assertThat(broker.open(MEMBER, request(Intent.STREAM)).licenceModel()).isEqualTo("SUBSCRIPTION");
-		verifyNoInteractions(devices, lease, availability);
+		verifyNoInteractions(devices, lease, queue);
 	}
 
 	@Test
@@ -262,7 +262,7 @@ class ReadBrokerServiceTest {
 		when(content.grant(any())).thenReturn(aGrant());
 
 		assertThat(broker.open(MEMBER, request(Intent.STREAM)).licenceModel()).isEqualTo("OPEN_ACCESS");
-		verifyNoInteractions(devices, lease, availability);
+		verifyNoInteractions(devices, lease, queue);
 	}
 
 	// ── step 4 ──────────────────────────────────────────────────────────────
@@ -277,50 +277,43 @@ class ReadBrokerServiceTest {
 
 		// The whole point: we never asked anyone to do crypto or hold a copy for a
 		// read we were always going to refuse.
-		verifyNoInteractions(content, licences, lease, availability);
+		verifyNoInteractions(content, licences, lease, queue);
 	}
 
 	// ── step 5 ──────────────────────────────────────────────────────────────
 
 	@Test
-	void aFullEliteTitleRefusesAndCreatesNothingAndFetchesNothing() {
+	void aFullEliteTitleJoinsTheQueueInsteadOfRefusingAndCreatesNoLicenceOrGrant() {
 		when(entitlements.check(MEMBER, ITEM)).thenReturn(entitled(AccessLevel.ENTITLED_CONCURRENT, 5, 14));
 		when(lease.claim(MEMBER.institutionId(), ITEM, 5)).thenReturn(Optional.empty());
-		when(availability.forItem(MEMBER.institutionId(), ITEM, 5))
-				.thenReturn(new AvailabilitySnapshot(0, 4, null, CLOCK.instant()));
+		HoldView hold = new HoldView("hold_1", ITEM, "QUEUED", 3, 4, 14, CLOCK.instant(), null);
+		when(queue.join(MEMBER.userId(), MEMBER.institutionId(), ITEM))
+				.thenReturn(new QueueJoin.JoinResult(hold, true));
 
-		assertThatThrownBy(() -> broker.open(MEMBER, request(Intent.STREAM)))
-				.isInstanceOf(ApiException.class)
-				.extracting(e -> ((ApiException) e).code())
-				.isEqualTo(ErrorCode.NO_COPIES_AVAILABLE);
+		ReadingSessionResponse response = broker.open(MEMBER, request(Intent.STREAM));
+
+		assertThat(response.licenceId()).isNull();
+		assertThat(response.canPersist()).isFalse();
+		assertThat(response.content()).isNull();
+		assertThat(response.queue()).isNotNull();
+		assertThat(response.queue().queueId()).isEqualTo("hold_1");
+		assertThat(response.queue().position()).isEqualTo(3);
+		assertThat(response.queue().queueLength()).isEqualTo(4);
+		assertThat(response.queue().readNow()).isFalse();
 
 		verifyNoInteractions(licences, content);
 	}
 
 	@Test
-	void theFullTitleRefusalDescribesTheQueueWhenAvailabilityCanAnswer() {
+	void anAlreadyQueuedReaderGetsTheSamePlaceNotANewOne() {
 		when(entitlements.check(MEMBER, ITEM)).thenReturn(entitled(AccessLevel.ENTITLED_CONCURRENT, 5, 14));
 		when(lease.claim(any(), any(), anyInt())).thenReturn(Optional.empty());
-		when(availability.forItem(any(), any(), any()))
-				.thenReturn(new AvailabilitySnapshot(0, 4, 2, CLOCK.instant()));
+		HoldView existing = new HoldView("hold_1", ITEM, "QUEUED", 2, 4, 14, CLOCK.instant(), null);
+		when(queue.join(any(), any(), any())).thenReturn(new QueueJoin.JoinResult(existing, false));
 
-		assertThatThrownBy(() -> broker.open(MEMBER, request(Intent.STREAM)))
-				.isInstanceOf(ApiException.class)
-				.hasMessageContaining("4 reader")
-				.hasMessageContaining("already 2 in line");
-	}
+		ReadingSessionResponse response = broker.open(MEMBER, request(Intent.STREAM));
 
-	@Test
-	void theFullTitleRefusalNeverBecomesA500WhenAvailabilityItselfFails() {
-		when(entitlements.check(MEMBER, ITEM)).thenReturn(entitled(AccessLevel.ENTITLED_CONCURRENT, 5, 14));
-		when(lease.claim(any(), any(), anyInt())).thenReturn(Optional.empty());
-		when(availability.forItem(any(), any(), any())).thenThrow(new RuntimeException("redis is down"));
-
-		// Best-effort: the queue detail is lost, but the refusal itself must still be a clean 409.
-		assertThatThrownBy(() -> broker.open(MEMBER, request(Intent.STREAM)))
-				.isInstanceOf(ApiException.class)
-				.extracting(e -> ((ApiException) e).code())
-				.isEqualTo(ErrorCode.NO_COPIES_AVAILABLE);
+		assertThat(response.queue().position()).isEqualTo(2);
 	}
 
 	// ── subscription / open-access happy path — no lease, no queue ──────────
@@ -337,7 +330,7 @@ class ReadBrokerServiceTest {
 
 		assertThat(response.licenceModel()).isEqualTo("SUBSCRIPTION");
 		assertThat(response.queue()).isNull();
-		verifyNoInteractions(lease, availability);
+		verifyNoInteractions(lease, queue);
 	}
 
 	// ── elite happy path — claim, create, grant, extend, forward ────────────
