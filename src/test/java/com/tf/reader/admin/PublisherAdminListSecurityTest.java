@@ -19,9 +19,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Unit tests for {@link AdminScopeAuthorizer#isSuperAdmin()}.
  *
  * <p>
- * Tests the role-check logic directly on the authorizer without a servlet.
- * {@code PublisherAdminService.list()} calls {@code adminScope.requireSuperAdmin()}, which is
- * built on this same method - if it returns the correct value, the list guard is correct.
+ * Tests the role-check logic directly on the authorizer, without a servlet.
+ *
+ * <p>
+ * This is no longer the guard on the publisher list. That endpoint used to require
+ * {@code requireSuperAdmin()}; it now admits all three admin roles and pins a
+ * {@code PUBLISHER_ADMIN} to their own publisher instead, which is covered by
+ * {@code PublisherAdminServiceTest.publisherAdminSeesOnlyTheirOwnPublisher}. What is left here is
+ * still worth keeping - {@code isSuperAdmin()} guards other operations - but a green run here says
+ * nothing about who may list publishers.
  */
 class PublisherAdminListSecurityTest {
 
