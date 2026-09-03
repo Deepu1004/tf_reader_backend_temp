@@ -204,6 +204,32 @@ class EntitlementAdminServiceTest {
 		assertThat(created.status()).isEqualTo(EntitlementStatus.ACTIVE);
 	}
 
+	@Test
+	void createSupersedesARevokedEntitlementForTheSameScope() {
+		when(institutionRepository.existsById("inst_7f3")).thenReturn(true);
+		when(publisherRepository.existsById("pub_rtlg")).thenReturn(true);
+
+		Entitlement revoked = entitlement("ent_5a1", "inst_7f3", ScopeType.PUBLISHER, "pub_rtlg", null, 3);
+		revoked.setStatus(EntitlementStatus.REVOKED);
+		when(entitlementRepository.findByInstitutionIdAndScopeTypeAndScopeId("inst_7f3", ScopeType.PUBLISHER,
+				"pub_rtlg")).thenReturn(Optional.of(revoked));
+		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+		EntitlementCreate write = new EntitlementCreate(ScopeType.PUBLISHER, "pub_rtlg", null, null, null, null, null);
+
+		EntitlementView created = service.create("inst_7f3", write);
+
+		assertThat(created.id()).isEqualTo("ent_5a1");
+		assertThat(created.status()).isEqualTo(EntitlementStatus.ACTIVE);
+		assertThat(created.version()).isEqualTo(4);
+		verify(versionBumper).bump(CatalogueVersionBumper.Scope.INSTITUTION, "inst_7f3");
+
+		ArgumentCaptor<Map<String, Object>> beforeCaptor = ArgumentCaptor.forClass(Map.class);
+		verify(auditWriter).record(any(), eq(com.tf.reader.common.audit.AuditLog.Action.CREATE), eq("ENTITLEMENT"),
+				eq("ent_5a1"), beforeCaptor.capture(), any());
+		assertThat(beforeCaptor.getValue()).containsEntry("status", "REVOKED");
+	}
+
 	// ---------------------------------------------------------------- update
 
 	@Test

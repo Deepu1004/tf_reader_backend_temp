@@ -297,7 +297,7 @@ public class CatalogueItemAdminService {
 
 
 	private CatalogueItemView toSummaryView(CatalogueItem item, boolean institutionView, EntitlementStatus status) {
-		String entitlementStatusLabel = !institutionView ? null : (status == null ? "none" : status.name().toLowerCase());
+		String entitlementStatusLabel = !institutionView ? null : (status == null ? "NONE" : status.name());
 		return toView(item, null, List.of(), entitlementStatusLabel);
 	}
 

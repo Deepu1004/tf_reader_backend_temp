@@ -83,25 +83,39 @@ public class EntitlementAdminService {
 					"No " + write.scopeType().name().toLowerCase() + " exists with id '" + write.scopeId() + "'");
 		}
 
+		// A REVOKED row still occupies the {institutionId, scopeType, scopeId} unique index, so a
+		// re-request for the same scope must reuse and reopen that row rather than insert a
+		// second one and hit a duplicate key error.
+		Entitlement revoked = entitlementRepository
+				.findByInstitutionIdAndScopeTypeAndScopeId(institutionId, write.scopeType(), write.scopeId())
+				.filter(existing -> existing.getStatus() == EntitlementStatus.REVOKED)
+				.orElse(null);
+
 		Instant now = Instant.now();
-		Entitlement entitlement = new Entitlement();
-		entitlement.setId(newId());
-		entitlement.setInstitutionId(institutionId);
-		entitlement.setScopeType(write.scopeType());
-		entitlement.setScopeId(write.scopeId());
+		Entitlement entitlement = revoked != null ? revoked : new Entitlement();
+		Map<String, Object> before = revoked != null ? Map.of("status", String.valueOf(revoked.getStatus())) : null;
+		if (revoked == null) {
+			entitlement.setId(newId());
+			entitlement.setInstitutionId(institutionId);
+			entitlement.setScopeType(write.scopeType());
+			entitlement.setScopeId(write.scopeId());
+			entitlement.setVersion(0);
+			entitlement.setCreatedAt(now);
+		}
+		else {
+			entitlement.setVersion(entitlement.getVersion() + 1);
+		}
 		entitlement.setCopies(write.copies());
 		entitlement.setLoanPeriodDays(write.loanPeriodDays() != null ? write.loanPeriodDays() : DEFAULT_LOAN_PERIOD_DAYS);
 		entitlement.setValidFrom(write.validFrom() != null ? write.validFrom() : LocalDate.now());
 		entitlement.setValidTo(write.validTo());
 		entitlement.setStatus(resolveCreateStatus(write.status()));
-		entitlement.setVersion(0);
-		entitlement.setCreatedAt(now);
 		entitlement.setUpdatedAt(now);
 
 		entitlement = entitlementRepository.save(entitlement);
 
 		auditWriter.record(adminScope.currentAdminId(), AuditLog.Action.CREATE, "ENTITLEMENT", entitlement.getId(),
-				null, creationMap(entitlement));
+				before, creationMap(entitlement));
 		catalogueVersionBumper.bump(CatalogueVersionBumper.Scope.INSTITUTION, institutionId);
 
 		return toView(entitlement);

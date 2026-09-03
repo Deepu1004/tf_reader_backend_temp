@@ -3439,14 +3439,14 @@ components:
         description: { type: string }
         entitlementStatus:
           type: [string, 'null']
-          enum: [none, pending, active, suspended, revoked, null]
+          enum: [NONE, PENDING, ACTIVE, SUSPENDED, REVOKED, null]
           description: >-
             Only present when the caller is viewing as an institution (an
-            INSTITUTION_ADMIN, or a SUPER_ADMIN who passed `institutionId`): `none`,
-            `pending`, `active`, `suspended` or `revoked`, resolved from that institution's
+            INSTITUTION_ADMIN, or a SUPER_ADMIN who passed `institutionId`): `NONE`,
+            `PENDING`, `ACTIVE`, `SUSPENDED` or `REVOKED`, resolved from that institution's
             COLLECTION- and PUBLISHER-scoped entitlements only - an ITEM-scoped entitlement
             is never considered. Null for any other caller (a PUBLISHER_ADMIN, or a
-            SUPER_ADMIN with no `institutionId`) - not the same as `none`, which means the
+            SUPER_ADMIN with no `institutionId`) - not the same as `NONE`, which means the
             institution has zero matching COLLECTION or PUBLISHER entitlements for this
             collection.
 
@@ -3544,13 +3544,13 @@ components:
           description: Touched by every write, including ingest state changes. `IngestStatus` returns it.
         entitlementStatus:
           type: [string, 'null']
-          enum: [none, pending, active, suspended, revoked, null]
+          enum: [NONE, PENDING, ACTIVE, SUSPENDED, REVOKED, null]
           description: >-
             Only present when the caller is viewing as an institution (an
-            INSTITUTION_ADMIN, or a SUPER_ADMIN who passed `institutionId`): `none`,
-            `pending`, `active`, `suspended` or `revoked`, resolved against that
+            INSTITUTION_ADMIN, or a SUPER_ADMIN who passed `institutionId`): `NONE`,
+            `PENDING`, `ACTIVE`, `SUSPENDED` or `REVOKED`, resolved against that
             institution's entitlements. Null for any other caller (a PUBLISHER_ADMIN, or a
-            SUPER_ADMIN with no `institutionId`) - not the same as `none`, which means the
+            SUPER_ADMIN with no `institutionId`) - not the same as `NONE`, which means the
             institution
             has zero matching entitlements for this item.
 
