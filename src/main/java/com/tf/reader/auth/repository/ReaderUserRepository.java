@@ -10,4 +10,7 @@ import com.tf.reader.auth.entity.ReaderUser;
 public interface ReaderUserRepository extends MongoRepository<ReaderUser, String> {
 
 	Optional<ReaderUser> findByEmailAndInstitutionId(String email, String institutionId);
+
+	/** The individual counterpart: no institution, so no pair to key by - just the email. */
+	Optional<ReaderUser> findByEmailAndInstitutionIdIsNull(String email);
 }

@@ -59,6 +59,8 @@ class AuthorizationCoverageTest {
 			"POST /api/v1/auth/dev-token",
 			"POST /api/v1/auth/oidc/start",
 			"GET /api/v1/auth/oidc/callback",
+			"POST /api/v1/auth/b2c/start",
+			"GET /api/v1/auth/b2c/callback",
 			// A one-time code, and an opaque refresh token, authenticate these - neither is a
 			// bearer JWT, so there is nothing for this chain to check before the controller runs.
 			"POST /api/v1/auth/token",
