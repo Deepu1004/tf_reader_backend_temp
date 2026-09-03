@@ -57,7 +57,7 @@ public class QueueService implements QueueJoin {
     }
 
     public Placed join(CurrentUser me, String itemId) {
-        JoinResult result = join(me.userId(), QueueKeys.requireScope(me.institutionId()), itemId);
+        JoinResult result = join(me.userId(), me.institutionId(), itemId);
         return new Placed(result.hold(), result.created());
     }
 
@@ -65,10 +65,13 @@ public class QueueService implements QueueJoin {
      * Published via {@link QueueJoin} for the {@code reading} module: called when a reading
      * session finds no copy free, so the reader is queued in the same request instead of
      * needing a separate {@code POST /api/v1/holds}. Identical semantics to the HTTP path —
-     * re-entitlement check, dedupe against an existing hold, same {@code HOLD_PLACED} event.
+     * re-entitlement check, dedupe against an existing hold, same {@code HOLD_PLACED} event —
+     * including the null/blank scope guard, since a port caller is no more trusted than an
+     * HTTP one to have already checked it.
      */
     @Override
-    public JoinResult join(String userId, String scope, String itemId) {
+    public JoinResult join(String userId, String rawScope, String itemId) {
+        String scope = QueueKeys.requireScope(rawScope);
         EntitlementDecision decision = entitlements.check(new SubjectRef(userId, scope), itemId);
         if (!decision.entitled()) {
             // The deny reason, unchanged — "your subscription lapsed" and
