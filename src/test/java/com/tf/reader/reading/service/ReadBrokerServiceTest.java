@@ -292,28 +292,26 @@ class ReadBrokerServiceTest {
 
 		ReadingSessionResponse response = broker.open(MEMBER, request(Intent.STREAM));
 
-		assertThat(response.licenceId()).isNull();
+		assertThat(response.loanId()).isNull();
 		assertThat(response.canPersist()).isFalse();
 		assertThat(response.content()).isNull();
-		assertThat(response.queue()).isNotNull();
-		assertThat(response.queue().queueId()).isEqualTo("hold_1");
-		assertThat(response.queue().position()).isEqualTo(3);
-		assertThat(response.queue().queueLength()).isEqualTo(4);
-		assertThat(response.queue().readNow()).isFalse();
+		assertThat(response.licenceModel()).isEqualTo("ELITE");
+		assertThat(response.holdCreatedAt()).isEqualTo(CLOCK.instant());
 
 		verifyNoInteractions(licences, content);
 	}
 
 	@Test
-	void anAlreadyQueuedReaderGetsTheSamePlaceNotANewOne() {
+	void anAlreadyQueuedReaderGetsTheSamePlacedAtNotANewOne() {
 		when(entitlements.check(MEMBER, ITEM)).thenReturn(entitled(AccessLevel.ENTITLED_CONCURRENT, 5, 14));
 		when(lease.claim(any(), any(), anyInt())).thenReturn(Optional.empty());
-		HoldView existing = new HoldView("hold_1", ITEM, "QUEUED", 2, 4, 14, CLOCK.instant(), null);
+		Instant originallyPlacedAt = CLOCK.instant().minusSeconds(3600);
+		HoldView existing = new HoldView("hold_1", ITEM, "QUEUED", 2, 4, 14, originallyPlacedAt, null);
 		when(queue.join(any(), any(), any())).thenReturn(new QueueJoin.JoinResult(existing, false));
 
 		ReadingSessionResponse response = broker.open(MEMBER, request(Intent.STREAM));
 
-		assertThat(response.queue().position()).isEqualTo(2);
+		assertThat(response.holdCreatedAt()).isEqualTo(originallyPlacedAt);
 	}
 
 	// ── subscription / open-access happy path — no lease, no queue ──────────
@@ -329,7 +327,7 @@ class ReadBrokerServiceTest {
 		ReadingSessionResponse response = broker.open(MEMBER, request(Intent.STREAM));
 
 		assertThat(response.licenceModel()).isEqualTo("SUBSCRIPTION");
-		assertThat(response.queue()).isNull();
+		assertThat(response.holdCreatedAt()).isNull();
 		verifyNoInteractions(lease, queue);
 	}
 
@@ -354,7 +352,7 @@ class ReadBrokerServiceTest {
 
 		assertThat(response.licenceModel()).isEqualTo("ELITE");
 		assertThat(response.canPersist()).isFalse();
-		assertThat(response.queue()).isNull(); // this endpoint never places anyone in a queue
+		assertThat(response.holdCreatedAt()).isNull(); // a free copy was claimed — no hold was created
 
 		var order = org.mockito.Mockito.inOrder(lease, licences, content, lease);
 		order.verify(lease).claim(MEMBER.institutionId(), ITEM, 5);
@@ -399,7 +397,7 @@ class ReadBrokerServiceTest {
 		ReadingSessionResponse response = broker.open(MEMBER, request(Intent.STREAM));
 
 		assertThat(response).isNotNull();
-		assertThat(response.licenceId()).isEqualTo("lic_3b");
+		assertThat(response.loanId()).isEqualTo("lic_3b");
 		assertThat(response.licenceModel()).isEqualTo("ELITE");
 		verify(reconciler).reconcile(ITEM); // reconcile was triggered despite the failed extend
 	}
