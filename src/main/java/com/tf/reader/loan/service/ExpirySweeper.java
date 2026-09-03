@@ -74,6 +74,6 @@ public class ExpirySweeper {
 		if (closed.getLeaseId() != null) {          // Elite only — release exactly once
 			copyLease.release(closed.getLeaseId());
 		}
-		holdPromotion.promote(closed.getItemId());
+		holdPromotion.promote(closed.getInstitutionId(), closed.getItemId());
 	}
 }

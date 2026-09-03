@@ -60,7 +60,7 @@ class ExpirySweeperTest {
 		InOrder order = inOrder(loans, copyLease, holdPromotion);
 		order.verify(loans).save(any(Loan.class));
 		order.verify(copyLease).release("lease_1");
-		order.verify(holdPromotion).promote("item_1");
+		order.verify(holdPromotion).promote("inst_1", "item_1");
 	}
 
 	@Test
@@ -88,7 +88,7 @@ class ExpirySweeperTest {
 		sweeper.sweep();
 
 		verify(copyLease, never()).release(anyString());
-		verify(holdPromotion).promote("item_2");
+		verify(holdPromotion).promote("inst_1", "item_2");
 	}
 
 	@Test
@@ -103,8 +103,8 @@ class ExpirySweeperTest {
 
 		sweeper.sweep();
 
-		verify(holdPromotion).promote("item_good");
-		verify(holdPromotion, never()).promote(eq("item_bad"));
+		verify(holdPromotion).promote("inst_1", "item_good");
+		verify(holdPromotion, never()).promote(eq("inst_1"), eq("item_bad"));
 		// The bad row never got past its save, so it must record nothing; only the good one does.
 		verify(changeLog).record(ChangeRecord.forLoan(
 				"user_1", ChangeReason.LOAN_EXPIRED, "item_good", "loan_good", NOW));
