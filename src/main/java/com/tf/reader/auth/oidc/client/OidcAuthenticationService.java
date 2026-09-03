@@ -10,12 +10,9 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import com.tf.reader.auth.model.Institution;
 import com.tf.reader.auth.model.TnfUser;
 import com.tf.reader.auth.token.IssuedToken;
 import com.tf.reader.auth.token.TokenService;
-import com.tf.reader.catalogue.api.InstitutionLookup;
-import com.tf.reader.catalogue.api.InstitutionRef;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 
@@ -50,7 +47,6 @@ public class OidcAuthenticationService {
 			org.slf4j.LoggerFactory.getLogger(OidcAuthenticationService.class);
 
 	private final OidcTransactionStore transactions;
-	private final InstitutionLookup institutions;
 	private final OidcTokenClient tokenClient;
 	private final OidcIdTokenValidator idTokenValidator;
 	private final OidcUserMapper userMapper;
@@ -59,11 +55,10 @@ public class OidcAuthenticationService {
 	private final Clock clock;
 
 	public OidcAuthenticationService(OidcTransactionStore transactions,
-			InstitutionLookup institutions, OidcTokenClient tokenClient,
-			OidcIdTokenValidator idTokenValidator, OidcUserMapper userMapper,
-			TokenService tokenService, OidcProperties properties, Clock clock) {
+			OidcTokenClient tokenClient, OidcIdTokenValidator idTokenValidator,
+			OidcUserMapper userMapper, TokenService tokenService, OidcProperties properties,
+			Clock clock) {
 		this.transactions = transactions;
-		this.institutions = institutions;
 		this.tokenClient = tokenClient;
 		this.idTokenValidator = idTokenValidator;
 		this.userMapper = userMapper;
@@ -75,26 +70,16 @@ public class OidcAuthenticationService {
 	/**
 	 * Opens a sign-in and returns the url the browser must be sent to.
 	 *
-	 * <p>Authenticates nobody and mints no token. The only input is an institution id anyone
-	 * could type, and it is resolved against the institution repository before anything else
-	 * happens - an unknown institution cannot even start.
-	 *
-	 * @throws ApiException 404 if no such institution exists
+	 * <p>Authenticates nobody and mints no token. No institution to resolve and none to refuse a
+	 * caller over - this is the whole point of the flow.
 	 */
-	public OidcStartResponse start(String institutionId) {
-		InstitutionRef institutionRef = institutions.find(institutionId)
-				.orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND,
-						"No institution is registered with id '" + institutionId + "'."));
-		Institution institution = new Institution(institutionRef.institutionId(), institutionRef.name());
-
-		OidcTransaction transaction = transactions.open(institution.institutionId());
-		log.info("OIDC transaction created: {} for institution {}",
-				transaction.id(), institution.institutionId());
+	public OidcStartResponse start() {
+		OidcTransaction transaction = transactions.open();
+		log.info("OIDC transaction created: {}", transaction.id());
 
 		return new OidcStartResponse(
 				transaction.id(),
 				authorizationUrl(transaction),
-				institution,
 				transaction.expiresAt().truncatedTo(ChronoUnit.SECONDS),
 				clock.instant().truncatedTo(ChronoUnit.SECONDS));
 	}
@@ -110,8 +95,7 @@ public class OidcAuthenticationService {
 	 * <li><b>code exchange</b> - server to server, with our client secret</li>
 	 * <li><b>ID token</b> - signature against the provider's JWKS, issuer, audience, expiry,
 	 * then the nonce against this transaction</li>
-	 * <li><b>institution</b> - from the transaction, never from a claim</li>
-	 * <li><b>user</b> - our own store, by email plus institution</li>
+	 * <li><b>user</b> - our own store, by email; the first sign-in for an email provisions it</li>
 	 * <li><b>token</b> - ours, minted last</li>
 	 * </ol>
 	 *
@@ -120,9 +104,10 @@ public class OidcAuthenticationService {
 	 * failed sign-in cannot produce a token at any point.
 	 *
 	 * @param code  the authorization code from the callback
-	 * @param state the state from the callback - the ONLY thing that decides the institution
+	 * @param state the state from the callback - the ONLY thing that ties this callback to a
+	 *              sign-in this backend started
 	 * @throws ApiException 401 if the state is unknown/expired/used, the exchange fails, or the
-	 *                      ID token does not validate; 403 if the identity holds no membership
+	 *                      ID token does not validate
 	 */
 	public OidcLoginResult complete(String code, String state) {
 		if (code == null || code.isBlank()) {
@@ -145,24 +130,16 @@ public class OidcAuthenticationService {
 		// STEP 3 - and the ID token becomes claims we are willing to believe.
 		Jwt idToken = idTokenValidator.validate(tokens.idToken(), transaction);
 
-		// STEP 4 - the institution is recovered from OUR transaction. One provider serves every
-		// institution, so no claim can tell us which one this is - and if the client could, it
-		// could pick any of them.
-		InstitutionRef institutionRef = institutions.find(transaction.institutionId())
-				.orElseThrow(() -> new ApiException(ErrorCode.OIDC_AUTHENTICATION_FAILED,
-						"The institution this sign-in was started for no longer exists."));
-		Institution institution = new Institution(institutionRef.institutionId(), institutionRef.name());
+		// STEP 4 - who that is, here.
+		TnfUser user = userMapper.map(idToken);
 
-		// STEP 5 - who that is, here.
-		TnfUser user = userMapper.map(idToken, institution.institutionId());
-
-		// STEP 6 - our token, from the mapped user and nothing else.
+		// STEP 5 - our token, from the mapped user and nothing else.
 		IssuedToken token = tokenService.issue(user);
 		log.info("Application JWT issued for {} via OIDC, expires at {}",
 				user.userId(), token.expiresAt());
 
 		return new OidcLoginResult(token.token(), token.expiresAt(),
-				clock.instant().truncatedTo(ChronoUnit.SECONDS), institution,
+				clock.instant().truncatedTo(ChronoUnit.SECONDS),
 				userMapper.resolveSubject(idToken), user);
 	}
 
@@ -189,16 +166,13 @@ public class OidcAuthenticationService {
 	/**
 	 * What a completed sign-in produced.
 	 *
-	 * <p>Field for field the same as {@code SamlAuthenticationService.SamlLoginResult}, because
-	 * the API Reference requires one sign-in envelope: the app routes on the institution's
-	 * sign-in method and must not need two response parsers. {@code oidcSubject} stands where
-	 * {@code samlSubject} stands - prototype evidence that the right transaction and the right
-	 * identity met, and the field that would come out before this is shown to a real client.
+	 * <p>{@code oidcSubject} is the provider's stable identifier for this identity - evidence that
+	 * the right transaction and the right identity met, not a credential in itself.
 	 *
 	 * <p><b>The provider's ID token is deliberately not a component of this record</b>, so there
 	 * is no path by which it could be serialised to a client or written to a log.
 	 */
 	public record OidcLoginResult(String token, Instant expiresAt, Instant serverTime,
-			Institution institution, String oidcSubject, TnfUser user) {
+			String oidcSubject, TnfUser user) {
 	}
 }

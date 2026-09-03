@@ -34,9 +34,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *                     configured secret, so the local demo works without setting the same value
  *                     twice; tests set them differently to prove the check exists
  * @param redirectUris the redirect uris the mock will send a code to - a real B2C app
- *                     registration allows more than one, which is exactly why there can be more
- *                     than one relying party (institutional OIDC, individual B2C) against the
- *                     same local mock tenant
+ *                     registration allows more than one, which is why this is a list rather than
+ *                     a single value even though the relying party registers only one today
  * @param codeTtl      how long an authorization code lives. Short: it is exchanged within
  *                     milliseconds of being issued, by a backend, over a direct connection
  * @param idTokenTtl   how long the ID token it mints lives

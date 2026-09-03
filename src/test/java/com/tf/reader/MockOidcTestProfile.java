@@ -55,9 +55,6 @@ public abstract class MockOidcTestProfile extends ContainerisedInfrastructure {
 
 	public static final String REDIRECT_URI = ISSUER + "/api/v1/auth/oidc/callback";
 
-	/** The individual B2C flow's own callback, registered against the same mock tenant. */
-	public static final String B2C_REDIRECT_URI = ISSUER + "/api/v1/auth/b2c/callback";
-
 	/** The application's base url, which in these tests is the same origin as the provider. */
 	public static String baseUrl() {
 		return ISSUER;
@@ -95,9 +92,7 @@ public abstract class MockOidcTestProfile extends ContainerisedInfrastructure {
 		registry.add("mock-oidc.issuer", () -> ISSUER);
 		registry.add("mock-oidc.client-id", () -> CLIENT_ID);
 		registry.add("mock-oidc.client-secret", () -> CLIENT_SECRET);
-		// Two registered callbacks against the one mock tenant: institutional OIDC and B2C.
 		registry.add("mock-oidc.redirect-uris[0]", () -> REDIRECT_URI);
-		registry.add("mock-oidc.redirect-uris[1]", () -> B2C_REDIRECT_URI);
 
 		// The relying party, pointed at it. These are the six values that become a B2C tenant's
 		// in production, and nothing else changes.
@@ -108,14 +103,5 @@ public abstract class MockOidcTestProfile extends ContainerisedInfrastructure {
 		registry.add("tnf.auth.oidc.token-uri", () -> ISSUER + "/oauth2/token");
 		registry.add("tnf.auth.oidc.jwk-set-uri", () -> ISSUER + "/oauth2/jwks");
 		registry.add("tnf.auth.oidc.redirect-uri", () -> REDIRECT_URI);
-
-		// The individual B2C flow, against the same mock tenant - same client, different callback.
-		registry.add("tnf.auth.b2c.client-id", () -> CLIENT_ID);
-		registry.add("tnf.auth.b2c.client-secret", () -> CLIENT_SECRET);
-		registry.add("tnf.auth.b2c.issuer", () -> ISSUER);
-		registry.add("tnf.auth.b2c.authorization-uri", () -> ISSUER + "/oauth2/authorize");
-		registry.add("tnf.auth.b2c.token-uri", () -> ISSUER + "/oauth2/token");
-		registry.add("tnf.auth.b2c.jwk-set-uri", () -> ISSUER + "/oauth2/jwks");
-		registry.add("tnf.auth.b2c.redirect-uri", () -> B2C_REDIRECT_URI);
 	}
 }
