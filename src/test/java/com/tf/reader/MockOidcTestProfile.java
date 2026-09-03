@@ -92,7 +92,7 @@ public abstract class MockOidcTestProfile extends ContainerisedInfrastructure {
 		registry.add("mock-oidc.issuer", () -> ISSUER);
 		registry.add("mock-oidc.client-id", () -> CLIENT_ID);
 		registry.add("mock-oidc.client-secret", () -> CLIENT_SECRET);
-		registry.add("mock-oidc.redirect-uri", () -> REDIRECT_URI);
+		registry.add("mock-oidc.redirect-uris[0]", () -> REDIRECT_URI);
 
 		// The relying party, pointed at it. These are the six values that become a B2C tenant's
 		// in production, and nothing else changes.

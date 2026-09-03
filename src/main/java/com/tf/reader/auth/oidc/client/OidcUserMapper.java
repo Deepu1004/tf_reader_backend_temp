@@ -16,24 +16,22 @@ import com.tf.reader.common.error.ErrorCode;
 /**
  * Turns a validated OIDC ID token into a TnF user.
  *
- * <p>The exact counterpart of {@link com.tf.reader.auth.saml.SamlUserMapper}, deliberately: the
- * provider tells us who someone is, the institution comes from the sign-in transaction our own
- * backend opened, and this class is the only place those two facts meet. <b>Both mappers end at
- * the same {@link ReaderUserDirectory} lookup</b>, so a SAML sign-in and an OIDC sign-in for the
- * same person at the same institution resolve to the same {@code userId}. That convergence is
- * the point of having one user store rather than one per protocol, and it is what lets every
- * module behind the filter chain stay ignorant of how anybody signed in.
+ * <p>The individual counterpart of {@link com.tf.reader.auth.saml.SamlUserMapper} - same
+ * claim-reading rules, but there is no institution to resolve a membership against. An identity
+ * here <b>is</b> the account: the first successful sign-in for an email provisions it
+ * ({@link ReaderUserDirectory#findOrProvisionIndividual}), rather than being refused as
+ * unprovisioned the way an institutional sign-in is.
  *
  * <p>Takes a {@link Jwt} because that is what verification produces - a token whose signature,
  * issuer, audience, expiry and nonce have all been checked. There is no overload taking a raw
  * string, so there is no path by which an unverified token reaches a user lookup.
  *
- * <p><b>What is deliberately NOT read from any claim:</b> roles, collections, user type and
- * institution. Those are this application's authorization model and they come from our own user
- * store. A claim is the provider's statement about identity, not a grant of authority here - and
- * a {@code roles} claim honoured at this line would let anyone who can edit a B2C user flow's
- * output claims, or anyone who can reconfigure the mock, make themselves an administrator of
- * the Reader.
+ * <p><b>What is deliberately NOT read from any claim:</b> roles, collections and user type. Those
+ * are this application's authorization model and they come from our own user store. A claim is
+ * the provider's statement about identity, not a grant of authority here - and a {@code roles}
+ * claim honoured at this line would let anyone who can edit the identity provider's user flow
+ * output claims, or anyone who can reconfigure the mock, make themselves an administrator of the
+ * Reader.
  */
 @Component
 @EnableConfigurationProperties(OidcProperties.class)
@@ -51,28 +49,17 @@ public class OidcUserMapper {
 	}
 
 	/**
-	 * @param idToken       an ID token that has already been fully validated
-	 * @param institutionId the institution recovered from the sign-in transaction, never from a
-	 *                      claim and never from the client
-	 * @throws ApiException 401 if the token carries no email we can identify; 403 if the identity
-	 *                      holds no membership at that institution
+	 * @param idToken an ID token that has already been fully validated
+	 * @throws ApiException 401 if the token carries no email we can identify
 	 */
-	public TnfUser map(Jwt idToken, String institutionId) {
+	public TnfUser map(Jwt idToken) {
 		String email = resolveEmail(idToken);
 
-		TnfUser user = users.find(email, institutionId)
-				.orElseThrow(() -> {
-					// Authenticated is not provisioned, and the log says which of the two failed -
-					// it is the first thing anybody debugging a new tenant needs to know.
-					log.warn("OIDC identity authenticated but not provisioned at institution {}",
-							institutionId);
-					return new ApiException(ErrorCode.USER_NOT_PROVISIONED,
-							"This identity holds no membership at institution '" + institutionId + "'.");
-				});
+		TnfUser user = users.findOrProvisionIndividual(email);
 
 		// The user id, not the email: an address is personal data and this line ends up in a log
 		// file that outlives the request.
-		log.info("OIDC user resolved: {} at {}", user.userId(), institutionId);
+		log.info("OIDC user resolved: {}", user.userId());
 		return user;
 	}
 

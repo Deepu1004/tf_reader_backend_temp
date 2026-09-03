@@ -84,6 +84,8 @@ tnf:
     jwt:
       secret: ${TNF_JWT_SECRET}
       ttl: 1h
+    # The individual, no-institution sign-in flow. Pointed at whichever IdP is configured (Azure
+    # AD B2C or otherwise) - swapping the six values below is the entire migration.
     oidc:
       client-id: ${OIDC_CLIENT_ID}
       client-secret: ${OIDC_CLIENT_SECRET}
