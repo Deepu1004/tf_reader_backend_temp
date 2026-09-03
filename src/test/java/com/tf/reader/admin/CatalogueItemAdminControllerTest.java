@@ -3,6 +3,8 @@ package com.tf.reader.admin;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -127,6 +129,22 @@ class CatalogueItemAdminControllerTest {
 		mvc.perform(post("/api/admin/v1/catalogue-items").contentType(MediaType.APPLICATION_JSON).content("""
 				{"publisherId":"does-not-exist","title":"x","contentType":"PDF","accessTier":"ELITE"}
 				""")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+	}
+
+	/**
+	 * The duplicate-ISBN check in {@code CatalogueItemAdminService} normalises before comparing but
+	 * does not re-validate the shape, on the grounds that {@code @Valid} has already refused
+	 * anything that is not an ISBN. This test is what makes that safe to rely on: if the
+	 * {@code @Pattern} on {@code CatalogueItemWrite.isbn} were ever relaxed or dropped, free text
+	 * would reach the service and be stored as an ISBN, and this fails first.
+	 */
+	@Test
+	void createWithFreeTextInIsbnIs400AndNeverReachesTheService() throws Exception {
+		mvc.perform(post("/api/admin/v1/catalogue-items").contentType(MediaType.APPLICATION_JSON).content("""
+				{"publisherId":"pub_rtlg","title":"x","isbn":"hello","contentType":"PDF","accessTier":"ELITE"}
+				""")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+		verify(service, never()).create(any());
 	}
 
 	// ---------------------------------------------------------------- get

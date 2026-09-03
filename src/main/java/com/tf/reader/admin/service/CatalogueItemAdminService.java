@@ -138,6 +138,7 @@ public class CatalogueItemAdminService {
 			throw new ApiException(ErrorCode.FORBIDDEN_ROLE, "Not permitted to create a book for this publisher");
 		}
 		validateDuration(write);
+		requireIsbnFree(write.isbn(), null);
 
 		CatalogueItem item = new CatalogueItem();
 		item.setId("item_" + UUID.randomUUID().toString().substring(0, 8));
@@ -173,6 +174,7 @@ public class CatalogueItemAdminService {
 			throw new ApiException(ErrorCode.FORBIDDEN_ROLE, "Not permitted to move a book to this publisher");
 		}
 		validateDuration(write);
+		requireIsbnFree(write.isbn(), itemId);
 
 		Map<String, Object> before = afterMap(item);
 
@@ -246,6 +248,42 @@ public class CatalogueItemAdminService {
 		if (!audio && write.duration() != null) {
 			throw new ApiException(ErrorCode.VALIDATION_FAILED, "duration is only meaningful when contentType is AUDIO");
 		}
+	}
+
+	/**
+	 * A repeat ISBN is refused rather than linked to the book that already holds it. Putting an
+	 * existing book into a collection is already
+	 * available via the endpoint PUT /api/admin/v1/collections/{collectionId}/items ,and one URL that either creates
+	 * or links depending on data the caller cannot see is worse than a 409.
+	 *
+	 * <p>Compares on the normalised form, so ISBN 978-0-13-235088-4 and ISBN 9780132350884
+	 * are the same book. An absent ISBN is never a duplicate: it is optional , and most audiobooks and ingest-first drafts have none.
+	 *
+	 * @param editingItemId the item being updated, excluded from the match so a PUT that leaves
+	 *                      the ISBN alone does not collide with itself; null when creating
+	 */
+	private void requireIsbnFree(String rawIsbn, String editingItemId) {
+		String isbn = normalizeIsbn(rawIsbn);
+		if (isbn == null || isbn.isBlank()) {
+			return;
+		}
+		catalogueItemRepository.findByIsbn(isbn)
+				.filter(existing -> !existing.getId().equals(editingItemId))
+				.ifPresent(existing -> {
+					throw new ApiException(ErrorCode.CODE_TAKEN, duplicateIsbnMessage(existing));
+				});
+	}
+
+	// Naming the existing book tells an operator what to do next, but only when the book is
+	// already theirs to see. To an admin scoped elsewhere it is another publisher's catalogue,
+	// so they get the refusal without the id - same reason findActiveById hides a suspended
+	// institution behind a 404.
+	private String duplicateIsbnMessage(CatalogueItem existing) {
+		if (!adminScope.canAccessPublisher(existing.getPublisherId())) {
+			return "That ISBN is already in the catalogue";
+		}
+		return "ISBN already belongs to " + existing.getId()
+				+ ". To add that book to a collection use PUT /api/admin/v1/collections/{collectionId}/items";
 	}
 
 	private static String normalizeIsbn(String isbn) {
