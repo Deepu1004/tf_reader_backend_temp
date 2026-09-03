@@ -57,20 +57,18 @@ public class SamlMockController {
 
 	public SamlMockController(SamlMockResponseBuilder responses) {
 		this.responses = responses;
-		// Redirects disabled: on success the ACS answers with a 302 to tfreader://auth/callback,
-		// not JSON - the default client tries to follow it and fails, because that scheme is not
-		// one an HTTP client can route to. The 3xx and its Location header are what this endpoint
-		// hands back instead.
-		this.restClient = RestClient.builder()
-				.requestFactory(new HttpComponentsClientHttpRequestFactory(
-						HttpClients.custom().disableRedirectHandling().build()))
-				.build();
+		this.restClient = RestClient.create();
 	}
 
 	/**
 	 * Redirect-binding SSO: decode the AuthnRequest, sign a Response answering it, then post the
-	 * result to the ACS ourselves and hand back whatever the ACS answered - the token envelope on
-	 * success, or the application's own refusal shape on failure.
+	 * result to the ACS ourselves and hand back whatever the ACS answered - a
+	 * {@code tfreader://auth/callback} redirect, on either success or failure, now that the ACS
+	 * itself no longer returns a JSON body.
+	 *
+	 * <p><b>Every header the ACS set is forwarded, not just content type.</b> The redirect this
+	 * hands back to Postman lives entirely in {@code Location}; copying only content type would
+	 * answer 302 with no way to see where to.
 	 */
 	@GetMapping(SSO_PATH)
 	public ResponseEntity<byte[]> sso(
@@ -91,18 +89,9 @@ public class SamlMockController {
 				.header(HttpHeaders.COOKIE, request.getHeader(HttpHeaders.COOKIE))
 				.contentType(MediaType.APPLICATION_FORM_URLENCODED)
 				.body(body)
-				.exchange((acsRequest, acsResponse) -> {
-					ResponseEntity.BodyBuilder responseBuilder =
-							ResponseEntity.status(acsResponse.getStatusCode());
-					String location = acsResponse.getHeaders().getFirst(HttpHeaders.LOCATION);
-					if (location != null) {
-						responseBuilder.header(HttpHeaders.LOCATION, location);
-					}
-					MediaType contentType = acsResponse.getHeaders().getContentType();
-					if (contentType != null) {
-						responseBuilder.contentType(contentType);
-					}
-					return responseBuilder.body(acsResponse.getBody().readAllBytes());
-				});
+				.exchange((acsRequest, acsResponse) -> ResponseEntity
+						.status(acsResponse.getStatusCode())
+						.contentType(acsResponse.getHeaders().getContentType())
+						.body(acsResponse.getBody().readAllBytes()));
 	}
 }

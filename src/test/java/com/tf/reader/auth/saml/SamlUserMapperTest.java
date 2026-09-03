@@ -10,9 +10,10 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.saml2.provider.service.authentication.Saml2ResponseAssertionAccessor;
 
+import com.tf.reader.auth.ReaderUserRepositoryFixtures;
 import com.tf.reader.auth.model.TnfUser;
 import com.tf.reader.auth.model.UserType;
-import com.tf.reader.auth.repository.MockUserRepository;
+import com.tf.reader.auth.repository.ReaderUserDirectory;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 
@@ -26,7 +27,8 @@ import com.tf.reader.common.error.ErrorCode;
  */
 class SamlUserMapperTest {
 
-	private final SamlUserMapper mapper = new SamlUserMapper(new MockUserRepository());
+	private final SamlUserMapper mapper =
+			new SamlUserMapper(new ReaderUserDirectory(ReaderUserRepositoryFixtures.demoUsers()));
 
 	@Test
 	void mapsAnAssertionToTheTnfUserForThatInstitution() {

@@ -4,25 +4,44 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Locale;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 
+import com.tf.reader.TestcontainersConfiguration;
+import com.tf.reader.auth.AuthTestUsers;
 import com.tf.reader.auth.model.TnfUser;
 import com.tf.reader.auth.model.UserType;
 
 /**
- * The prototype user store. Other developers build against these fixtures, so determinism
- * matters as much as correctness.
+ * The real reader directory, against a real Mongo. Pins the same behaviours
+ * {@code MockUserRepositoryTest} used to pin against a hardcoded map, now against the
+ * {@code readerUsers} collection.
  */
-class MockUserRepositoryTest {
+@SpringBootTest
+@Import(TestcontainersConfiguration.class)
+class ReaderUserDirectoryTest {
 
-	private final MockUserRepository users = new MockUserRepository();
+	@Autowired
+	private ReaderUserRepository readerUserRepository;
+
+	private ReaderUserDirectory users;
+
+	@BeforeEach
+	void seedDemoUsers() {
+		readerUserRepository.deleteAll();
+		users = new ReaderUserDirectory(readerUserRepository);
+		AuthTestUsers.seed(readerUserRepository);
+	}
 
 	@Test
 	void findsTheSeededUserForAnIdentityAndInstitution() {
 		assertThat(users.find("john.doe@example.com", "inst_7f3"))
 				.get()
 				.satisfies(user -> {
-					assertThat(user.userId()).isEqualTo("usr_6712ab");
+					assertThat(user.userId()).isEqualTo(AuthTestUsers.JOHN_AT_IMPERIAL);
 					assertThat(user.type()).isEqualTo(UserType.INSTITUTION);
 					assertThat(user.institutionId()).isEqualTo("inst_7f3");
 				});
@@ -32,18 +51,18 @@ class MockUserRepositoryTest {
 	void theSameIdentityIsADifferentUserAtEachInstitution() {
 		// One IdP, many institutions: the pair is the key, not the email.
 		TnfUser imperial = users.find("john.doe@example.com", "inst_7f3").orElseThrow();
-		TnfUser dsu = users.find("john.doe@example.com", "inst_ucl").orElseThrow();
+		TnfUser ucl = users.find("john.doe@example.com", "inst_ucl").orElseThrow();
 
-		assertThat(imperial.userId()).isNotEqualTo(dsu.userId());
-		assertThat(imperial.collections()).isNotEqualTo(dsu.collections());
+		assertThat(imperial.userId()).isNotEqualTo(ucl.userId());
+		assertThat(imperial.collections()).isNotEqualTo(ucl.collections());
 	}
 
 	@Test
 	void emailFoldingDoesNotDependOnTheJvmsLocale() {
 		// "I".toLowerCase() is the dotless "ı" in a Turkish or Azeri locale, so a default-locale
 		// fold makes a provisioned user unprovisioned on some machines and not others. Today's
-		// seeded addresses happen to contain no dotted I, so this pins the rule ahead of the real
-		// user store rather than reproducing a live failure.
+		// seeded addresses happen to contain no dotted I, so this pins the rule ahead of a live
+		// failure rather than reproducing one.
 		Locale original = Locale.getDefault();
 		try {
 			Locale.setDefault(Locale.forLanguageTag("tr-TR"));

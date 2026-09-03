@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import com.tf.reader.auth.model.TnfUser;
-import com.tf.reader.auth.repository.MockUserRepository;
+import com.tf.reader.auth.repository.ReaderUserDirectory;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 
@@ -30,9 +30,9 @@ public class SamlUserMapper {
 	 */
 	static final String EMAIL_CLAIM = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress";
 
-	private final MockUserRepository users;
+	private final ReaderUserDirectory users;
 
-	public SamlUserMapper(MockUserRepository users) {
+	public SamlUserMapper(ReaderUserDirectory users) {
 		this.users = users;
 	}
 
