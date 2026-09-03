@@ -8,6 +8,9 @@ import org.springframework.stereotype.Service;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.hold.api.HoldPromotion;
+import com.tf.reader.library.api.ChangeLog;
+import com.tf.reader.library.api.ChangeReason;
+import com.tf.reader.library.api.ChangeRecord;
 import com.tf.reader.loan.dto.ReturnResponse;
 import com.tf.reader.loan.entity.Loan;
 import com.tf.reader.loan.entity.LoanStatus;
@@ -30,15 +33,17 @@ public class ReturnService {
 	private final LoanRepository loans;
 	private final CopyLease copyLease;
 	private final HoldPromotion holdPromotion;
+	private final ChangeLog changeLog;
 	private final Clock clock;
 
-	// Four collaborators (repo + two ports + clock) — above the 3-param guideline, but each is a
-	// distinct capability this one job genuinely needs; splitting the class would scatter the order.
+	// Five collaborators (repo + two ports + change-feed port + clock) — above the 3-param guideline,
+	// but each is a distinct capability this one job genuinely needs; splitting would scatter the order.
 	public ReturnService(LoanRepository loans, CopyLease copyLease, HoldPromotion holdPromotion,
-			Clock clock) {
+			ChangeLog changeLog, Clock clock) {
 		this.loans = loans;
 		this.copyLease = copyLease;
 		this.holdPromotion = holdPromotion;
+		this.changeLog = changeLog;
 		this.clock = clock;
 	}
 
@@ -61,10 +66,15 @@ public class ReturnService {
 		loan.setReturnedAt(now);
 		Loan closed = loans.save(loan);
 
+		// After the state write, per the ChangeLog contract (D-029). It never throws, so no try/catch;
+		// a feed miss is a delay, not a wrong answer, because GET /library reads the real loans.
+		changeLog.record(ChangeRecord.forLoan(closed.getUserId(), ChangeReason.LOAN_RETURNED,
+				closed.getItemId(), closed.getLoanId(), now));
+
 		if (closed.getLeaseId() != null) {          // Elite only — release exactly once
 			copyLease.release(closed.getLeaseId());
 		}
-		holdPromotion.promote(closed.getItemId());
+		holdPromotion.promote(closed.getInstitutionId(), closed.getItemId());
 
 		return new ReturnResponse(closed.getLoanId(), closed.getItemId(),
 				closed.getStatus().name(), closed.getReturnedAt(), now);
