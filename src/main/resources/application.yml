@@ -79,7 +79,7 @@ tnf:
   # TempDevAuthController's /dev-token mints a token for anyone with no check at all. Off unless a
   # developer's own application-local.yml turns it on, same as mock-oidc.enabled below.
   dev-auth:
-    enabled: false
+    enabled: true
   auth:
     jwt:
       secret: ${TNF_JWT_SECRET}

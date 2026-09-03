@@ -183,6 +183,7 @@ public class ReadBrokerService {
 					sessionExpiresAt,
 					now
 			);
+			// holdCreatedAt is null here: a direct read never creates a hold.
 
 		} catch (RuntimeException failure) {
 			if (held != null) {
@@ -195,15 +196,13 @@ public class ReadBrokerService {
 	/**
 	 * Every copy of an ELITE title is taken. Instead of refusing with {@code NO_COPIES_AVAILABLE}
 	 * and telling the client to call {@code POST /api/v1/holds} itself, join the queue right here
-	 * and hand back a session response with a populated {@code queue} block and everything else
-	 * null — there is no licence and nothing to read yet, only a place in line.
+	 * and hand back a session response carrying only {@code holdCreatedAt} — there is no licence
+	 * and nothing to read yet, only a place in line. Queue position/length/ETA live on
+	 * {@code GET /api/v1/holds}, not here.
 	 */
 	private ReadingSessionResponse queuedResponse(SubjectRef subject, String itemId) {
 		QueueJoin.JoinResult joined = queue.join(subject.userId(), subject.institutionId(), itemId);
 		HoldView hold = joined.hold();
-		Instant estimatedAt = hold.estimatedWaitDays() == null
-				? null
-				: hold.placedAt().plus(Duration.ofDays(hold.estimatedWaitDays()));
 
 		return new ReadingSessionResponse(
 				"sess_" + UUID.randomUUID().toString().substring(0, 8),
@@ -212,12 +211,7 @@ public class ReadBrokerService {
 				AccessLevel.ENTITLED_CONCURRENT.name(),
 				licenceModelOf(AccessLevel.ENTITLED_CONCURRENT),
 				false,
-				new ReadingSessionResponse.QueueState(
-						hold.holdId(),
-						hold.position(),
-						hold.queueLength(),
-						hold.position() == 0,
-						estimatedAt),
+				hold.placedAt(),
 				null,
 				null,
 				null,

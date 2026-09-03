@@ -2,10 +2,12 @@ package com.tf.reader.auth.saml.mock.controller;
 
 import java.net.URI;
 
+import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,8 +17,6 @@ import org.springframework.web.client.RestClient;
 
 import com.tf.reader.auth.saml.mock.service.SamlMockResponse;
 import com.tf.reader.auth.saml.mock.service.SamlMockResponseBuilder;
-
-import jakarta.servlet.http.HttpServletRequest;
 
 import jakarta.servlet.http.HttpServletRequest;
 

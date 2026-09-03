@@ -9,6 +9,7 @@ import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.auth.model.CurrentUser;
 import com.tf.reader.hold.api.HoldView;
 import com.tf.reader.hold.api.OfferView;
+import com.tf.reader.hold.api.QueueJoin;
 import com.tf.reader.hold.dto.AcceptedLoanResponse;
 import com.tf.reader.hold.entity.Hold;
 import com.tf.reader.hold.entity.HoldStatus;
@@ -32,7 +33,7 @@ import java.util.Optional;
 // holdsFor. Position and queueLength are always computed here, on read,
 // from Redis — never stored.
 @Service
-public class QueueService {
+public class QueueService implements QueueJoin {
 
     private final HoldRepository holds;
     private final HoldWrites writes;
@@ -56,9 +57,22 @@ public class QueueService {
     }
 
     public Placed join(CurrentUser me, String itemId) {
-        String scope = QueueKeys.requireScope(me.institutionId());
+        JoinResult result = join(me.userId(), me.institutionId(), itemId);
+        return new Placed(result.hold(), result.created());
+    }
 
-        EntitlementDecision decision = entitlements.check(new SubjectRef(me.userId(), scope), itemId);
+    /**
+     * Published via {@link QueueJoin} for the {@code reading} module: called when a reading
+     * session finds no copy free, so the reader is queued in the same request instead of
+     * needing a separate {@code POST /api/v1/holds}. Identical semantics to the HTTP path —
+     * re-entitlement check, dedupe against an existing hold, same {@code HOLD_PLACED} event —
+     * including the null/blank scope guard, since a port caller is no more trusted than an
+     * HTTP one to have already checked it.
+     */
+    @Override
+    public JoinResult join(String userId, String rawScope, String itemId) {
+        String scope = QueueKeys.requireScope(rawScope);
+        EntitlementDecision decision = entitlements.check(new SubjectRef(userId, scope), itemId);
         if (!decision.entitled()) {
             // The deny reason, unchanged — "your subscription lapsed" and
             // "your library never had this" are different sentences.
@@ -72,29 +86,29 @@ public class QueueService {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "This title has no copy limit — nothing to queue for");
         }
 
-        Optional<Hold> existing = holds.findByScopeAndItemIdAndUserId(scope, itemId, me.userId());
+        Optional<Hold> existing = holds.findByScopeAndItemIdAndUserId(scope, itemId, userId);
         if (existing.isPresent()) {
-            // Already queued: 200 with the SAME position. Re-joining must
-            // never move somebody to the back of a line they were already in.
-            return new Placed(viewOf(existing.get(), decision), false);
+            // Already queued: same position. Re-joining must never move
+            // somebody to the back of a line they were already in.
+            return new JoinResult(viewOf(existing.get(), decision), false);
         }
 
         long ticket = requireNonNull(redis.opsForValue().increment(QueueKeys.ticketKey(scope, itemId)));
-        Hold hold = Hold.queued(me.userId(), scope, itemId, ticket, clock.instant());
+        Hold hold = Hold.queued(userId, scope, itemId, ticket, clock.instant());
 
         Hold saved;
         try {
             saved = holds.save(hold);
         } catch (DuplicateKeyException e) {
             // The index throwing on a double tap is the design working —
-            // a clean 200 with the winner's row, never a 500.
-            saved = holds.findByScopeAndItemIdAndUserId(scope, itemId, me.userId()).orElseThrow(() -> e);
-            return new Placed(viewOf(saved, decision), false);
+            // a clean success with the winner's row, never a 500.
+            saved = holds.findByScopeAndItemIdAndUserId(scope, itemId, userId).orElseThrow(() -> e);
+            return new JoinResult(viewOf(saved, decision), false);
         }
 
-        redis.opsForZSet().add(QueueKeys.queueKey(scope, itemId), QueueKeys.member(me.userId()), ticket);
-        changeLog.record(ChangeRecord.forHold(me.userId(), ChangeReason.HOLD_PLACED, itemId, saved.getHoldId(), clock.instant()));
-        return new Placed(viewOf(saved, decision), true);
+        redis.opsForZSet().add(QueueKeys.queueKey(scope, itemId), QueueKeys.member(userId), ticket);
+        changeLog.record(ChangeRecord.forHold(userId, ChangeReason.HOLD_PLACED, itemId, saved.getHoldId(), clock.instant()));
+        return new JoinResult(viewOf(saved, decision), true);
     }
 
     public void leave(CurrentUser me, String holdId) {
