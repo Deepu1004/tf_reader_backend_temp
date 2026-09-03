@@ -1,7 +1,9 @@
 package com.tf.reader.hold.service;
 
 import com.tf.reader.auth.model.CurrentUser;
+import com.tf.reader.auth.model.TnfUser;
 import com.tf.reader.auth.model.UserType;
+import com.tf.reader.auth.token.JwtTokenService;
 import com.tf.reader.hold.HoldContainerTest;
 import com.tf.reader.hold.entity.Hold;
 import com.tf.reader.hold.entity.HoldStatus;
@@ -11,17 +13,23 @@ import com.tf.reader.hold.repository.HoldWrites;
 import com.tf.reader.library.api.ChangeReason;
 import com.tf.reader.library.repository.ChangeLogRepository;
 import com.tf.reader.reading.api.CopyLease;
+import com.jayway.jsonpath.JsonPath;
 import org.bson.Document;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -32,6 +40,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 // join() runs through the real EntitlementQuery, which needs a real
 // catalogue item and a 2-copy entitlement seeded for it - seeded via
@@ -39,6 +49,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 // classes (hold may only depend on catalogue's api/ package, even from a
 // test). oneItemsResultDoesNotBlockAnother uses its own item ids and never
 // calls join(), so it needs none of this.
+@AutoConfigureMockMvc
 class PromotionIT extends HoldContainerTest {
 
     private static final String SCOPE = "inst_1";
@@ -63,6 +74,8 @@ class PromotionIT extends HoldContainerTest {
     MongoTemplate mongo;
     @Autowired
     ChangeLogRepository changeLog;
+    @Autowired
+    MockMvc mockMvc;
 
     @BeforeEach
     void seedCatalogueAndEntitlement() {
@@ -101,6 +114,14 @@ class PromotionIT extends HoldContainerTest {
         return new CurrentUser("user_" + suffix, UserType.INSTITUTION, SCOPE, List.of(), List.of());
     }
 
+    // A real, signed app-audience token for a real borrow()/return() call over HTTP — the JWT
+    // secret here is the suite-wide test value already set in src/test/resources/application.properties.
+    private static String token(String userId) {
+        TnfUser caller = new TnfUser(userId, UserType.INSTITUTION, SCOPE, List.of("MEMBER"), List.of(COLLECTION));
+        return JwtTokenService.forTest(com.tf.reader.ContainerisedInfrastructure.JWT_SECRET, Duration.ofHours(1), Clock.systemUTC())
+                .issue(caller).token();
+    }
+
     @Test
     @DisplayName("with two copies, promoting three times in a row reaches exactly two different readers")
     void twoCopiesReachTwoDifferentReaders() {
@@ -123,6 +144,51 @@ class PromotionIT extends HoldContainerTest {
                 .isEqualTo(ChangeReason.HOLD_PROMOTED);
         assertThat(changeLog.findFirstByUserIdOrderBySequenceDesc("user_b").orElseThrow().getReason())
                 .isEqualTo(ChangeReason.HOLD_PROMOTED);
+    }
+
+    @Test
+    @DisplayName("two real loans returning through the real HTTP path promote two different queued readers")
+    void twoCopiesReachTwoDifferentReadersThroughARealLoanReturn() throws Exception {
+        // Both copies taken for real, through the actual borrow endpoint — not a
+        // Hold, not a directly-saved Loan document.
+        String loanX = borrow("user_x");
+        String loanY = borrow("user_y");
+
+        queue.join(user("a"), ITEM);
+        queue.join(user("b"), ITEM);
+        queue.join(user("c"), ITEM);
+
+        // Each return goes through the real ReturnService HTTP path, which calls the real,
+        // published HoldPromotion.promote() — the actual cross-module trigger this test
+        // exists to prove, not PromotionService.promoteNext() called directly.
+        returnLoan(loanX, "user_x");
+        returnLoan(loanY, "user_y");
+
+        List<Hold> offered = holds.findByScopeAndItemIdAndStatusOrderByTicketAsc(SCOPE, ITEM, HoldStatus.OFFERED);
+        assertThat(offered).hasSize(2);
+        assertThat(offered).extracting(Hold::getUserId).containsExactly("user_a", "user_b");
+        assertThat(queue.holdsFor("user_c").get(0).status()).isEqualTo("QUEUED");
+
+        assertThat(changeLog.findFirstByUserIdOrderBySequenceDesc("user_a").orElseThrow().getReason())
+                .isEqualTo(ChangeReason.HOLD_PROMOTED);
+        assertThat(changeLog.findFirstByUserIdOrderBySequenceDesc("user_b").orElseThrow().getReason())
+                .isEqualTo(ChangeReason.HOLD_PROMOTED);
+    }
+
+    private String borrow(String userId) throws Exception {
+        String body = mockMvc.perform(post("/api/v1/loans")
+                        .header("Authorization", "Bearer " + token(userId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"itemId\":\"" + ITEM + "\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return JsonPath.read(body, "$.loanId");
+    }
+
+    private void returnLoan(String loanId, String userId) throws Exception {
+        mockMvc.perform(post("/api/v1/loans/" + loanId + "/return")
+                        .header("Authorization", "Bearer " + token(userId)))
+                .andExpect(status().isOk());
     }
 
     @Test

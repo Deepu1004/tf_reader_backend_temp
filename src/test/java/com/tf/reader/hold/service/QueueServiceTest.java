@@ -150,7 +150,9 @@ class QueueServiceTest {
         assertThat(response.licenceModel()).isEqualTo("ELITE");
         assertThat(response.status()).isEqualTo("ACTIVE");
         assertThat(response.dueAt()).isEqualTo(Instant.parse("2026-08-31T09:00:00Z"));
-        verify(changeLog).record(ChangeRecord.forLoan("user_a", ChangeReason.LOAN_CREATED, "item_1", "loan_1", clock.instant()));
+        // LOAN_CREATED is BorrowService.create()'s own responsibility now (D-029) — accept()
+        // must not also record it, or the same loan gets two feed entries.
+        verifyNoInteractions(changeLog);
     }
 
     @Test

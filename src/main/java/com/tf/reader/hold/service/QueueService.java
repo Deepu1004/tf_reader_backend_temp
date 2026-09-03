@@ -128,10 +128,10 @@ public class QueueService {
                 AccessLevel.ENTITLED_CONCURRENT, decision.loanPeriodDays(), hold.getOffer().getLeaseToken());
 
         Instant now = clock.instant();
-        // The offer becoming a loan is a loan-created event, not a hold event —
-        // there's no HOLD_ACCEPTED reason on the wire, and this is the only
-        // place that knows the new loanId.
-        changeLog.record(ChangeRecord.forLoan(me.userId(), ChangeReason.LOAN_CREATED, hold.getItemId(), licence.licenceId(), now));
+        // LOAN_CREATED is recorded by BorrowService.create() itself now (D-029) — create() is
+        // the single chokepoint every loan is born through, borrow or accept alike, so recording
+        // it here too would double the feed entry for the same loan. No HOLD_ACCEPTED reason
+        // exists on the wire either way; accepting an offer is a loan event, not a hold one.
         return new AcceptedLoanResponse(licence.licenceId(), subject.userId(), subject.institutionId(), licence.itemId(),
                 "ELITE", "ACTIVE", licence.canPersist(), now, licence.expiresAt(), now);
     }
