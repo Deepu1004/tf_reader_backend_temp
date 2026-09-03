@@ -2,14 +2,10 @@ package com.tf.reader.auth.saml.mock.controller;
 
 import java.net.URI;
 
-import jakarta.servlet.http.HttpServletRequest;
-
-import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,6 +15,10 @@ import org.springframework.web.client.RestClient;
 
 import com.tf.reader.auth.saml.mock.service.SamlMockResponse;
 import com.tf.reader.auth.saml.mock.service.SamlMockResponseBuilder;
+
+import jakarta.servlet.http.HttpServletRequest;
+
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * The local mock SAML IdP's one endpoint - the local equivalent of {@code https://samlmock.dev/idp}.
@@ -57,11 +57,32 @@ public class SamlMockController {
 
 	public SamlMockController(SamlMockResponseBuilder responses) {
 		this.responses = responses;
-		this.restClient = RestClient.create();
+		// Redirects disabled: the ACS itself now answers with a 302 to tfreader://auth/callback
+		// on both success and failure. A client that followed that redirect would try to route
+		// an unroutable custom scheme and blow up with a ClientProtocolException; this class's
+		// whole job is to hand that response back untouched, not to chase it.
+		this.restClient = RestClient.builder()
+				.requestFactory(new HttpComponentsClientHttpRequestFactory(
+						HttpClients.custom().disableRedirectHandling().build()))
+				.build();
 	}
 
 	/**
 	 * Redirect-binding SSO: decode the AuthnRequest, sign a Response answering it, then post the
+	 * result to the ACS ourselves and hand back whatever the ACS answered - a
+	 * {@code tfreader://auth/callback} redirect, on either success or failure, now that the ACS
+	 * itself no longer returns a JSON body.
+	 *
+	 * <p><b>Every header the ACS set is forwarded, not just content type.</b> The redirect this
+	 * hands back to Postman lives entirely in {@code Location}; copying only content type would
+	 * answer 302 with no way to see where to.
+	 * result to the ACS ourselves and hand back whatever the ACS answered - a
+	 * {@code tfreader://auth/callback} redirect, on either success or failure, now that the ACS
+	 * itself no longer returns a JSON body.
+	 *
+	 * <p><b>Every header the ACS set is forwarded, not just content type.</b> The redirect this
+	 * hands back to Postman lives entirely in {@code Location}; copying only content type would
+	 * answer 302 with no way to see where to.
 	 * result to the ACS ourselves and hand back whatever the ACS answered - a
 	 * {@code tfreader://auth/callback} redirect, on either success or failure, now that the ACS
 	 * itself no longer returns a JSON body.
@@ -89,9 +110,18 @@ public class SamlMockController {
 				.header(HttpHeaders.COOKIE, request.getHeader(HttpHeaders.COOKIE))
 				.contentType(MediaType.APPLICATION_FORM_URLENCODED)
 				.body(body)
-				.exchange((acsRequest, acsResponse) -> ResponseEntity
-						.status(acsResponse.getStatusCode())
-						.contentType(acsResponse.getHeaders().getContentType())
-						.body(acsResponse.getBody().readAllBytes()));
+				.exchange((acsRequest, acsResponse) -> {
+					HttpHeaders forwarded = new HttpHeaders();
+					forwarded.addAll(acsResponse.getHeaders());
+					// Recomputed from the body actually sent below, not copied: forwarding the
+					// ACS's own framing headers would fight with whatever length this response's
+					// byte[] body ends up being written with.
+					forwarded.remove(HttpHeaders.CONTENT_LENGTH);
+					forwarded.remove(HttpHeaders.TRANSFER_ENCODING);
+
+					return ResponseEntity.status(acsResponse.getStatusCode())
+							.headers(forwarded)
+							.body(acsResponse.getBody().readAllBytes());
+				});
 	}
 }

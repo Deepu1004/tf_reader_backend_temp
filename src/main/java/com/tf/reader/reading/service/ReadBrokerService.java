@@ -19,8 +19,8 @@ import com.tf.reader.content.api.ContentAccessGrant;
 import com.tf.reader.content.api.ContentGrant;
 import com.tf.reader.content.api.ContentGrantRequest;
 import com.tf.reader.content.api.LoanProof;
-import com.tf.reader.hold.api.AvailabilityQuery;
-import com.tf.reader.hold.api.AvailabilitySnapshot;
+import com.tf.reader.hold.api.HoldView;
+import com.tf.reader.hold.api.QueueJoin;
 import com.tf.reader.library.api.ChangeLog;
 import com.tf.reader.library.api.ChangeRecord;
 import com.tf.reader.loan.api.LicenceCommand;
@@ -44,7 +44,7 @@ public class ReadBrokerService {
 	private final ContentAccessGrant content;
 	private final LicenceCommand licences;
 	private final CopyLease lease;
-	private final AvailabilityQuery availability;
+	private final QueueJoin queue;
 	private final ReconcilerService reconciler;
 	private final DeviceCapService devices;
 	private final RightsService rights;
@@ -56,7 +56,7 @@ public class ReadBrokerService {
 			ContentAccessGrant content,
 			LicenceCommand licences,
 			CopyLease lease,
-			AvailabilityQuery availability,
+			QueueJoin queue,
 			ReconcilerService reconciler,
 			DeviceCapService devices,
 			RightsService rights,
@@ -66,7 +66,7 @@ public class ReadBrokerService {
 		this.content = content;
 		this.licences = licences;
 		this.lease = lease;
-		this.availability = availability;
+		this.queue = queue;
 		this.reconciler = reconciler;
 		this.devices = devices;
 		this.rights = rights;
@@ -119,8 +119,14 @@ public class ReadBrokerService {
 
 		if (copyLimited) {
 			String scope = subject != null ? subject.institutionId() : null;
-			held = lease.claim(scope, request.itemId(), decision.copies())
-					.orElseThrow(() -> noCopies(scope, request.itemId(), decision.copies()));
+			var claimed = lease.claim(scope, request.itemId(), decision.copies());
+			if (claimed.isEmpty()) {
+				// No free copy — join the wait queue in this same call instead of making
+				// the client turn around and call POST /api/v1/holds itself. No licence,
+				// no content grant: the reader has nothing to read yet, only a place in line.
+				return queuedResponse(subject, request.itemId());
+			}
+			held = claimed.get();
 		}
 
 		try {
@@ -186,25 +192,38 @@ public class ReadBrokerService {
 		}
 	}
 
-	private ApiException noCopies(String scope, String itemId, Integer copies) {
-		String detail = "";
-		try {
-			AvailabilitySnapshot snapshot = availability.forItem(scope, itemId, copies != null ? copies : 1);
-			if (snapshot != null) {
-				Integer q = snapshot.queueLength();
-				if (q != null) {
-					detail = " " + q + " reader(s) are waiting.";
-					if (snapshot.myPosition() != null) {
-						detail += " You are already " + snapshot.myPosition() + " in line.";
-					} else {
-						detail += " You can join the queue at POST /api/v1/holds.";
-					}
-				}
-			}
-		} catch (RuntimeException ignored) {
-			// best effort only — never convert 409 into 500
-		}
-		return new ApiException(ErrorCode.NO_COPIES_AVAILABLE, "All copies of this title are on loan." + detail);
+	/**
+	 * Every copy of an ELITE title is taken. Instead of refusing with {@code NO_COPIES_AVAILABLE}
+	 * and telling the client to call {@code POST /api/v1/holds} itself, join the queue right here
+	 * and hand back a session response with a populated {@code queue} block and everything else
+	 * null — there is no licence and nothing to read yet, only a place in line.
+	 */
+	private ReadingSessionResponse queuedResponse(SubjectRef subject, String itemId) {
+		QueueJoin.JoinResult joined = queue.join(subject.userId(), subject.institutionId(), itemId);
+		HoldView hold = joined.hold();
+		Instant estimatedAt = hold.estimatedWaitDays() == null
+				? null
+				: hold.placedAt().plus(Duration.ofDays(hold.estimatedWaitDays()));
+
+		return new ReadingSessionResponse(
+				"sess_" + UUID.randomUUID().toString().substring(0, 8),
+				null,
+				itemId,
+				AccessLevel.ENTITLED_CONCURRENT.name(),
+				licenceModelOf(AccessLevel.ENTITLED_CONCURRENT),
+				false,
+				new ReadingSessionResponse.QueueState(
+						hold.holdId(),
+						hold.position(),
+						hold.queueLength(),
+						hold.position() == 0,
+						estimatedAt),
+				null,
+				null,
+				null,
+				null,
+				clock.instant()
+		);
 	}
 
 	private byte[] decodeDeviceKey(String base64) {

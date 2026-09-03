@@ -80,6 +80,22 @@ class ExpirySweeperTest {
 	}
 
 	@Test
+	void recordsLoanExpiredForEachSweptLoanAfterTheSave() {
+		Loan elite = pastDueElite("loan_1", "item_1", "lease_1");
+		when(loans.findByStatusAndDueAtLessThanEqual(LoanStatus.ACTIVE, NOW)).thenReturn(List.of(elite));
+		when(loans.save(any(Loan.class))).thenAnswer(i -> i.getArgument(0));
+
+		sweeper.sweep();
+
+		verify(changeLog).record(ChangeRecord.forLoan(
+				"user_1", ChangeReason.LOAN_EXPIRED, "item_1", "loan_1", NOW));
+		InOrder order = inOrder(loans, changeLog, copyLease);
+		order.verify(loans).save(any(Loan.class));
+		order.verify(changeLog).record(any(ChangeRecord.class));
+		order.verify(copyLease).release("lease_1");
+	}
+
+	@Test
 	void expiringASubscriptionReleasesNoLease() {
 		Loan sub = pastDueSubscription("loan_2", "item_2");
 		when(loans.findByStatusAndDueAtLessThanEqual(LoanStatus.ACTIVE, NOW)).thenReturn(List.of(sub));
@@ -103,8 +119,8 @@ class ExpirySweeperTest {
 
 		sweeper.sweep();
 
-		verify(holdPromotion).promote("inst_1", "item_good");
-		verify(holdPromotion, never()).promote(eq("inst_1"), eq("item_bad"));
+		verify(holdPromotion).promote("item_good");
+		verify(holdPromotion, never()).promote(eq("item_bad"));
 		// The bad row never got past its save, so it must record nothing; only the good one does.
 		verify(changeLog).record(ChangeRecord.forLoan(
 				"user_1", ChangeReason.LOAN_EXPIRED, "item_good", "loan_good", NOW));
