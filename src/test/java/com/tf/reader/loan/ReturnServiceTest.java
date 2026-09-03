@@ -66,7 +66,25 @@ class ReturnServiceTest {
 		InOrder order = inOrder(loans, copyLease, holdPromotion);
 		order.verify(loans).save(any(Loan.class));
 		order.verify(copyLease).release("lease_1");
-		order.verify(holdPromotion).promote("item_1");
+		order.verify(holdPromotion).promote("inst_1", "item_1");
+	}
+
+	@Test
+	void recordsLoanReturnedAfterTheSaveAndBeforeReleaseAndPromote() {
+		Loan loan = elite("loan_1", "user_1", "item_1", "lease_1");
+		when(loans.findById("loan_1")).thenReturn(Optional.of(loan));
+		when(loans.save(any(Loan.class))).thenAnswer(i -> i.getArgument(0));
+
+		service.returnLoan("user_1", "loan_1");
+
+		// One LOAN_RETURNED for this reader/loan, stamped on the server clock.
+		verify(changeLog).record(ChangeRecord.forLoan(
+				"user_1", ChangeReason.LOAN_RETURNED, "item_1", "loan_1", NOW));
+		// After the state write, before the copy is released (contract order).
+		InOrder order = inOrder(loans, changeLog, copyLease);
+		order.verify(loans).save(any(Loan.class));
+		order.verify(changeLog).record(any(ChangeRecord.class));
+		order.verify(copyLease).release("lease_1");
 	}
 
 	@Test
@@ -96,7 +114,7 @@ class ReturnServiceTest {
 		service.returnLoan("user_1", "loan_2");
 
 		verify(copyLease, never()).release(anyString());
-		verify(holdPromotion).promote("item_2");
+		verify(holdPromotion).promote("inst_1", "item_2");
 	}
 
 	@Test

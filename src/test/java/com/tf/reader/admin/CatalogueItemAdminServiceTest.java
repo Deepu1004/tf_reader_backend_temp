@@ -169,6 +169,94 @@ class CatalogueItemAdminServiceTest {
 		verify(catalogueItemRepository, never()).save(any());
 	}
 
+	// ------------------------------------------------- duplicate ISBN (workstream 2)
+
+	@Test
+	@DisplayName("create with an ISBN nobody holds saves normally")
+	void createsWhenIsbnIsNew() {
+		when(catalogueItemRepository.findByIsbn("9780132350884")).thenReturn(Optional.empty());
+		when(catalogueItemRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+		var view = service.create(isbnWrite("pub_rtlg", "9780132350884"));
+
+		assertThat(view.isbn()).isEqualTo("9780132350884");
+	}
+
+	@Test
+	@DisplayName("create with an ISBN another book already holds throws CODE_TAKEN")
+	void rejectsCreateWhenIsbnAlreadyExists() {
+		when(catalogueItemRepository.findByIsbn("9780132350884"))
+				.thenReturn(Optional.of(isbnItem("item_42", "pub_rtlg", "9780132350884")));
+
+		assertThatThrownBy(() -> service.create(isbnWrite("pub_rtlg", "9780132350884")))
+				.isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.CODE_TAKEN));
+		verify(catalogueItemRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("the duplicate check compares normalised ISBNs, so punctuation and case cannot slip a copy past it")
+	void rejectsCreateWhenIsbnMatchesOnlyAfterNormalisation() {
+		when(catalogueItemRepository.findByIsbn("012345678X"))
+				.thenReturn(Optional.of(isbnItem("item_42", "pub_rtlg", "012345678X")));
+
+		assertThatThrownBy(() -> service.create(isbnWrite("pub_rtlg", "0-123456 78x")))
+				.isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.CODE_TAKEN));
+	}
+
+	@Test
+	@DisplayName("an absent ISBN is never a duplicate and is not even looked up")
+	void allowsCreateWhenIsbnIsNull() {
+		when(catalogueItemRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+		service.create(pdfWrite("pub_rtlg"));
+		service.create(pdfWrite("pub_rtlg"));
+
+		verify(catalogueItemRepository, never()).findByIsbn(any());
+	}
+
+	@Test
+	@DisplayName("update may keep the ISBN the item already holds")
+	void allowsUpdateToKeepItsOwnIsbn() {
+		CatalogueItem existing = isbnItem("item_42", "pub_rtlg", "9780132350884");
+		when(catalogueItemRepository.findById("item_42")).thenReturn(Optional.of(existing));
+		when(catalogueItemRepository.findByIsbn("9780132350884")).thenReturn(Optional.of(existing));
+		when(catalogueItemRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+		var view = service.update("item_42", isbnWrite("pub_rtlg", "9780132350884"));
+
+		assertThat(view.isbn()).isEqualTo("9780132350884");
+	}
+
+	@Test
+	@DisplayName("update may not take an ISBN a different book already holds")
+	void rejectsUpdateWhenIsbnBelongsToAnotherItem() {
+		when(catalogueItemRepository.findById("item_99"))
+				.thenReturn(Optional.of(isbnItem("item_99", "pub_rtlg", null)));
+		when(catalogueItemRepository.findByIsbn("9780132350884"))
+				.thenReturn(Optional.of(isbnItem("item_42", "pub_rtlg", "9780132350884")));
+
+		assertThatThrownBy(() -> service.update("item_99", isbnWrite("pub_rtlg", "9780132350884")))
+				.isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.CODE_TAKEN));
+		verify(catalogueItemRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("the refusal names the existing book only when the caller could already read it")
+	void doesNotNameAnotherPublishersBookInTheRefusal() {
+		actingAs(AdminRole.PUBLISHER_ADMIN, "pub_mine");
+		when(catalogueItemRepository.findByIsbn("9780132350884"))
+				.thenReturn(Optional.of(isbnItem("item_42", "pub_other", "9780132350884")));
+
+		assertThatThrownBy(() -> service.create(isbnWrite("pub_mine", "9780132350884")))
+				.isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.CODE_TAKEN))
+				.hasMessageNotContaining("item_42")
+				.hasMessageNotContaining("pub_other");
+	}
+
 	// ---------------------------------------------------------------- get
 
 	@Test
@@ -393,6 +481,18 @@ class CatalogueItemAdminServiceTest {
 	}
 
 	// ---------------------------------------------------------------- fixtures
+
+	private static CatalogueItemWrite isbnWrite(String publisherId, String isbn) {
+		return new CatalogueItemWrite(publisherId, List.of(), "Rights for Robots", null, List.of("Joshua Gellers"),
+				List.of(), List.of(), isbn, ContentType.PDF, AccessTier.ELITE, List.of("Law"), "en", null, null, null,
+				null, null);
+	}
+
+	private static CatalogueItem isbnItem(String id, String publisherId, String isbn) {
+		CatalogueItem item = pdfItem(id, publisherId);
+		item.setIsbn(isbn);
+		return item;
+	}
 
 	private static CatalogueItem pdfItem(String id, String publisherId) {
 		CatalogueItem item = new CatalogueItem();

@@ -60,7 +60,23 @@ class ExpirySweeperTest {
 		InOrder order = inOrder(loans, copyLease, holdPromotion);
 		order.verify(loans).save(any(Loan.class));
 		order.verify(copyLease).release("lease_1");
-		order.verify(holdPromotion).promote("item_1");
+		order.verify(holdPromotion).promote("inst_1", "item_1");
+	}
+
+	@Test
+	void recordsLoanExpiredForEachSweptLoanAfterTheSave() {
+		Loan elite = pastDueElite("loan_1", "item_1", "lease_1");
+		when(loans.findByStatusAndDueAtLessThanEqual(LoanStatus.ACTIVE, NOW)).thenReturn(List.of(elite));
+		when(loans.save(any(Loan.class))).thenAnswer(i -> i.getArgument(0));
+
+		sweeper.sweep();
+
+		verify(changeLog).record(ChangeRecord.forLoan(
+				"user_1", ChangeReason.LOAN_EXPIRED, "item_1", "loan_1", NOW));
+		InOrder order = inOrder(loans, changeLog, copyLease);
+		order.verify(loans).save(any(Loan.class));
+		order.verify(changeLog).record(any(ChangeRecord.class));
+		order.verify(copyLease).release("lease_1");
 	}
 
 	@Test
@@ -88,7 +104,7 @@ class ExpirySweeperTest {
 		sweeper.sweep();
 
 		verify(copyLease, never()).release(anyString());
-		verify(holdPromotion).promote("item_2");
+		verify(holdPromotion).promote("inst_1", "item_2");
 	}
 
 	@Test
