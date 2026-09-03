@@ -1,12 +1,21 @@
 package com.tf.reader.hold.service;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+
+import com.tf.reader.auth.model.CurrentUser;
 import com.tf.reader.catalogue.api.AccessLevel;
 import com.tf.reader.catalogue.api.EntitlementDecision;
 import com.tf.reader.catalogue.api.EntitlementQuery;
 import com.tf.reader.catalogue.api.SubjectRef;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
-import com.tf.reader.auth.model.CurrentUser;
 import com.tf.reader.hold.api.HoldView;
 import com.tf.reader.hold.api.OfferView;
 import com.tf.reader.hold.api.QueueJoin;
@@ -20,14 +29,6 @@ import com.tf.reader.library.api.ChangeReason;
 import com.tf.reader.library.api.ChangeRecord;
 import com.tf.reader.loan.api.LicenceCommand;
 import com.tf.reader.loan.api.LicenceView;
-import org.springframework.dao.DuplicateKeyException;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.stereotype.Service;
-
-import java.time.Clock;
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
 
 // Maintains the ordered wait queue for a title — join, leave, accept and
 // holdsFor. Position and queueLength are always computed here, on read,
@@ -57,7 +58,7 @@ public class QueueService implements QueueJoin {
     }
 
     public Placed join(CurrentUser me, String itemId) {
-        JoinResult result = join(me.userId(), me.institutionId(), itemId);
+        JoinResult result = join(me.userId(), QueueKeys.requireScope(me.institutionId()), itemId);
         return new Placed(result.hold(), result.created());
     }
 
@@ -65,13 +66,10 @@ public class QueueService implements QueueJoin {
      * Published via {@link QueueJoin} for the {@code reading} module: called when a reading
      * session finds no copy free, so the reader is queued in the same request instead of
      * needing a separate {@code POST /api/v1/holds}. Identical semantics to the HTTP path —
-     * re-entitlement check, dedupe against an existing hold, same {@code HOLD_PLACED} event —
-     * including the null/blank scope guard, since a port caller is no more trusted than an
-     * HTTP one to have already checked it.
+     * re-entitlement check, dedupe against an existing hold, same {@code HOLD_PLACED} event.
      */
     @Override
-    public JoinResult join(String userId, String rawScope, String itemId) {
-        String scope = QueueKeys.requireScope(rawScope);
+    public JoinResult join(String userId, String scope, String itemId) {
         EntitlementDecision decision = entitlements.check(new SubjectRef(userId, scope), itemId);
         if (!decision.entitled()) {
             // The deny reason, unchanged — "your subscription lapsed" and
