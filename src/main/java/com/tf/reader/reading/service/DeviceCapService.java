@@ -55,11 +55,11 @@ public class DeviceCapService {
 	/**
 	 * Records this device against the reader, if the cap allows it.
 	 *
-	 * <p>Returns a verdict rather than throwing, for now: the shared {@code ErrorCode} enum does not
-	 * yet carry {@code DEVICE_LIMIT_REACHED}, and inventing a second error shape to work around that
-	 * would be worse than returning a boolean. The broker turns {@code false} into the refusal once
-	 * the code exists. <b>TODO:</b> propose {@code DEVICE_LIMIT_REACHED} to the owner of
-	 * {@code common/error}, then throw from here instead.
+	 * <p>Returns a verdict rather than throwing: {@code DeviceCapService} is a pure domain
+	 * service with no dependency on the HTTP layer, and keeping the refusal logic in the broker
+	 * ({@code ReadBrokerService} step 3) makes the error boundary explicit and testable without
+	 * a Spring context. {@code DEVICE_LIMIT_REACHED} is already in {@code ErrorCode} (added by
+	 * Haripriya) and the broker throws it on {@code false}. No further change needed here.
 	 *
 	 * @param devicePublicKey the raw key bytes, already decoded by the caller
 	 * @return true when the device is recorded and the read may proceed
