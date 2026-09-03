@@ -12,6 +12,9 @@ import com.tf.reader.catalogue.api.EntitlementQuery;
 import com.tf.reader.catalogue.api.SubjectRef;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
+import com.tf.reader.library.api.ChangeLog;
+import com.tf.reader.library.api.ChangeReason;
+import com.tf.reader.library.api.ChangeRecord;
 import com.tf.reader.loan.api.LicenceCommand;
 import com.tf.reader.loan.api.LicenceView;
 import com.tf.reader.loan.dto.BorrowResponse;
@@ -29,14 +32,18 @@ public class BorrowService implements LicenceCommand {
 	private final LoanRepository loanRepository;
 	private final EntitlementQuery entitlement;
 	private final CopyLease copyLease;
+	private final ChangeLog changeLog;
 	private final Clock clock;
 
-	// Four collaborators: the repo, the two other-team ports the borrow flow calls, and the clock.
+	// Five collaborators: the repo, the two other-team ports the borrow flow calls, the change-feed
+	// port (create() is the single loan-birth chokepoint, so LOAN_CREATED belongs here — D-029), and
+	// the clock. Above the 3-param guideline, but each is a distinct capability this job needs.
 	public BorrowService(LoanRepository loanRepository, EntitlementQuery entitlement,
-			CopyLease copyLease, Clock clock) {
+			CopyLease copyLease, ChangeLog changeLog, Clock clock) {
 		this.loanRepository = loanRepository;
 		this.entitlement = entitlement;
 		this.copyLease = copyLease;
+		this.changeLog = changeLog;
 		this.clock = clock;
 	}
 
@@ -184,6 +191,15 @@ public class BorrowService implements LicenceCommand {
 				}
 			}
 			throw e;
+		}
+
+		// Only here — a genuinely new loan was saved. The two idempotent branches above return an
+		// existing loan without saving, so they must NOT record: the port is not idempotent, and a
+		// re-borrow (or Read tap) of a held title would otherwise write a phantom LOAN_CREATED (D-029).
+		// After the state write, per the ChangeLog contract; it never throws, so no try/catch.
+		if (userId != null) {
+			changeLog.record(ChangeRecord.forLoan(userId, ChangeReason.LOAN_CREATED, itemId,
+					loan.getLoanId(), now));
 		}
 
 		return new LicenceView(

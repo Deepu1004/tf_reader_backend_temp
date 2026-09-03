@@ -20,6 +20,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
 import com.tf.reader.hold.api.HoldPromotion;
+import com.tf.reader.library.api.ChangeLog;
+import com.tf.reader.library.api.ChangeReason;
+import com.tf.reader.library.api.ChangeRecord;
 import com.tf.reader.loan.entity.LicenceModel;
 import com.tf.reader.loan.entity.Loan;
 import com.tf.reader.loan.entity.LoanStatus;
@@ -40,7 +43,9 @@ class ExpirySweeperTest {
 	private final LoanRepository loans = mock(LoanRepository.class);
 	private final CopyLease copyLease = mock(CopyLease.class);
 	private final HoldPromotion holdPromotion = mock(HoldPromotion.class);
-	private final ExpirySweeper sweeper = new ExpirySweeper(loans, copyLease, holdPromotion, CLOCK);
+	private final ChangeLog changeLog = mock(ChangeLog.class);
+	private final ExpirySweeper sweeper =
+			new ExpirySweeper(loans, copyLease, holdPromotion, changeLog, CLOCK);
 
 	@Test
 	void expiresAPastDueEliteLoanThenReleasesTheLeaseThenPromotes() {
@@ -56,6 +61,22 @@ class ExpirySweeperTest {
 		order.verify(loans).save(any(Loan.class));
 		order.verify(copyLease).release("lease_1");
 		order.verify(holdPromotion).promote("item_1");
+	}
+
+	@Test
+	void recordsLoanExpiredForEachSweptLoanAfterTheSave() {
+		Loan elite = pastDueElite("loan_1", "item_1", "lease_1");
+		when(loans.findByStatusAndDueAtLessThanEqual(LoanStatus.ACTIVE, NOW)).thenReturn(List.of(elite));
+		when(loans.save(any(Loan.class))).thenAnswer(i -> i.getArgument(0));
+
+		sweeper.sweep();
+
+		verify(changeLog).record(ChangeRecord.forLoan(
+				"user_1", ChangeReason.LOAN_EXPIRED, "item_1", "loan_1", NOW));
+		InOrder order = inOrder(loans, changeLog, copyLease);
+		order.verify(loans).save(any(Loan.class));
+		order.verify(changeLog).record(any(ChangeRecord.class));
+		order.verify(copyLease).release("lease_1");
 	}
 
 	@Test
@@ -84,6 +105,11 @@ class ExpirySweeperTest {
 
 		verify(holdPromotion).promote("item_good");
 		verify(holdPromotion, never()).promote(eq("item_bad"));
+		// The bad row never got past its save, so it must record nothing; only the good one does.
+		verify(changeLog).record(ChangeRecord.forLoan(
+				"user_1", ChangeReason.LOAN_EXPIRED, "item_good", "loan_good", NOW));
+		verify(changeLog, never()).record(ChangeRecord.forLoan(
+				"user_1", ChangeReason.LOAN_EXPIRED, "item_bad", "loan_bad", NOW));
 	}
 
 	private Loan pastDueElite(String loanId, String itemId, String leaseId) {
