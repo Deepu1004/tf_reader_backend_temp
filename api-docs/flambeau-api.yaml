@@ -244,8 +244,6 @@ paths:
                 methods:
                   - method: SAML
                     startUrl: /api/v1/auth/saml/start
-                  - method: OIDC
-                    startUrl: /api/v1/auth/oidc/start
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -308,40 +306,34 @@ paths:
     post:
       tags: [Auth]
       operationId: startOidcSignIn
-      summary: Begin institutional sign-in over OIDC
+      summary: Begin individual sign-in over OIDC
       description: |
-        No token. The OIDC counterpart of `/auth/saml/start`, and deliberately the same
-        request and response shape, so the app writes one sign-in flow and chooses a URL
-        rather than writing two.
+        No token, and no request body: unlike SAML, this flow has nothing for a caller to
+        say up front. This is the individual, no-institution flow - the OIDC counterpart of
+        an email-and-password sign-up, not of `/auth/saml/start`. An unknown identity is
+        provisioned as an INDIVIDUAL subscriber on first sign-in rather than refused.
 
-        `state` plays the part RelayState plays in SAML and carries the same opaque
-        transaction id.
+        `state` plays the part RelayState plays in SAML and carries the opaque transaction id.
+
+        **Breaking change from the previous DRAFT shape**: this endpoint used to require
+        `institutionId` and resolve an institutional membership, in parallel with SAML. It no
+        longer does either - `institutionId` is removed from the request, and `institution` is
+        removed from the response. A caller still sending `institutionId` should stop; it is
+        silently ignored by nothing, because there is no longer a request body to put it in.
       x-stability: DRAFT
       x-called-by: [team1]
       security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/OidcStartRequest' }
-            example:
-              institutionId: inst_7f3
       responses:
         '200':
-          description: The URL to open, and the transaction that carries the institution
+          description: The URL to open, and the transaction the callback will redeem
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OidcStartResponse' }
               example:
                 authTxnId: c9f0f895fb98ab91
                 authorizationUrl: /oauth2/authorization/tf-reader?state=c9f0f895fb98ab91
-                institution:
-                  institutionId: inst_7f3
-                  name: Deakin University
                 expiresAt: '2026-08-13T10:10:00Z'
                 serverTime: '2026-08-13T10:00:00Z'
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '404': { $ref: '#/components/responses/NotFound' }
 
   /api/v1/auth/me:
     get:
@@ -1528,7 +1520,10 @@ components:
 
     SignInMethod:
       type: string
-      enum: [SAML, OIDC]
+      description: >-
+        The only institutional protocol is SAML. OIDC is the separate individual,
+        no-institution flow (`POST /auth/oidc/start`) and is never a value here.
+      enum: [SAML]
 
     SignInMethodsResponse:
       type: object
@@ -1570,20 +1565,16 @@ components:
           description: After this the transaction is refused and sign-in restarts.
         serverTime: { type: string, format: date-time }
 
-    OidcStartRequest:
-      type: object
-      required: [institutionId]
-      properties:
-        institutionId: { type: string, example: inst_7f3 }
-
     OidcStartResponse:
       type: object
-      description: Deliberately the same shape as SamlStartResponse.
-      required: [authTxnId, authorizationUrl, institution, expiresAt, serverTime]
+      description: >-
+        No institution: this is the individual sign-in flow. An identity here IS the
+        account, so there is nothing to report here that SamlStartResponse's institution
+        field would.
+      required: [authTxnId, authorizationUrl, expiresAt, serverTime]
       properties:
         authTxnId: { type: string }
         authorizationUrl: { type: string }
-        institution: { $ref: '#/components/schemas/Institution' }
         expiresAt: { type: string, format: date-time }
         serverTime: { type: string, format: date-time }
 
