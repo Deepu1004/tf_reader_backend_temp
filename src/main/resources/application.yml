@@ -92,6 +92,17 @@ tnf:
       token-uri: ${OIDC_TOKEN_URI}
       jwk-set-uri: ${OIDC_JWK_SET_URI}
       redirect-uri: ${OIDC_REDIRECT_URI}
+    # The individual, email-and-password flow - a different callback registered at the same B2C
+    # tenant, so it is a different redirect-uri and therefore its own configuration block, not a
+    # reuse of tnf.auth.oidc.* above. See auth.b2c.B2cProperties.
+    b2c:
+      client-id: ${B2C_CLIENT_ID}
+      client-secret: ${B2C_CLIENT_SECRET}
+      issuer: ${B2C_ISSUER}
+      authorization-uri: ${B2C_AUTHORIZATION_URI}
+      token-uri: ${B2C_TOKEN_URI}
+      jwk-set-uri: ${B2C_JWK_SET_URI}
+      redirect-uri: ${B2C_REDIRECT_URI}
 
 springdoc:
   api-docs:

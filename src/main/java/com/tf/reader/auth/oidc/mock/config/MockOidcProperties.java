@@ -4,6 +4,7 @@ import com.tf.reader.auth.oidc.mock.controller.MockOidcController;
 import com.tf.reader.auth.oidc.mock.model.MockOidcUser;
 
 import java.time.Duration;
+import java.util.List;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -32,7 +33,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param clientSecret the client secret the mock expects. Defaults to the client's own
  *                     configured secret, so the local demo works without setting the same value
  *                     twice; tests set them differently to prove the check exists
- * @param redirectUri  the only redirect uri the mock will send a code to
+ * @param redirectUris the redirect uris the mock will send a code to - a real B2C app
+ *                     registration allows more than one, which is exactly why there can be more
+ *                     than one relying party (institutional OIDC, individual B2C) against the
+ *                     same local mock tenant
  * @param codeTtl      how long an authorization code lives. Short: it is exchanged within
  *                     milliseconds of being issued, by a backend, over a direct connection
  * @param idTokenTtl   how long the ID token it mints lives
@@ -45,7 +49,7 @@ public record MockOidcProperties(
 		Integer port,
 		String clientId,
 		String clientSecret,
-		String redirectUri,
+		List<String> redirectUris,
 		Duration codeTtl,
 		Duration idTokenTtl,
 		MockOidcUser user) {
@@ -55,6 +59,7 @@ public record MockOidcProperties(
 	private static final Duration DEFAULT_ID_TOKEN_TTL = Duration.ofMinutes(5);
 
 	public MockOidcProperties {
+		redirectUris = (redirectUris != null) ? List.copyOf(redirectUris) : List.of();
 		codeTtl = (codeTtl != null) ? codeTtl : DEFAULT_CODE_TTL;
 		idTokenTtl = (idTokenTtl != null) ? idTokenTtl : DEFAULT_ID_TOKEN_TTL;
 		user = (user != null) ? user : MockOidcUser.defaultUser();

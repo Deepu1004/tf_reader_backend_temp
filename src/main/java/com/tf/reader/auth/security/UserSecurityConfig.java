@@ -130,6 +130,9 @@ public class UserSecurityConfig {
 						// OIDC: start cannot require a token; callback is a browser redirect from IdP
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/oidc/start").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/v1/auth/oidc/callback").permitAll()
+						// B2C: the individual, email-and-password flow. Same reasoning as OIDC above.
+						.requestMatchers(HttpMethod.POST, "/api/v1/auth/b2c/start").permitAll()
+						.requestMatchers(HttpMethod.GET, "/api/v1/auth/b2c/callback").permitAll()
 						// Authenticated by the opaque code/refresh token in the body, not a bearer JWT.
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/token").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/refresh").permitAll()
