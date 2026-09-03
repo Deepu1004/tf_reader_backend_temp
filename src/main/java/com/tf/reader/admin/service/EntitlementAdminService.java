@@ -93,7 +93,10 @@ public class EntitlementAdminService {
 
 		Instant now = Instant.now();
 		Entitlement entitlement = revoked != null ? revoked : new Entitlement();
-		Map<String, Object> before = revoked != null ? Map.of("status", String.valueOf(revoked.getStatus())) : null;
+		// Full snapshot, not just status: a re-request silently overwrites the prior grant's
+		// terms (copies, loan period, validity), and those are exactly what the audit trail
+		// needs to show were replaced.
+		Map<String, Object> before = revoked != null ? afterMap(revoked) : null;
 		if (revoked == null) {
 			entitlement.setId(newId());
 			entitlement.setInstitutionId(institutionId);

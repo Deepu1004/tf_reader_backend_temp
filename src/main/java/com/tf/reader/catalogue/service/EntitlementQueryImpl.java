@@ -12,6 +12,7 @@ import com.tf.reader.catalogue.api.AccessLevel;
 import com.tf.reader.catalogue.api.DenyReason;
 import com.tf.reader.catalogue.api.EntitlementDecision;
 import com.tf.reader.catalogue.api.EntitlementQuery;
+import com.tf.reader.catalogue.api.InstitutionLookup;
 import com.tf.reader.catalogue.api.SubjectRef;
 import com.tf.reader.catalogue.entity.AccessTier;
 import com.tf.reader.catalogue.entity.CatalogueItem;
@@ -22,8 +23,6 @@ import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.catalogue.entity.ScopeType;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
-import com.tf.reader.catalogue.repository.InstitutionRepository;
-import com.tf.reader.common.model.RecordStatus;
 
 import lombok.RequiredArgsConstructor;
 
@@ -33,7 +32,7 @@ class EntitlementQueryImpl implements EntitlementQuery {
 
     private final CatalogueItemRepository catalogueItemRepository;
     private final EntitlementRepository entitlementRepository;
-    private final InstitutionRepository institutionRepository;
+    private final InstitutionLookup institutionLookup;
 
     @Override
     public EntitlementDecision check(SubjectRef subject, String itemId) {
@@ -42,12 +41,9 @@ class EntitlementQueryImpl implements EntitlementQuery {
         }
 
         // A suspended institution must read exactly like an unknown one, same reason
-        // findActiveById/InstitutionLookupImpl collapse the two - so this is NOT_FOUND, not a
-        // distinct reason that would disclose the institution's existence or status.
-        boolean institutionActive = institutionRepository.findById(subject.institutionId())
-                .filter(institution -> institution.getStatus() == RecordStatus.ACTIVE)
-                .isPresent();
-        if (!institutionActive) {
+        // InstitutionLookup itself collapses the two - so this is NOT_FOUND, not a distinct
+        // reason that would disclose the institution's existence or status.
+        if (institutionLookup.find(subject.institutionId()).isEmpty()) {
             return denied(DenyReason.NOT_FOUND);
         }
 

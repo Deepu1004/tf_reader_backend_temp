@@ -11,6 +11,8 @@ import com.tf.reader.catalogue.api.AccessLevel;
 import com.tf.reader.catalogue.api.DenyReason;
 import com.tf.reader.catalogue.api.EntitlementDecision;
 import com.tf.reader.catalogue.api.EntitlementQuery;
+import com.tf.reader.catalogue.api.InstitutionLookup;
+import com.tf.reader.catalogue.api.InstitutionRef;
 import com.tf.reader.catalogue.api.SubjectRef;
 import com.tf.reader.catalogue.entity.AccessTier;
 import com.tf.reader.catalogue.entity.CatalogueItem;
@@ -18,12 +20,9 @@ import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.Entitlement;
 import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.ItemStatus;
-import com.tf.reader.catalogue.entity.Institution;
 import com.tf.reader.catalogue.entity.ScopeType;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
-import com.tf.reader.catalogue.repository.InstitutionRepository;
-import com.tf.reader.common.model.RecordStatus;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
@@ -40,19 +39,19 @@ class EntitlementQueryImplTest {
 
     private CatalogueItemRepository catalogueItemRepository;
     private EntitlementRepository entitlementRepository;
-    private InstitutionRepository institutionRepository;
+    private InstitutionLookup institutionLookup;
     private EntitlementQuery query;
 
     @BeforeEach
     void setUp() {
         catalogueItemRepository = mock(CatalogueItemRepository.class);
         entitlementRepository = mock(EntitlementRepository.class);
-        institutionRepository = mock(InstitutionRepository.class);
-        query = new EntitlementQueryImpl(catalogueItemRepository, entitlementRepository, institutionRepository);
+        institutionLookup = mock(InstitutionLookup.class);
+        query = new EntitlementQueryImpl(catalogueItemRepository, entitlementRepository, institutionLookup);
 
         when(entitlementRepository.findByInstitutionIdAndScopeTypeAndScopeId(any(), any(), any()))
                 .thenReturn(Optional.empty());
-        when(institutionRepository.findById("inst_7f3")).thenReturn(Optional.of(activeInstitution()));
+        when(institutionLookup.find("inst_7f3")).thenReturn(Optional.of(new InstitutionRef("inst_7f3", "Imperial")));
     }
 
     @Test
@@ -148,9 +147,9 @@ class EntitlementQueryImplTest {
 
     @Test
     void deniesWithNotFoundWhenTheInstitutionIsSuspended() {
-        Institution suspended = activeInstitution();
-        suspended.setStatus(RecordStatus.SUSPENDED);
-        when(institutionRepository.findById("inst_7f3")).thenReturn(Optional.of(suspended));
+        // InstitutionLookup itself collapses "suspended" and "unknown" into an empty Optional -
+        // check() never sees the difference, so this test only needs to stub the empty case.
+        when(institutionLookup.find("inst_7f3")).thenReturn(Optional.empty());
 
         EntitlementDecision decision = query.check(SUBJECT, "item_c25");
 
@@ -161,7 +160,7 @@ class EntitlementQueryImplTest {
 
     @Test
     void deniesWithNotFoundWhenTheInstitutionIsUnknown() {
-        when(institutionRepository.findById("inst_7f3")).thenReturn(Optional.empty());
+        when(institutionLookup.find("inst_7f3")).thenReturn(Optional.empty());
 
         EntitlementDecision decision = query.check(SUBJECT, "item_c25");
 
@@ -213,13 +212,6 @@ class EntitlementQueryImplTest {
         EntitlementDecision decision = query.check(SUBJECT, "item_c25");
 
         assertThat(decision.entitlementId()).isEqualTo("ent_unlimited");
-    }
-
-    private Institution activeInstitution() {
-        Institution institution = new Institution();
-        institution.setId("inst_7f3");
-        institution.setStatus(RecordStatus.ACTIVE);
-        return institution;
     }
 
     private CatalogueItem readyItem(String id, List<String> collectionIds) {
