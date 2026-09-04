@@ -17,6 +17,8 @@ import org.springframework.web.client.RestClient;
 
 import com.tf.reader.auth.saml.mock.service.SamlMockResponse;
 import com.tf.reader.auth.saml.mock.service.SamlMockResponseBuilder;
+import com.tf.reader.auth.transaction.AuthTransaction;
+import com.tf.reader.auth.transaction.AuthTransactionStore;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -36,9 +38,12 @@ import jakarta.servlet.http.HttpServletRequest;
  * off the incoming request and forwarded explicitly - this is the one thing this class does that
  * a real IdP, on a different origin, structurally could not.
  *
- * <p>No login page and no consent step: unlike the OIDC mock, there is only ever one identity to
- * authenticate as, configured in {@code saml-mock.user} - a page asking "sign in as the
- * pre-populated user?" would be theatre with no decision behind it.
+ * <p>No login page and no consent step: unlike the OIDC mock, there is no form here for a human to
+ * fill in. Which identity to assert - {@code saml-mock.user}'s configured default, or a different
+ * seeded one - is instead decided before the redirect even happens, at
+ * {@code POST /auth/saml/start}'s optional {@code username} parameter, carried here via
+ * {@link AuthTransactionStore#peek(String)} on the RelayState. See
+ * {@code AuthTransaction#usernameHint()} for why this can only ever be a local-mock capability.
  *
  * <p><b>Never enabled by default</b>, for the same reason the OIDC mock is not: a mock identity
  * provider is a machine for minting identities for arbitrary users.
@@ -53,10 +58,12 @@ public class SamlMockController {
 	public static final String SSO_PATH = "/saml-mock/sso";
 
 	private final SamlMockResponseBuilder responses;
+	private final AuthTransactionStore transactions;
 	private final RestClient restClient;
 
-	public SamlMockController(SamlMockResponseBuilder responses) {
+	public SamlMockController(SamlMockResponseBuilder responses, AuthTransactionStore transactions) {
 		this.responses = responses;
+		this.transactions = transactions;
 		// Redirects disabled: the ACS itself now answers with a 302 to tfreader://auth/callback
 		// on both success and failure. A client that followed that redirect would try to route
 		// an unroutable custom scheme and blow up with a ClientProtocolException; this class's
@@ -97,7 +104,13 @@ public class SamlMockController {
 			@RequestParam(name = "RelayState", required = false) String relayState,
 			HttpServletRequest request) throws java.io.IOException {
 
-		SamlMockResponse response = responses.build(samlRequest);
+		// Peek, never consume: this transaction still has to be consumed for real at the ACS, by
+		// SamlAuthenticationService, once our own signed response reaches it below. Consuming it
+		// here would spend it before that happens.
+		String nameIdOverride = transactions.peek(relayState)
+				.map(AuthTransaction::usernameHint)
+				.orElse(null);
+		SamlMockResponse response = responses.build(samlRequest, nameIdOverride);
 
 		MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
 		body.add("SAMLResponse", response.value());
