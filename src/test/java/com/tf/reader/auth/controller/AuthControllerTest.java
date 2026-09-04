@@ -1,6 +1,7 @@
 package com.tf.reader.auth.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -229,5 +230,25 @@ class AuthControllerTest {
 						.content("{ \"refreshToken\": \"stale-refresh\" }"))
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.code").value("TOKEN_EXPIRED"));
+	}
+
+	@Test
+	void logoutRevokesTheSessionAndAnswersWithNoContent() throws Exception {
+		mockMvc.perform(post("/api/v1/auth/logout")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{ \"refreshToken\": \"some-refresh\" }"))
+				.andExpect(status().isNoContent())
+				.andExpect(jsonPath("$.code").doesNotExist());
+
+		verify(readerSessions).revoke("some-refresh");
+	}
+
+	@Test
+	void logoutOfAnUnknownRefreshTokenStillAnswersWithNoContent() throws Exception {
+		// Idempotent by design - see ReaderSessionService.revoke.
+		mockMvc.perform(post("/api/v1/auth/logout")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{ \"refreshToken\": \"never-issued\" }"))
+				.andExpect(status().isNoContent());
 	}
 }

@@ -53,6 +53,18 @@ public class AuthTransactionStore {
 
 	/** Opens a transaction for an institution and returns it. */
 	public AuthTransaction open(String institutionId) {
+		return open(institutionId, null);
+	}
+
+	/**
+	 * Opens a transaction for an institution, carrying an optional username hint for the local
+	 * mock IdP.
+	 *
+	 * @param usernameHint which seeded user the mock IdP should assert instead of its configured
+	 *                     default. Meaningless to a real IdP, which decides identity on its own
+	 *                     login page - see {@link AuthTransaction}'s own javadoc
+	 */
+	public AuthTransaction open(String institutionId, String usernameHint) {
 		// POST /auth/saml/start is public and unauthenticated, so anyone can reach this line.
 		// Without a sweep, every call would leave a map entry behind for good and an anonymous
 		// caller could grow the heap until the process died. Nothing else evicts: there is no
@@ -63,7 +75,7 @@ public class AuthTransactionStore {
 		}
 		Instant now = clock.instant();
 		AuthTransaction transaction =
-				new AuthTransaction(newId(), institutionId, now, now.plus(LIFETIME));
+				new AuthTransaction(newId(), institutionId, usernameHint, now, now.plus(LIFETIME));
 		transactions.put(transaction.id(), transaction);
 		return transaction;
 	}
@@ -83,6 +95,28 @@ public class AuthTransactionStore {
 			return Optional.empty();
 		}
 		AuthTransaction transaction = transactions.remove(id);
+		if (transaction == null || transaction.hasExpiredAt(clock.instant())) {
+			return Optional.empty();
+		}
+		return Optional.of(transaction);
+	}
+
+	/**
+	 * Reads a transaction without spending it.
+	 *
+	 * <p>The one caller of this is the local mock IdP, which needs to read
+	 * {@link AuthTransaction#usernameHint()} while building its response - before
+	 * {@link #consume(String)} runs at the ACS. Anything that decides a sign-in must still call
+	 * {@code consume}; this exists only so a transaction can be read twice without a second one
+	 * spending it early.
+	 *
+	 * @return the transaction, or empty if the id is unknown or expired
+	 */
+	public Optional<AuthTransaction> peek(String id) {
+		if (id == null || id.isBlank()) {
+			return Optional.empty();
+		}
+		AuthTransaction transaction = transactions.get(id);
 		if (transaction == null || transaction.hasExpiredAt(clock.instant())) {
 			return Optional.empty();
 		}

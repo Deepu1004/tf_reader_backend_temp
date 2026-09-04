@@ -1,5 +1,8 @@
 package com.tf.reader.library.service;
 
+import java.util.List;
+
+import org.springframework.data.domain.Limit;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -24,6 +27,16 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class OutboxReplayService {
 
+	/**
+	 * How many entries one tick will attempt.
+	 *
+	 * <p>A backlog drains over several ticks rather than in one pass, which is the point: the run
+	 * after a long outage is the one with the most to do and the least headroom to do it in, since
+	 * the database it is hammering has only just come back. Draining steadily gets the same entries
+	 * written without making recovery the heaviest minute of the day.
+	 */
+	private static final int BATCH = 200;
+
 	private final ChangeLogOutboxRepository outbox;
 	private final ChangeLog changeLog;
 
@@ -34,8 +47,14 @@ public class OutboxReplayService {
 
 	@Scheduled(fixedDelayString = "${library.outbox.replay-interval-ms:60000}")
 	public void replayAll() {
-		for (OutboxEntry entry : outbox.findAllByOrderByFailedAtAsc()) {
+		List<OutboxEntry> batch = outbox.findAllByOrderByFailedAtAsc(Limit.of(BATCH));
+		for (OutboxEntry entry : batch) {
 			replay(entry);
+		}
+		if (batch.size() == BATCH) {
+			// Said out loud, because a silently truncated pass looks identical to a drained one and
+			// this is the state worth noticing: the outbox is filling faster than it empties.
+			log.warn("change log outbox replay hit its batch limit of {}; more entries remain", BATCH);
 		}
 	}
 

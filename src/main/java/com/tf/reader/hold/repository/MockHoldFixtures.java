@@ -3,7 +3,7 @@ package com.tf.reader.hold.repository;
 /**
  * Seeded fixture reference for manually testing join-the-queue against a real, running app.
  *
- * <p>Same idea as {@code catalogue.api.InstitutionLookup} and {@code auth.repository.MockUserRepository}
+ * <p>Same idea as {@code catalogue.api.InstitutionLookup} and {@code auth.repository.ReaderUserDirectory}
  * — a documented seam onto data that already exists, not a bean of its own. Everything named here
  * comes from {@code DemoDataSeeder}, which runs automatically on every startup (idempotent — "X
  * already present" on a repeat run). Nothing here needs to be created by hand except one optional

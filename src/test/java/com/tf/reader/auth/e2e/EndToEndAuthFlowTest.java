@@ -36,10 +36,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.tf.reader.TestcontainersConfiguration;
 import com.tf.reader.auth.AuthTestInstitutions;
+import com.tf.reader.auth.AuthTestUsers;
 import com.tf.reader.auth.authorization.AuthorizationService;
 import com.tf.reader.auth.model.CurrentUser;
 import com.tf.reader.auth.model.Role;
 import com.tf.reader.auth.model.UserType;
+import com.tf.reader.auth.repository.ReaderUserRepository;
 import com.tf.reader.auth.saml.SamlAuthenticationService;
 import com.tf.reader.auth.saml.SamlAuthenticationService.SamlLoginResult;
 import com.tf.reader.auth.token.JwtProperties;
@@ -85,9 +87,13 @@ class EndToEndAuthFlowTest {
 	@Autowired
 	private InstitutionRepository institutions;
 
+	@Autowired
+	private ReaderUserRepository readerUsers;
+
 	@BeforeEach
 	void seedInstitutions() {
 		AuthTestInstitutions.seed(institutions);
+		AuthTestUsers.seed(readerUsers);
 	}
 
 	// ───────────────────────────── the happy path, whole ─────────────────────────────

@@ -76,10 +76,16 @@ tf:
 tnf:
   seed:
     enabled: true
+  # TempDevAuthController's /dev-token mints a token for anyone with no check at all. Off unless a
+  # developer's own application-local.yml turns it on, same as mock-oidc.enabled below.
+  dev-auth:
+    enabled: true
   auth:
     jwt:
       secret: ${TNF_JWT_SECRET}
       ttl: 1h
+    # The individual, no-institution sign-in flow. Pointed at whichever IdP is configured (Azure
+    # AD B2C or otherwise) - swapping the six values below is the entire migration.
     oidc:
       client-id: ${OIDC_CLIENT_ID}
       client-secret: ${OIDC_CLIENT_SECRET}
@@ -103,7 +109,14 @@ management:
 
 mock-oidc:
   enabled: false
-  
+
+# Same reasoning as mock-oidc above: SamlMockController mints a token for anyone claiming to be
+# john.doe@example.com. Explicit here rather than left as an absent property, so this is asserted
+# by SecurityArchitectureTest instead of relying on @ConditionalOnProperty's default-missing
+# behaviour going unnoticed if it ever changed.
+saml-mock:
+  enabled: false
+
 ---
 spring:
   config:

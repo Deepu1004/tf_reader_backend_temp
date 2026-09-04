@@ -12,10 +12,16 @@ package com.tf.reader.hold.api;
 public interface HoldPromotion {
 
 	/**
-	 * Signal that one copy slot for {@code itemId} is now free. The hold module will
-	 * promote the head of the wait queue (if any) into that slot and create their loan.
+	 * Signal that one copy slot for {@code itemId}, in {@code scope}, is now free. The hold
+	 * module will promote the head of that institution's wait queue (if any) into the slot
+	 * and create their loan.
 	 *
+	 * <p>No lease token: by the time loan calls this, the freed copy's lease has already been
+	 * released, so there is nothing to reassign — every promotion through this method is a
+	 * fresh claim.
+	 *
+	 * @param scope  the institution whose copy pool just gained a free slot
 	 * @param itemId the title whose slot was just freed
 	 */
-	void promote(String itemId);
+	void promote(String scope, String itemId);
 }

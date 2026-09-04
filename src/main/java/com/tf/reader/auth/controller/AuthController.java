@@ -3,12 +3,14 @@ package com.tf.reader.auth.controller;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
 
 import jakarta.validation.Valid;
 
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,7 +29,6 @@ import com.tf.reader.auth.saml.SamlStartResponse;
 import com.tf.reader.auth.model.CurrentUser;
 import com.tf.reader.auth.model.Institution;
 import com.tf.reader.auth.model.TnfUser;
-import com.tf.reader.auth.model.UserType;
 import com.tf.reader.auth.security.CurrentUserAuthenticationToken;
 import com.tf.reader.auth.security.UserSecurityConfig;
 import com.tf.reader.auth.service.ReaderSessionService;
@@ -46,6 +47,7 @@ import com.tf.reader.common.error.ErrorCode;
  * The auth group: starting institutional sign-in, reporting who is signed in, and exchanging a
  * sign-in for a token pair.
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
@@ -94,6 +96,7 @@ public class AuthController {
 		}
 
 		Jwt presentedToken = token.getCredentials();
+		log.info("me: userId={}", currentUser.userId());
 
 		return new AuthMeResponse(
 				currentUser.userId(),
@@ -112,11 +115,20 @@ public class AuthController {
 	 * <p>{@code institutionId} travels as a query parameter, not a request body, per the RN
 	 * client's integration shape. {@code idpHint} is accepted and deliberately unused: we run one
 	 * SAML integration for every institution, so nothing about the request selects an IdP.
+	 *
+	 * <p>{@code username} is likewise accepted and, against a real IdP, unused - identity there is
+	 * decided on the IdP's own login page, which this backend has no channel to influence. It only
+	 * has an effect when {@code saml-mock.enabled=true}: the local mock IdP has no login page of
+	 * its own, so this is how a caller picks which seeded user it should assert instead of its
+	 * configured default. See {@link AuthTransaction#usernameHint()}.
 	 */
 	@PostMapping("/saml/start")
 	public SamlStartResponse samlStart(
 			@RequestParam(required = false) String institutionId,
-			@RequestParam(required = false) String idpHint) {
+			@RequestParam(required = false) String idpHint,
+			@RequestParam(required = false) String username) {
+		log.info("saml/start: institutionId={}", institutionId);
+
 		if (institutionId == null || institutionId.isBlank()) {
 			throw new ApiException(ErrorCode.VALIDATION_FAILED, "institutionId is required");
 		}
@@ -126,7 +138,8 @@ public class AuthController {
 						"No institution is registered with id '" + institutionId + "'."));
 		Institution institution = new Institution(institutionRef.institutionId(), institutionRef.name());
 
-		AuthTransaction transaction = transactions.open(institution.institutionId());
+		AuthTransaction transaction = transactions.open(institution.institutionId(), username);
+		log.info("saml/start: opened authTxnId={} for institutionId={}", transaction.id(), institutionId);
 
 		return new SamlStartResponse(
 				transaction.id(),
@@ -143,9 +156,12 @@ public class AuthController {
 	 */
 	@PostMapping("/token")
 	public TokenResponse exchangeCode(@Valid @RequestBody TokenExchangeRequest request) {
-		return authorizationCodes.consume(request.code())
+		log.info("token: exchanging a one-time code");
+		TokenResponse tokens = authorizationCodes.consume(request.code())
 				.orElseThrow(() -> new ApiException(ErrorCode.TOKEN_INVALID,
 						"This code is unknown, already used, or expired."));
+		log.info("token: issued a token pair, expiresIn={}s", tokens.expiresIn());
+		return tokens;
 	}
 
 	/**
@@ -171,12 +187,18 @@ public class AuthController {
 				Duration.between(accessToken.issuedAt(), accessToken.expiresAt()).getSeconds());
 	}
 
-	@PostMapping("/dev-token")
-	public IssuedToken generateDevToken(
-			@RequestParam(defaultValue = "usr_dev123") String userId,
-			@RequestParam(defaultValue = "inst_7f3") String institutionId) {
-		TnfUser user = new TnfUser(userId, UserType.INSTITUTION, institutionId, List.of("MEMBER"), List.of("col_law2024"));
-		return tokenService.issue(user);
+	/**
+	 * Ends the session the presented refresh token belongs to. The one way for a caller to sign
+	 * out, as opposed to {@code /refresh}, which ends a session too but always replaces it.
+	 *
+	 * <p>Idempotent: whether the token was live, already rotated, or never issued, the caller is
+	 * signed out either way, so this never distinguishes those cases in its response.
+	 */
+	@PostMapping("/logout")
+	public ResponseEntity<Void> logout(@Valid @RequestBody RefreshRequest request) {
+		log.info("logout: revoking a session");
+		readerSessions.revoke(request.refreshToken());
+		return ResponseEntity.noContent().build();
 	}
 
 	/**

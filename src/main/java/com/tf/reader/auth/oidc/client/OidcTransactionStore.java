@@ -13,13 +13,10 @@ import org.springframework.stereotype.Component;
 /**
  * Server-side store of in-flight OIDC sign-ins, keyed by the {@code state} parameter.
  *
- * <p><b>Why this exists.</b> Three things have to survive a redirect through a third party
- * without being handed to the client, and this is where they wait:
+ * <p><b>Why this exists.</b> Two things have to survive a redirect through a third party without
+ * being handed to the client, and this is where they wait:
  *
  * <ul>
- * <li>the <b>institution</b>, because we run one OIDC integration for every institution and
- * nothing the provider returns says which one was chosen. A client-supplied institutionId on the
- * way back is exactly how one user reads another institution's content</li>
  * <li>the <b>state</b>, so a callback can be proved to belong to a sign-in we started, in this
  * backend, recently. Without it, anyone who can make a browser issue a request to our callback
  * can start a session - the OIDC form of CSRF</li>
@@ -64,15 +61,14 @@ public class OidcTransactionStore {
 		this.properties = properties;
 	}
 
-	/** Opens a transaction for an institution, with a fresh state and nonce. */
-	public OidcTransaction open(String institutionId) {
+	/** Opens a transaction with a fresh state and nonce. */
+	public OidcTransaction open() {
 		if (byState.size() >= EVICT_ABOVE) {
 			evictExpired();
 		}
 		Instant now = clock.instant();
 		OidcTransaction transaction = new OidcTransaction(
 				randomValue("oidcTxn_"),
-				institutionId,
 				// 24 bytes of SecureRandom each. State and nonce must be unguessable for their
 				// checks to mean anything: a predictable state is a state an attacker can pre-empt.
 				randomValue(""),

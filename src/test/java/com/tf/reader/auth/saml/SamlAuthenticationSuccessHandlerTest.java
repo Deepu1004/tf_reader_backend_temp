@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,7 +25,9 @@ import org.springframework.security.saml2.provider.service.authentication.Saml2A
 import org.springframework.security.saml2.provider.service.authentication.Saml2ResponseAssertionAccessor;
 
 import com.tf.reader.TestcontainersConfiguration;
+import com.tf.reader.auth.AuthTestUsers;
 import com.tf.reader.auth.dto.TokenResponse;
+import com.tf.reader.auth.repository.ReaderUserRepository;
 import com.tf.reader.auth.token.AuthorizationCodeStore;
 import com.tf.reader.auth.transaction.AuthTransactionStore;
 import com.tf.reader.catalogue.api.InstitutionLookup;
@@ -52,6 +55,14 @@ class SamlAuthenticationSuccessHandlerTest {
 
 	@Autowired
 	private AuthorizationCodeStore authorizationCodes;
+
+	@Autowired
+	private ReaderUserRepository readerUsers;
+
+	@BeforeEach
+	void seedDemoUsers() {
+		AuthTestUsers.seed(readerUsers);
+	}
 
 	@TestConfiguration
 	static class FixedTestConfig {
@@ -84,7 +95,7 @@ class SamlAuthenticationSuccessHandlerTest {
 
 		assertThat(response.getStatus()).isEqualTo(302);
 		assertThat(response.getRedirectedUrl())
-				.startsWith(SamlAuthenticationSuccessHandler.DEEP_LINK_CALLBACK + "?code=");
+				.startsWith(AuthorizationCodeStore.DEEP_LINK_CALLBACK + "?code=");
 		assertThat(session.isInvalid())
 				.describedAs("the sign-in session must not outlive the code it produced")
 				.isTrue();
@@ -99,7 +110,7 @@ class SamlAuthenticationSuccessHandlerTest {
 				samlAuthentication());
 
 		String code = response.getRedirectedUrl().substring(
-				(SamlAuthenticationSuccessHandler.DEEP_LINK_CALLBACK + "?code=").length());
+				(AuthorizationCodeStore.DEEP_LINK_CALLBACK + "?code=").length());
 
 		TokenResponse tokens = authorizationCodes.consume(code).orElseThrow();
 		assertThat(tokens.accessToken()).isNotBlank();
@@ -122,7 +133,7 @@ class SamlAuthenticationSuccessHandlerTest {
 
 		assertThat(response.getStatus()).isEqualTo(302);
 		assertThat(response.getRedirectedUrl()).isEqualTo(
-				SamlAuthenticationSuccessHandler.DEEP_LINK_CALLBACK + "?error=SAML_AUTHENTICATION_FAILED");
+				AuthorizationCodeStore.DEEP_LINK_CALLBACK + "?error=SAML_AUTHENTICATION_FAILED");
 		assertThat(session.isInvalid()).isTrue();
 	}
 

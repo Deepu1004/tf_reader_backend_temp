@@ -102,6 +102,24 @@ class QueueServiceTest {
     }
 
     @Test
+    void theQueueJoinPortRefusesANullOrBlankScopeTooNotJustTheHttpPath() {
+        // A port caller (reading, in-process) is no more trusted than an HTTP one to have
+        // already checked this — without the guard here, a null scope would silently build
+        // Redis keys like "queue:null:item_1" instead of failing loudly.
+        assertThatThrownBy(() -> queue.join("user_a", null, "item_1"))
+                .isInstanceOf(ApiException.class)
+                .extracting(e -> ((ApiException) e).getCode())
+                .isEqualTo(ErrorCode.VALIDATION_FAILED);
+
+        assertThatThrownBy(() -> queue.join("user_a", "  ", "item_1"))
+                .isInstanceOf(ApiException.class)
+                .extracting(e -> ((ApiException) e).getCode())
+                .isEqualTo(ErrorCode.VALIDATION_FAILED);
+
+        verifyNoInteractions(entitlements);
+    }
+
+    @Test
     void leaveRemovesTheQueueEntryAndPromotesTheNextReaderOnlyIfOffered() {
         CurrentUser me = new CurrentUser("user_a", UserType.INSTITUTION, "inst_1", List.of(), List.of());
         Offer offer = new Offer("offer_1", Instant.now(), Instant.now().plusSeconds(900), "lease_1");
@@ -150,7 +168,9 @@ class QueueServiceTest {
         assertThat(response.licenceModel()).isEqualTo("ELITE");
         assertThat(response.status()).isEqualTo("ACTIVE");
         assertThat(response.dueAt()).isEqualTo(Instant.parse("2026-08-31T09:00:00Z"));
-        verify(changeLog).record(ChangeRecord.forLoan("user_a", ChangeReason.LOAN_CREATED, "item_1", "loan_1", clock.instant()));
+        // LOAN_CREATED is BorrowService.create()'s own responsibility now (D-029) — accept()
+        // must not also record it, or the same loan gets two feed entries.
+        verifyNoInteractions(changeLog);
     }
 
     @Test

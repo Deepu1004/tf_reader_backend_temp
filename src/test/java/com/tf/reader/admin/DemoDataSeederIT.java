@@ -24,6 +24,7 @@ import com.tf.reader.catalogue.repository.FeedSettingsRepository;
 import com.tf.reader.catalogue.repository.InstitutionRepository;
 import com.tf.reader.catalogue.repository.PublisherRepository;
 import com.tf.reader.common.model.RecordStatus;
+import com.tf.reader.crypto.api.BookEncryptionKeys;
 
 import com.mongodb.client.MongoClient;
 
@@ -76,6 +77,7 @@ class DemoDataSeederIT {
     @Autowired FeedSettingsRepository feedSettings;
     @Autowired MongoClient mongoClient;
     @Autowired MongoDatabaseFactory mongoDatabaseFactory;
+    @Autowired BookEncryptionKeys bookEncryptionKeys;
 
     // ------------------------------------------------------------------------------- the basics
 
@@ -357,6 +359,7 @@ class DemoDataSeederIT {
                 entitlements,
                 adminUsers,
                 feedSettings,
+                bookEncryptionKeys,
                 tools.jackson.databind.json.JsonMapper.builder().build(),
                 mongoClient,
                 mongoDatabaseFactory,

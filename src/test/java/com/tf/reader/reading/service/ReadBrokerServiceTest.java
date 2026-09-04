@@ -14,8 +14,10 @@ import com.tf.reader.content.api.Format;
 import com.tf.reader.content.api.IndexUrl;
 import com.tf.reader.content.api.Intent;
 import com.tf.reader.content.api.SignedUrl;
-import com.tf.reader.hold.api.AvailabilityQuery;
-import com.tf.reader.hold.api.AvailabilitySnapshot;
+import com.tf.reader.hold.api.HoldView;
+import com.tf.reader.hold.api.QueueJoin;
+import com.tf.reader.library.api.ChangeLog;
+import com.tf.reader.library.api.ChangeReason;
 import com.tf.reader.loan.api.LicenceCommand;
 import com.tf.reader.loan.api.LicenceView;
 import com.tf.reader.reading.api.CopyLease;
@@ -36,8 +38,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -60,10 +64,11 @@ class ReadBrokerServiceTest {
 	private ContentAccessGrant content;
 	private LicenceCommand licences;
 	private CopyLease lease;
-	private AvailabilityQuery availability;
+	private QueueJoin queue;
 	private ReconcilerService reconciler;
 	private DeviceCapService devices;
 	private RightsService rights;
+	private ChangeLog changeLog;
 	private ReadBrokerService broker;
 
 	@BeforeEach
@@ -72,16 +77,17 @@ class ReadBrokerServiceTest {
 		content = mock(ContentAccessGrant.class);
 		licences = mock(LicenceCommand.class);
 		lease = mock(CopyLease.class);
-		availability = mock(AvailabilityQuery.class);
+		queue = mock(QueueJoin.class);
 		reconciler = mock(ReconcilerService.class);
 		devices = mock(DeviceCapService.class);
+		changeLog = mock(ChangeLog.class);
 		rights = new RightsService(); // real: it is pure and cheap, no reason to fake it
 
 		// Default: device cap always admits, unless a test says otherwise.
 		when(devices.admit(anyString(), any())).thenReturn(true);
 
-		broker = new ReadBrokerService(entitlements, content, licences, lease, availability,
-				reconciler, devices, rights, CLOCK);
+		broker = new ReadBrokerService(entitlements, content, licences, lease, queue,
+				reconciler, devices, rights, changeLog, CLOCK);
 	}
 
 	private ReadingSessionRequest request(Intent intent) {
@@ -96,6 +102,11 @@ class ReadBrokerServiceTest {
 		return new EntitlementDecision(false, null, null, null, 0, null, reason);
 	}
 
+	/** Overload for tests that need to control which tier was revoked (downloadable vs. elite). */
+	private EntitlementDecision denied(DenyReason reason, AccessLevel level) {
+		return new EntitlementDecision(false, level, null, null, 0, null, reason);
+	}
+
 	// ── step 1 ──────────────────────────────────────────────────────────────
 
 	@Test
@@ -107,7 +118,7 @@ class ReadBrokerServiceTest {
 				.extracting(e -> ((ApiException) e).code())
 				.isEqualTo(ErrorCode.INVALID_DEVICE_PUBLIC_KEY);
 
-		verifyNoInteractions(entitlements, devices, content, licences, lease, availability);
+		verifyNoInteractions(entitlements, devices, content, licences, lease, queue);
 	}
 
 	// ── step 2 — every DenyReason maps to its own code ───────────────────────
@@ -120,7 +131,7 @@ class ReadBrokerServiceTest {
 				.extracting(e -> ((ApiException) e).code())
 				.isEqualTo(ErrorCode.NO_ENTITLEMENT);
 
-		verifyNoInteractions(devices, content, licences, lease, availability);
+		verifyNoInteractions(devices, content, licences, lease, queue);
 	}
 
 	@Test
@@ -168,6 +179,52 @@ class ReadBrokerServiceTest {
 				.isEqualTo(ErrorCode.NOT_FOUND);
 	}
 
+	// ── step 2 — ENTITLEMENT_REVOKED change-log writes ─────────────────────────────────────
+
+	@Test
+	void aRevokedSubscriptionWritesEntitlementRevokedToTheFeedBeforeRefusing() {
+		// The feed is the only channel that reaches a device with the title already downloaded.
+		when(entitlements.check(MEMBER, ITEM))
+				.thenReturn(denied(DenyReason.ENTITLEMENT_EXPIRED, AccessLevel.ENTITLED_UNLIMITED));
+
+		assertThatThrownBy(() -> broker.open(MEMBER, request(Intent.STREAM)))
+				.extracting(e -> ((ApiException) e).code())
+				.isEqualTo(ErrorCode.ENTITLEMENT_EXPIRED);
+
+		verify(changeLog).record(argThat(r ->
+				r.reason() == ChangeReason.ENTITLEMENT_REVOKED
+						&& r.userId().equals(MEMBER.userId())
+						&& r.itemId().equals(ITEM)));
+	}
+
+	@Test
+	void aRevokedEliteReadDoesNotWriteToTheFeedBecauseEliteIsOnlineOnly() {
+		// Elite titles cannot be downloaded — the step-2 re-check IS the enforcement.
+		// No feed entry is needed because there is no on-device copy to invalidate.
+		when(entitlements.check(MEMBER, ITEM))
+				.thenReturn(denied(DenyReason.ENTITLEMENT_SUSPENDED, AccessLevel.ENTITLED_CONCURRENT));
+
+		assertThatThrownBy(() -> broker.open(MEMBER, request(Intent.STREAM)))
+				.extracting(e -> ((ApiException) e).code())
+				.isEqualTo(ErrorCode.ENTITLEMENT_SUSPENDED);
+
+		verify(changeLog, never()).record(any());
+	}
+
+	@Test
+	void aNoEntitlementRefusalDoesNotWriteToTheFeedBecauseThereIsNoPriorDownloadedCopy() {
+		// NO_ENTITLEMENT means the reader never had access — they have no downloaded copy
+		// to invalidate, so writing to the feed would be noise.
+		when(entitlements.check(MEMBER, ITEM))
+				.thenReturn(denied(DenyReason.NO_ENTITLEMENT, AccessLevel.ENTITLED_UNLIMITED));
+
+		assertThatThrownBy(() -> broker.open(MEMBER, request(Intent.STREAM)))
+				.extracting(e -> ((ApiException) e).code())
+				.isEqualTo(ErrorCode.NO_ENTITLEMENT);
+
+		verify(changeLog, never()).record(any());
+	}
+
 	// ── step 3 ──────────────────────────────────────────────────────────────
 
 	@Test
@@ -179,7 +236,7 @@ class ReadBrokerServiceTest {
 				.extracting(e -> ((ApiException) e).code())
 				.isEqualTo(ErrorCode.DEVICE_LIMIT_REACHED);
 
-		verifyNoInteractions(content, licences, lease, availability);
+		verifyNoInteractions(content, licences, lease, queue);
 	}
 
 	@Test
@@ -192,7 +249,7 @@ class ReadBrokerServiceTest {
 		when(content.grant(any())).thenReturn(aGrant());
 
 		assertThat(broker.open(MEMBER, request(Intent.STREAM)).licenceModel()).isEqualTo("SUBSCRIPTION");
-		verifyNoInteractions(devices, lease, availability);
+		verifyNoInteractions(devices, lease, queue);
 	}
 
 	@Test
@@ -205,7 +262,7 @@ class ReadBrokerServiceTest {
 		when(content.grant(any())).thenReturn(aGrant());
 
 		assertThat(broker.open(MEMBER, request(Intent.STREAM)).licenceModel()).isEqualTo("OPEN_ACCESS");
-		verifyNoInteractions(devices, lease, availability);
+		verifyNoInteractions(devices, lease, queue);
 	}
 
 	// ── step 4 ──────────────────────────────────────────────────────────────
@@ -220,50 +277,41 @@ class ReadBrokerServiceTest {
 
 		// The whole point: we never asked anyone to do crypto or hold a copy for a
 		// read we were always going to refuse.
-		verifyNoInteractions(content, licences, lease, availability);
+		verifyNoInteractions(content, licences, lease, queue);
 	}
 
 	// ── step 5 ──────────────────────────────────────────────────────────────
 
 	@Test
-	void aFullEliteTitleRefusesAndCreatesNothingAndFetchesNothing() {
+	void aFullEliteTitleJoinsTheQueueInsteadOfRefusingAndCreatesNoLicenceOrGrant() {
 		when(entitlements.check(MEMBER, ITEM)).thenReturn(entitled(AccessLevel.ENTITLED_CONCURRENT, 5, 14));
 		when(lease.claim(MEMBER.institutionId(), ITEM, 5)).thenReturn(Optional.empty());
-		when(availability.forItem(MEMBER.institutionId(), ITEM, 5))
-				.thenReturn(new AvailabilitySnapshot(0, 4, null, CLOCK.instant()));
+		HoldView hold = new HoldView("hold_1", ITEM, "QUEUED", 3, 4, 14, CLOCK.instant(), null);
+		when(queue.join(MEMBER.userId(), MEMBER.institutionId(), ITEM))
+				.thenReturn(new QueueJoin.JoinResult(hold, true));
 
-		assertThatThrownBy(() -> broker.open(MEMBER, request(Intent.STREAM)))
-				.isInstanceOf(ApiException.class)
-				.extracting(e -> ((ApiException) e).code())
-				.isEqualTo(ErrorCode.NO_COPIES_AVAILABLE);
+		ReadingSessionResponse response = broker.open(MEMBER, request(Intent.STREAM));
+
+		assertThat(response.loanId()).isNull();
+		assertThat(response.canPersist()).isFalse();
+		assertThat(response.content()).isNull();
+		assertThat(response.licenceModel()).isEqualTo("ELITE");
+		assertThat(response.holdCreatedAt()).isEqualTo(CLOCK.instant());
 
 		verifyNoInteractions(licences, content);
 	}
 
 	@Test
-	void theFullTitleRefusalDescribesTheQueueWhenAvailabilityCanAnswer() {
+	void anAlreadyQueuedReaderGetsTheSamePlacedAtNotANewOne() {
 		when(entitlements.check(MEMBER, ITEM)).thenReturn(entitled(AccessLevel.ENTITLED_CONCURRENT, 5, 14));
 		when(lease.claim(any(), any(), anyInt())).thenReturn(Optional.empty());
-		when(availability.forItem(any(), any(), any()))
-				.thenReturn(new AvailabilitySnapshot(0, 4, 2, CLOCK.instant()));
+		Instant originallyPlacedAt = CLOCK.instant().minusSeconds(3600);
+		HoldView existing = new HoldView("hold_1", ITEM, "QUEUED", 2, 4, 14, originallyPlacedAt, null);
+		when(queue.join(any(), any(), any())).thenReturn(new QueueJoin.JoinResult(existing, false));
 
-		assertThatThrownBy(() -> broker.open(MEMBER, request(Intent.STREAM)))
-				.isInstanceOf(ApiException.class)
-				.hasMessageContaining("4 reader")
-				.hasMessageContaining("already 2 in line");
-	}
+		ReadingSessionResponse response = broker.open(MEMBER, request(Intent.STREAM));
 
-	@Test
-	void theFullTitleRefusalNeverBecomesA500WhenAvailabilityItselfFails() {
-		when(entitlements.check(MEMBER, ITEM)).thenReturn(entitled(AccessLevel.ENTITLED_CONCURRENT, 5, 14));
-		when(lease.claim(any(), any(), anyInt())).thenReturn(Optional.empty());
-		when(availability.forItem(any(), any(), any())).thenThrow(new RuntimeException("redis is down"));
-
-		// Best-effort: the queue detail is lost, but the refusal itself must still be a clean 409.
-		assertThatThrownBy(() -> broker.open(MEMBER, request(Intent.STREAM)))
-				.isInstanceOf(ApiException.class)
-				.extracting(e -> ((ApiException) e).code())
-				.isEqualTo(ErrorCode.NO_COPIES_AVAILABLE);
+		assertThat(response.holdCreatedAt()).isEqualTo(originallyPlacedAt);
 	}
 
 	// ── subscription / open-access happy path — no lease, no queue ──────────
@@ -279,8 +327,8 @@ class ReadBrokerServiceTest {
 		ReadingSessionResponse response = broker.open(MEMBER, request(Intent.STREAM));
 
 		assertThat(response.licenceModel()).isEqualTo("SUBSCRIPTION");
-		assertThat(response.queue()).isNull();
-		verifyNoInteractions(lease, availability);
+		assertThat(response.holdCreatedAt()).isNull();
+		verifyNoInteractions(lease, queue);
 	}
 
 	// ── elite happy path — claim, create, grant, extend, forward ────────────
@@ -304,7 +352,7 @@ class ReadBrokerServiceTest {
 
 		assertThat(response.licenceModel()).isEqualTo("ELITE");
 		assertThat(response.canPersist()).isFalse();
-		assertThat(response.queue()).isNull(); // this endpoint never places anyone in a queue
+		assertThat(response.holdCreatedAt()).isNull(); // a free copy was claimed — no hold was created
 
 		var order = org.mockito.Mockito.inOrder(lease, licences, content, lease);
 		order.verify(lease).claim(MEMBER.institutionId(), ITEM, 5);
@@ -327,6 +375,31 @@ class ReadBrokerServiceTest {
 		broker.open(MEMBER, request(Intent.STREAM));
 
 		verify(reconciler).reconcile(ITEM);
+	}
+
+	@Test
+	void returnsSessionEvenWhenExtendAndReconcileBothFail() {
+		// ACCEPTED GAP — see ReadBrokerService Step 8 comment.
+		// Design: "recover, never rollback". The reader holds the licence; refusing now
+		// would be worse than a copy count that is temporarily one short. The 30-second
+		// claim TTL self-heals the slot without any action from the caller.
+		LeaseHandle handle = new LeaseHandle("token_1", MEMBER.institutionId(), ITEM, CLOCK.instant().plusSeconds(30));
+		when(entitlements.check(MEMBER, ITEM)).thenReturn(entitled(AccessLevel.ENTITLED_CONCURRENT, 5, 14));
+		when(lease.claim(any(), any(), anyInt())).thenReturn(Optional.of(handle));
+		LicenceView licence = new LicenceView("lic_3b", MEMBER.userId(), ITEM, AccessLevel.ENTITLED_CONCURRENT,
+				false, CLOCK.instant().plusSeconds(1_209_600), "token_1");
+		when(licences.create(any(), any(), any(), anyInt(), any())).thenReturn(licence);
+		when(content.grant(any())).thenReturn(aGrant());
+		when(lease.extend(any(), any())).thenReturn(false); // extend fails
+		// reconciler.reconcile() is a void mock — it does nothing but doesn't throw either.
+		// The response must still be complete and valid.
+
+		ReadingSessionResponse response = broker.open(MEMBER, request(Intent.STREAM));
+
+		assertThat(response).isNotNull();
+		assertThat(response.loanId()).isEqualTo("lic_3b");
+		assertThat(response.licenceModel()).isEqualTo("ELITE");
+		verify(reconciler).reconcile(ITEM); // reconcile was triggered despite the failed extend
 	}
 
 	@Test
