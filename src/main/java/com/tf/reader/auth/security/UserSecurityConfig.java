@@ -127,7 +127,8 @@ public class UserSecurityConfig {
 						// every profile but a developer's own. This entry is harmless when it is off:
 						// with no bean, the path is unmapped and 404s regardless of this matcher.
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/dev-token").permitAll()
-						// OIDC: start cannot require a token; callback is a browser redirect from IdP
+						// OIDC: the individual, no-institution flow. Start cannot require a token;
+						// callback is a browser redirect from the IdP.
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/oidc/start").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/v1/auth/oidc/callback").permitAll()
 						// Authenticated by the opaque code/refresh token in the body, not a bearer JWT.

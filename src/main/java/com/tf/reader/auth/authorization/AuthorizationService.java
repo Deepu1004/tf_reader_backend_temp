@@ -87,10 +87,6 @@ public class AuthorizationService {
 					"This resource belongs to an institution, and you are not a member of one.");
 		}
 		if (!StringUtils.hasText(resourceInstitutionId)) {
-			// Refused rather than allowed, and this is the trap the method exists to avoid: an
-			// individual has a null institution, so comparing two nulls for equality would let
-			// anyone reach anything unscoped. If a resource is not institution-scoped, it does
-			// not belong to this check at all.
 			throw new ApiException(ErrorCode.WRONG_INSTITUTION,
 					"This resource carries no institution to check against.");
 		}

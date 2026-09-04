@@ -14,9 +14,8 @@ public final class QueueKeys {
 
     public static String requireScope(String scope) {
         if (scope == null || scope.isBlank()) {
-            // Individual/B2C tokens carry no institutionId, and B2C isn't
-            // built yet. This fires instead of silently building
-            // "queue:null:itemId".
+            // Individual (OIDC, no-institution) tokens carry no institutionId.
+            // This fires instead of silently building "queue:null:itemId".
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "No institution scope on this token");
         }
         return scope;

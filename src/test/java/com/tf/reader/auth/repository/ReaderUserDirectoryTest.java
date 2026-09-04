@@ -113,4 +113,43 @@ class ReaderUserDirectoryTest {
 		assertThat(user.roles()).isUnmodifiable();
 		assertThat(user.collections()).isUnmodifiable();
 	}
+
+	@Test
+	void aNeverSeenEmailIsProvisionedAsAnIndividualOnFirstSignIn() {
+		TnfUser subscriber = users.findOrProvisionIndividual("new.reader@example.com");
+
+		assertThat(subscriber.userId()).startsWith("usr_");
+		assertThat(subscriber.type()).isEqualTo(UserType.INDIVIDUAL);
+		assertThat(subscriber.institutionId()).isNull();
+		assertThat(subscriber.roles()).containsExactly("SUBSCRIBER");
+		assertThat(subscriber.collections()).isEmpty();
+	}
+
+	@Test
+	void theSameEmailResolvesToTheSameIndividualOnEverySignIn() {
+		TnfUser first = users.findOrProvisionIndividual("returning.reader@example.com");
+		TnfUser second = users.findOrProvisionIndividual("returning.reader@example.com");
+
+		assertThat(second.userId()).isEqualTo(first.userId());
+	}
+
+	@Test
+	void individualProvisioningFoldsEmailTheSameWayInstitutionLookupDoes() {
+		TnfUser lowercase = users.findOrProvisionIndividual("Mixed.Case@Example.com");
+		TnfUser mixedCase = users.findOrProvisionIndividual("  mixed.case@example.com ");
+
+		assertThat(mixedCase.userId()).isEqualTo(lowercase.userId());
+	}
+
+	@Test
+	void anIndividualDoesNotCollideWithTheSameEmailsInstitutionMembership() {
+		// john.doe@example.com is seeded at three institutions; an individual sign-in for the same
+		// address must be a fourth, distinct account - the pair (email, institutionId) is still
+		// the key, and institutionId is null here rather than absent from it.
+		TnfUser individual = users.findOrProvisionIndividual("john.doe@example.com");
+
+		assertThat(individual.userId()).isNotIn(AuthTestUsers.JOHN_AT_IMPERIAL,
+				AuthTestUsers.JOHN_AT_UCL, AuthTestUsers.JOHN_AT_LEEDS);
+		assertThat(individual.type()).isEqualTo(UserType.INDIVIDUAL);
+	}
 }
