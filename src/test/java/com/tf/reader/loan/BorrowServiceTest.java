@@ -64,9 +64,23 @@ class BorrowServiceTest {
 		LicenceView view = service.create(SUBJECT, "item_1", AccessLevel.ENTITLED_UNLIMITED, 0, null);
 
 		assertThat(view.canPersist()).isTrue();
-		assertThat(view.expiresAt()).isNull();
+		assertThat(view.expiresAt()).isNull();   // loanPeriodDays 0 = unlimited → open-ended
 		assertThat(view.leaseId()).isNull();
 		assertThat(savedLoan().getLicenceModel()).isEqualTo(LicenceModel.SUBSCRIPTION);
+	}
+
+	@Test
+	void subscriptionWithAFiniteLoanPeriodGetsADueDate() {
+		noExistingLoan();
+		savesTheGivenLoan();
+
+		LicenceView view = service.create(SUBJECT, "item_1", AccessLevel.ENTITLED_UNLIMITED, 30, null);
+
+		// Contract: dueAt = borrowedAt + loanPeriodDays for anything but OPEN_ACCESS (D-030).
+		// A subscription with a finite entitlement window must expire, not read as open-ended.
+		assertThat(view.expiresAt()).isEqualTo(NOW.plus(Duration.ofDays(30)));
+		assertThat(savedLoan().getDueAt()).isEqualTo(NOW.plus(Duration.ofDays(30)));
+		assertThat(view.canPersist()).isTrue();   // still persists; only the window changes
 	}
 
 	@Test
@@ -74,7 +88,8 @@ class BorrowServiceTest {
 		noExistingLoan();
 		savesTheGivenLoan();
 
-		LicenceView view = service.create(SUBJECT, "item_1", AccessLevel.OPEN_ACCESS, 0, null);
+		// Even with a positive loanPeriodDays, open access never expires (the != OPEN_ACCESS guard).
+		LicenceView view = service.create(SUBJECT, "item_1", AccessLevel.OPEN_ACCESS, 14, null);
 
 		assertThat(view.canPersist()).isTrue();
 		assertThat(view.expiresAt()).isNull();
