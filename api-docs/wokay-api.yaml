@@ -3767,15 +3767,25 @@ components:
     EntitlementUpdate:
       type: object
       description: >-
-        Amends the **terms** of a grant. `scopeType` and `scopeId` are not here: to
-        re-point a grant, revoke it and create a new one. `version` is required. Status is
-        not here either: use `PATCH .../status` to approve or reject a pending request.
-      required: [version]
+        Amends the **terms** of a grant. This is a full replace, not a patch: send every
+        field every time. `scopeType` and `scopeId` are not here: to re-point a grant,
+        revoke it and create a new one. Status is not here either: use
+        `PATCH .../status` to approve or reject a pending request.
+      required: [loanPeriodDays, validFrom, version]
       properties:
-        copies: { type: [integer, 'null'], minimum: 1 }
+        copies:
+          type: [integer, 'null']
+          minimum: 1
+          description: >-
+            Null means UNLIMITED. Always send this field - null and "not present" are
+            different things to a partial client but the same thing to this API, since a
+            missing field here is treated as null, not as "leave it alone".
         loanPeriodDays: { type: integer, minimum: 1 }
         validFrom: { type: string, format: date }
-        validTo: { type: [string, 'null'], format: date }
+        validTo:
+          type: [string, 'null']
+          format: date
+          description: Null means open ended. Always send this field, same reasoning as copies.
         version:
           type: integer
           minimum: 0

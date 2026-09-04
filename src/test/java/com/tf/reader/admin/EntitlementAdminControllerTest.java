@@ -3,6 +3,8 @@ package com.tf.reader.admin;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -152,8 +154,30 @@ class EntitlementAdminControllerTest {
 	@DisplayName("PUT with a missing version returns 400 VALIDATION_FAILED")
 	void missingVersionIs400() throws Exception {
 		mvc.perform(put("/api/admin/v1/entitlements/ent_5a1").contentType(MediaType.APPLICATION_JSON)
-				.content("{\"copies\":2}")).andExpect(status().isBadRequest())
+				.content("{\"copies\":2,\"loanPeriodDays\":14,\"validFrom\":\"2026-08-01\"}"))
+				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+	}
+
+	@Test
+	@DisplayName("PUT with a missing loanPeriodDays returns 400 VALIDATION_FAILED before reaching the service")
+	void missingLoanPeriodDaysIs400() throws Exception {
+		// This is the bug this DTO's @NotNull fixes: a caller that omits loanPeriodDays must be
+		// rejected, not silently null the existing entitlement's loanPeriodDays.
+		mvc.perform(put("/api/admin/v1/entitlements/ent_5a1").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"validFrom\":\"2026-08-01\",\"version\":0}")).andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+		verify(service, never()).update(any(), any());
+	}
+
+	@Test
+	@DisplayName("PUT with a missing validFrom returns 400 VALIDATION_FAILED before reaching the service")
+	void missingValidFromIs400() throws Exception {
+		mvc.perform(put("/api/admin/v1/entitlements/ent_5a1").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"loanPeriodDays\":14,\"version\":0}")).andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+		verify(service, never()).update(any(), any());
 	}
 
 	@Test
@@ -163,8 +187,8 @@ class EntitlementAdminControllerTest {
 				.thenThrow(new ApiException(ErrorCode.STALE_VERSION, "This entitlement was changed since you last read it."));
 
 		mvc.perform(put("/api/admin/v1/entitlements/ent_5a1").contentType(MediaType.APPLICATION_JSON)
-				.content("{\"version\":1}")).andExpect(status().isConflict())
-				.andExpect(jsonPath("$.code").value("STALE_VERSION"));
+				.content("{\"loanPeriodDays\":14,\"validFrom\":\"2026-08-01\",\"version\":1}"))
+				.andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("STALE_VERSION"));
 	}
 
 	@Test
@@ -173,8 +197,8 @@ class EntitlementAdminControllerTest {
 		when(service.update(eq("ent_ghost"), any())).thenThrow(new ApiException(ErrorCode.NOT_FOUND, "No such entitlement"));
 
 		mvc.perform(put("/api/admin/v1/entitlements/ent_ghost").contentType(MediaType.APPLICATION_JSON)
-				.content("{\"version\":0}")).andExpect(status().isNotFound())
-				.andExpect(jsonPath("$.code").value("NOT_FOUND"));
+				.content("{\"loanPeriodDays\":14,\"validFrom\":\"2026-08-01\",\"version\":0}"))
+				.andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("NOT_FOUND"));
 	}
 
 	// ---------------------------------------------------------------- revoke

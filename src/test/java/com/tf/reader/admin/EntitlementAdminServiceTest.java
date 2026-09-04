@@ -17,6 +17,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.Page;
@@ -223,6 +224,25 @@ class EntitlementAdminServiceTest {
 		assertThat(updated.loanPeriodDays()).isEqualTo(30);
 		assertThat(updated.version()).isEqualTo(4);
 		verify(versionBumper).bump(CatalogueVersionBumper.Scope.INSTITUTION, "inst_7f3");
+	}
+
+	@Test
+	@DisplayName("update with an explicit null copies clears the copy limit to UNLIMITED")
+	void updateWithNullCopiesClearsTheLimit() {
+		// copies staying nullable (no @NotNull) is deliberate: null is UNLIMITED, a real value,
+		// not an omission - see EntitlementUpdate. loanPeriodDays and validTo must still be
+		// supplied since a full replace always resends them.
+		Entitlement existing = entitlement("ent_5a1", "inst_7f3", ScopeType.COLLECTION, "col_law2024", 2, 3);
+		when(entitlementRepository.findById("ent_5a1")).thenReturn(Optional.of(existing));
+		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+		when(bookCollectionRepository.findById("col_law2024")).thenReturn(Optional.empty());
+		when(catalogueItemRepository.countByCollectionIds("col_law2024")).thenReturn(0L);
+
+		EntitlementUpdate write = new EntitlementUpdate(null, 30, LocalDate.parse("2026-09-01"), null, 3L);
+
+		EntitlementView updated = service.update("ent_5a1", write);
+
+		assertThat(updated.copies()).isNull();
 	}
 
 	@Test
