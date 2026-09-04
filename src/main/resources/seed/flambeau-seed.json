@@ -107,17 +107,37 @@
       "_seedWhy": "4 of the default cap of 5 already used, so a manual tester can immediately try the 5th (admitted) and 6th (403 DEVICE_LIMIT_REACHED) device without registering four first.",
       "userId": "usr_dev123",
       "devices": [
-        { "fingerprint": "fp_seed_phone", "firstSeenAt": "2026-08-01T09:00:00Z", "lastSeenAt": "2026-08-25T09:00:00Z" },
-        { "fingerprint": "fp_seed_tablet", "firstSeenAt": "2026-08-05T09:00:00Z", "lastSeenAt": "2026-08-24T09:00:00Z" },
-        { "fingerprint": "fp_seed_laptop", "firstSeenAt": "2026-08-10T09:00:00Z", "lastSeenAt": "2026-08-20T09:00:00Z" },
-        { "fingerprint": "fp_seed_stale", "firstSeenAt": "2026-01-01T09:00:00Z", "lastSeenAt": "2026-02-01T09:00:00Z" }
+        {
+          "fingerprint": "fp_seed_phone",
+          "firstSeenAt": "2026-08-01T09:00:00Z",
+          "lastSeenAt": "2026-08-25T09:00:00Z"
+        },
+        {
+          "fingerprint": "fp_seed_tablet",
+          "firstSeenAt": "2026-08-05T09:00:00Z",
+          "lastSeenAt": "2026-08-24T09:00:00Z"
+        },
+        {
+          "fingerprint": "fp_seed_laptop",
+          "firstSeenAt": "2026-08-10T09:00:00Z",
+          "lastSeenAt": "2026-08-20T09:00:00Z"
+        },
+        {
+          "fingerprint": "fp_seed_stale",
+          "firstSeenAt": "2026-01-01T09:00:00Z",
+          "lastSeenAt": "2026-02-01T09:00:00Z"
+        }
       ]
     },
     {
       "_seedWhy": "A reader with a single device — the ordinary case, for contrast against usr_dev123's near-full cap.",
       "userId": "usr_a1",
       "devices": [
-        { "fingerprint": "fp_seed_a1_phone", "firstSeenAt": "2026-08-20T09:00:00Z", "lastSeenAt": "2026-08-25T09:00:00Z" }
+        {
+          "fingerprint": "fp_seed_a1_phone",
+          "firstSeenAt": "2026-08-20T09:00:00Z",
+          "lastSeenAt": "2026-08-25T09:00:00Z"
+        }
       ]
     }
   ],
@@ -127,17 +147,42 @@
       "_seedWhy": "A short realistic history for the dev-token default user, so GET /api/v1/loans/changes has more than one page to demonstrate ?since=/?size= paging against.",
       "userId": "usr_dev123",
       "entries": [
-        { "reason": "LOAN_CREATED", "itemId": "item_env", "loanId": "loan_seed_d9", "occurredAt": "2026-08-10T09:00:00Z" },
-        { "reason": "LOAN_CREATED", "itemId": "item_dual", "loanId": "loan_seed_e1", "occurredAt": "2026-07-01T09:00:00Z" },
-        { "reason": "LOAN_EXPIRED", "itemId": "item_dual", "loanId": "loan_seed_e1", "occurredAt": "2026-07-31T09:00:05Z" }
+        {
+          "reason": "LOAN_CREATED",
+          "itemId": "item_env",
+          "loanId": "loan_seed_d9",
+          "occurredAt": "2026-08-10T09:00:00Z"
+        },
+        {
+          "reason": "LOAN_CREATED",
+          "itemId": "item_dual",
+          "loanId": "loan_seed_e1",
+          "occurredAt": "2026-07-01T09:00:00Z"
+        },
+        {
+          "reason": "LOAN_EXPIRED",
+          "itemId": "item_dual",
+          "loanId": "loan_seed_e1",
+          "occurredAt": "2026-07-31T09:00:05Z"
+        }
       ]
     },
     {
       "_seedWhy": "A reader whose hold was promoted then accepted-in-waiting — exercises HOLD_PLACED/HOLD_PROMOTED in the feed.",
       "userId": "usr_c3",
       "entries": [
-        { "reason": "HOLD_PLACED", "itemId": "item_42", "holdId": "hold_seed_c3", "occurredAt": "2026-08-21T09:00:00Z" },
-        { "reason": "HOLD_PROMOTED", "itemId": "item_42", "holdId": "hold_seed_c3", "occurredAt": "2026-08-24T14:30:05Z" }
+        {
+          "reason": "HOLD_PLACED",
+          "itemId": "item_42",
+          "holdId": "hold_seed_c3",
+          "occurredAt": "2026-08-21T09:00:00Z"
+        },
+        {
+          "reason": "HOLD_PROMOTED",
+          "itemId": "item_42",
+          "holdId": "hold_seed_c3",
+          "occurredAt": "2026-08-24T14:30:05Z"
+        }
       ]
     }
   ]
