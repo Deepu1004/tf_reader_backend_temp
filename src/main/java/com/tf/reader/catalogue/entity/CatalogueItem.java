@@ -68,7 +68,12 @@ public class CatalogueItem {
 
 	private Integer duration;
 
+	// Set only when the cover was uploaded through the admin console, not pasted in as an
+	// external link. The bucket is private, so coverUrl is never derived from these at write
+	// time - CoverUrlResolver presigns fresh from coverKey on every read instead.
 	private String coverUrl;
+	private String coverKey;
+	private String coverMimeType;
 	private ContentType contentType;
 	private AccessTier accessTier;
 	private ItemStatus status;
