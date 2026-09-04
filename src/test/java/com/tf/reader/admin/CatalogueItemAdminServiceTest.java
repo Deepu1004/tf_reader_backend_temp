@@ -230,6 +230,18 @@ class CatalogueItemAdminServiceTest {
 	}
 
 	@Test
+	@DisplayName("update may not change an ISBN once it has been set")
+	void rejectsUpdateThatChangesAnAlreadySetIsbn() {
+		CatalogueItem existing = isbnItem("item_42", "pub_rtlg", "9780132350884");
+		when(catalogueItemRepository.findById("item_42")).thenReturn(Optional.of(existing));
+
+		assertThatThrownBy(() -> service.update("item_42", isbnWrite("pub_rtlg", "9780321356680")))
+				.isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+		verify(catalogueItemRepository, never()).save(any());
+	}
+
+	@Test
 	@DisplayName("update may not take an ISBN a different book already holds")
 	void rejectsUpdateWhenIsbnBelongsToAnotherItem() {
 		when(catalogueItemRepository.findById("item_99"))

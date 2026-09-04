@@ -1657,6 +1657,55 @@ paths:
                 path: /api/admin/v1/catalogue-items/item_42/content
                 traceId: b7c1f2a9
 
+  /api/admin/v1/catalogue-items/{itemId}/cover:
+    post:
+      tags: [Admin · catalogue items]
+      operationId: uploadCover
+      summary: Upload a book's cover image
+      description: |
+        Synchronous - there is no ingest queue for a cover, so the response already carries the
+        item with its new `coverUrl` set. Never encrypted: a cover is never a secret.
+
+        Stored through the same private-bucket/signed-URL path as the book file itself, so
+        `coverUrl` is a presigned link and is re-issued on every upload. Upload limit 5 MB.
+      x-stability: DRAFT
+      security: [{ adminToken: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ItemId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: The book, with coverUrl set to the newly uploaded image.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CatalogueItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413':
+          description: File too large
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                timestamp: '2026-09-04T14:00:00Z'
+                status: 413
+                code: VALIDATION_FAILED
+                message: A cover image may not exceed 5 MB
+                path: /api/admin/v1/catalogue-items/item_42/cover
+                traceId: c8d2e3b0
+
   /api/admin/v1/catalogue-items/{itemId}/ingest-status:
     get:
       tags: [Admin · catalogue items]

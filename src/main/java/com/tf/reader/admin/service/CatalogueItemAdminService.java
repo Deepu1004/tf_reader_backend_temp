@@ -174,6 +174,7 @@ public class CatalogueItemAdminService {
 			throw new ApiException(ErrorCode.FORBIDDEN_ROLE, "Not permitted to move a book to this publisher");
 		}
 		validateDuration(write);
+		requireIsbnImmutable(item.getIsbn(), write.isbn());
 		requireIsbnFree(write.isbn(), itemId);
 
 		Map<String, Object> before = afterMap(item);
@@ -284,6 +285,19 @@ public class CatalogueItemAdminService {
 		}
 		return "ISBN already belongs to " + existing.getId()
 				+ ". To add that book to a collection use PUT /api/admin/v1/collections/{collectionId}/items";
+	}
+
+	// Once an ISBN is set it is a fact about the physical book, not a form field an admin can
+	// second-guess later - a later PUT that tries to change it is almost always a copy-paste
+	// mistake, not an intentional correction, and an intentional one is a new book, not an edit.
+	private static void requireIsbnImmutable(String existingIsbn, String newIsbn) {
+		String existing = normalizeIsbn(existingIsbn);
+		if (existing == null) {
+			return;
+		}
+		if (!existing.equals(normalizeIsbn(newIsbn))) {
+			throw new ApiException(ErrorCode.VALIDATION_FAILED, "isbn cannot be changed once it has been set");
+		}
 	}
 
 	private static String normalizeIsbn(String isbn) {
