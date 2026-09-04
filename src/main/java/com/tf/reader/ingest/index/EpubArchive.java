@@ -2,12 +2,16 @@ package com.tf.reader.ingest.index;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
+import java.util.zip.ZipFile;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 
@@ -105,14 +109,29 @@ final class EpubArchive {
 		return (Element) nodes.item(0);
 	}
 
+	// ZipFile, not ZipInputStream: some real EPUB packagers write "mimetype" as a STORED
+	// entry with its size deferred to a trailing data descriptor, which ZipInputStream
+	// cannot read since it never consults the central directory. ZipFile does, so it
+	// needs random access - hence the temp file.
 	private static Map<String, byte[]> unzip(byte[] epubBytes) {
 		Map<String, byte[]> files = new LinkedHashMap<>();
-		try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(epubBytes))) {
-			ZipEntry entry;
-			while ((entry = zip.getNextEntry()) != null) {
-				if (!entry.isDirectory()) {
-					files.put(entry.getName(), zip.readAllBytes());
+		try {
+			Path temp = Files.createTempFile("epub-", ".zip");
+			try {
+				Files.write(temp, epubBytes);
+				try (ZipFile zip = new ZipFile(temp.toFile())) {
+					Enumeration<? extends ZipEntry> entries = zip.entries();
+					while (entries.hasMoreElements()) {
+						ZipEntry entry = entries.nextElement();
+						if (!entry.isDirectory()) {
+							try (InputStream in = zip.getInputStream(entry)) {
+								files.put(entry.getName(), in.readAllBytes());
+							}
+						}
+					}
 				}
+			} finally {
+				Files.deleteIfExists(temp);
 			}
 		} catch (IOException e) {
 			throw new IllegalStateException("failed to read EPUB archive", e);

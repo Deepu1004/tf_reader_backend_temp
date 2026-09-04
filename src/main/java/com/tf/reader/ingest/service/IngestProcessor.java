@@ -132,7 +132,7 @@ public class IngestProcessor {
 		catalogueItemRepository.save(item);
 		catalogueVersionBumper.bump(CatalogueVersionBumper.Scope.ITEM, itemId);
 
-		deleteStagingBestEffort(stagingKey, itemId);
+		deleteBestEffort(stagingKey, itemId);
 	}
 
 	/**
@@ -140,12 +140,12 @@ public class IngestProcessor {
 	 * point - nothing reads it again. Deleted best-effort, after the item is durably READY: a
 	 * cleanup failure here must not undo an ingest that already succeeded.
 	 */
-	private void deleteStagingBestEffort(String stagingKey, String itemId) {
+	private void deleteBestEffort(String key, String itemId) {
 		try {
-			bookStorage.delete(stagingKey);
+			bookStorage.delete(key);
 		}
 		catch (RuntimeException e) {
-			log.warn("could not delete staging object for item {}", itemId, e);
+			log.warn("could not delete storage object {} for item {}", key, itemId, e);
 		}
 	}
 
@@ -201,6 +201,16 @@ public class IngestProcessor {
 		item.setContentError(reason);
 		item.setUpdatedAt(clock.instant());
 		catalogueItemRepository.save(item);
+
+		// A failure can land after storeLocked/storeUnlocked already wrote content or index
+		// bytes (e.g. search-index extraction throwing once the content object has landed).
+		// Deleting all three keys is safe even when a given one was never written - delete is
+		// idempotent on a missing object - so this cleans up whatever this attempt left behind
+		// without needing to track which writes actually happened.
+		String itemId = item.getId();
+		deleteBestEffort(StorageKeys.staging(itemId), itemId);
+		deleteBestEffort(StorageKeys.content(itemId), itemId);
+		deleteBestEffort(StorageKeys.index(itemId), itemId);
 	}
 
 	private static String shortReason(RuntimeException e) {
