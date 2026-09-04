@@ -140,12 +140,20 @@ info:
     `ENTITLEMENT_EXPIRED`, `ENTITLEMENT_SUSPENDED`, `INSTITUTION_INACTIVE`,
     `CONTENT_NOT_READY`, `NOT_FOUND`.
 
-    Five are new with this file and need ratifying: `NO_COPIES_AVAILABLE`,
-    `NO_ACTIVE_LOAN`, `LOAN_NOT_ACTIVE`, `DEVICE_LIMIT_REACHED`, `OFFER_EXPIRED`.
+    Four are new with this file and need ratifying: `NO_COPIES_AVAILABLE`,
+    `LOAN_NOT_ACTIVE`, `DEVICE_LIMIT_REACHED`, `OFFER_EXPIRED`.
 
-    One is a live disagreement. `DOWNLOAD_NOT_PERMITTED` is **403** here because wokay's
-    file has it frozen at 403; our own reference says 422. Same rule, two status codes, and
-    it is raised on our endpoint using their code. It needs one answer.
+    `DOWNLOAD_NOT_PERMITTED` is settled at **403** in code (`common/error/ErrorCode`) —
+    the earlier disagreement with a 422 reference is resolved, not open.
+
+    `NO_ACTIVE_LOAN` exists in the shared `ErrorCode` enum but `POST /api/v1/reading-sessions`
+    never throws it — the read broker re-checks entitlement and never a separate loan
+    existence check. Treat any documentation citing it on this endpoint as stale.
+
+    `TOKEN_MISSING` and `TOKEN_INVALID` **do exist and are used** (`AuthController`), each
+    answering 401 alongside `TOKEN_EXPIRED` and `UNAUTHENTICATED` — a caller cannot tell
+    them apart from the status code alone, but the codes themselves are distinct on the
+    wire.
 
     ## Conventions
 
@@ -205,7 +213,6 @@ tags:
 security: []
 
 paths:
-
   # ────────────────────────────────────────────────────────────────
   # AUTH
   # ────────────────────────────────────────────────────────────────
@@ -233,19 +240,19 @@ paths:
           schema: { type: string }
           example: inst_7f3
       responses:
-        '200':
+        "200":
           description: The methods available for this institution
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/SignInMethodsResponse' }
+              schema: { $ref: "#/components/schemas/SignInMethodsResponse" }
               example:
                 institutionId: inst_7f3
                 institutionName: Deakin University
                 methods:
                   - method: SAML
                     startUrl: /api/v1/auth/saml/start
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /api/v1/auth/saml/start:
     post:
@@ -286,21 +293,21 @@ paths:
           required: false
           schema: { type: string }
       responses:
-        '200':
+        "200":
           description: The URL to open, and the transaction that carries the institution
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/SamlStartResponse' }
+              schema: { $ref: "#/components/schemas/SamlStartResponse" }
               example:
                 authTxnId: 8f14e45fceea167a
                 authorizationUrl: /saml2/authenticate?registrationId=tf-reader&authTxn=8f14e45fceea167a
                 institution:
                   institutionId: inst_7f3
                   name: Deakin University
-                expiresAt: '2026-08-13T10:10:00Z'
-                serverTime: '2026-08-13T10:00:00Z'
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '404': { $ref: '#/components/responses/NotFound' }
+                expiresAt: "2026-08-13T10:10:00Z"
+                serverTime: "2026-08-13T10:00:00Z"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /api/v1/auth/oidc/start:
     post:
@@ -324,16 +331,16 @@ paths:
       x-called-by: [team1]
       security: []
       responses:
-        '200':
+        "200":
           description: The URL to open, and the transaction the callback will redeem
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/OidcStartResponse' }
+              schema: { $ref: "#/components/schemas/OidcStartResponse" }
               example:
                 authTxnId: c9f0f895fb98ab91
                 authorizationUrl: /oauth2/authorization/tf-reader?state=c9f0f895fb98ab91
-                expiresAt: '2026-08-13T10:10:00Z'
-                serverTime: '2026-08-13T10:00:00Z'
+                expiresAt: "2026-08-13T10:10:00Z"
+                serverTime: "2026-08-13T10:00:00Z"
 
   /api/v1/auth/me:
     get:
@@ -362,11 +369,11 @@ paths:
       x-called-by: [team1]
       security: [{ appToken: [] }]
       responses:
-        '200':
+        "200":
           description: The current identity
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/AuthMeResponse' }
+              schema: { $ref: "#/components/schemas/AuthMeResponse" }
               examples:
                 institutional:
                   summary: A member signed in through an institution
@@ -376,8 +383,8 @@ paths:
                     institutionId: inst_7f3
                     roles: [MEMBER]
                     collections: [col_medicine, col_nursing]
-                    expiresAt: '2026-08-13T11:00:00Z'
-                    serverTime: '2026-08-13T10:00:00Z'
+                    expiresAt: "2026-08-13T11:00:00Z"
+                    serverTime: "2026-08-13T10:00:00Z"
                 individual:
                   summary: An individual subscriber, with no institution at all
                   value:
@@ -385,9 +392,9 @@ paths:
                     type: INDIVIDUAL
                     roles: [SUBSCRIBER]
                     collections: []
-                    expiresAt: '2026-08-13T11:00:00Z'
-                    serverTime: '2026-08-13T10:00:00Z'
-        '401': { $ref: '#/components/responses/Unauthorized' }
+                    expiresAt: "2026-08-13T11:00:00Z"
+                    serverTime: "2026-08-13T10:00:00Z"
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /api/v1/auth/token:
     post:
@@ -406,14 +413,14 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/TokenExchangeRequest' }
+            schema: { $ref: "#/components/schemas/TokenExchangeRequest" }
       responses:
-        '200':
+        "200":
           description: The token pair the code was issued for
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/TokenResponse' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+              schema: { $ref: "#/components/schemas/TokenResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /api/v1/auth/refresh:
     post:
@@ -431,14 +438,80 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/RefreshRequest' }
+            schema: { $ref: "#/components/schemas/RefreshRequest" }
       responses:
-        '200':
+        "200":
           description: A rotated token pair
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/TokenResponse' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+              schema: { $ref: "#/components/schemas/TokenResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: End the session behind a refresh token
+      description: |
+        Revokes the session the presented refresh token belongs to. **Always `204`**, even
+        for a refresh token that is already revoked, expired or unrecognised — logging out
+        is idempotent, and the caller's goal ("I am no longer signed in") is already true
+        either way.
+
+        Does not touch the access token: an already-issued access token remains valid for
+        the rest of its one hour. There is nothing here that revokes it early.
+      x-stability: DRAFT
+      x-called-by: [team1]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefreshRequest" }
+      responses:
+        "204":
+          description: Signed out, whatever the refresh token's state was.
+
+  /api/v1/auth/oidc/callback:
+    get:
+      tags: [Auth]
+      operationId: oidcCallback
+      summary: Where the identity provider sends the browser back
+      description: |
+        **Not a JSON endpoint.** This is reached by a browser redirect from the identity
+        provider, so it answers with an HTTP redirect, never a body — a thrown exception
+        here would answer a browser navigation with a JSON body it cannot do anything with.
+
+        On success, redirects to the app's deep link (`tfreader://auth/callback?code=...`)
+        carrying a one-time code, exactly like the SAML ACS does; that code is what
+        `POST /api/v1/auth/token` redeems. On failure it redirects to the same deep link
+        carrying `?error=<ErrorCode>` instead.
+
+        `state` is required — a callback without one cannot be matched to a sign-in
+        transaction. `code` is optional at this level: a provider-side failure (the user
+        cancelling) arrives as `?error=access_denied` with no code, and is refused by our
+        own service rather than by the framework.
+      x-stability: DRAFT
+      x-called-by: []
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema: { type: string }
+        - name: state
+          in: query
+          required: true
+          schema: { type: string }
+        - name: error
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "302":
+          description: >-
+            Always a redirect to the app's deep link, carrying either `?code=` or `?error=`.
+            Never a JSON body.
 
   # ────────────────────────────────────────────────────────────────
   # LOANS
@@ -481,19 +554,21 @@ paths:
       x-stability: FROZEN
       x-called-by: [team1]
       security: [{ appToken: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/BorrowRequest' }
+            schema: { $ref: "#/components/schemas/BorrowRequest" }
             example:
               itemId: item_42
       responses:
-        '200':
+        "200":
           description: This reader already holds this title. The existing loan, unchanged.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Loan' }
+              schema: { $ref: "#/components/schemas/Loan" }
               example:
                 loanId: loan_3b8
                 itemId: item_42
@@ -501,15 +576,15 @@ paths:
                 institutionId: inst_7f3
                 licenceModel: ELITE
                 status: ACTIVE
-                borrowedAt: '2026-08-01T09:00:00Z'
-                dueAt: '2026-08-15T09:00:00Z'
+                borrowedAt: "2026-08-01T09:00:00Z"
+                dueAt: "2026-08-15T09:00:00Z"
                 canPersist: false
-                serverTime: '2026-08-13T10:00:00Z'
-        '201':
+                serverTime: "2026-08-13T10:00:00Z"
+        "201":
           description: A new loan
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Loan' }
+              schema: { $ref: "#/components/schemas/Loan" }
               examples:
                 concurrent:
                   summary: A copy-limited title. One copy is now held by this reader.
@@ -520,10 +595,10 @@ paths:
                     institutionId: inst_7f3
                     licenceModel: ELITE
                     status: ACTIVE
-                    borrowedAt: '2026-08-13T10:00:00Z'
-                    dueAt: '2026-08-27T10:00:00Z'
+                    borrowedAt: "2026-08-13T10:00:00Z"
+                    dueAt: "2026-08-27T10:00:00Z"
                     canPersist: false
-                    serverTime: '2026-08-13T10:00:00Z'
+                    serverTime: "2026-08-13T10:00:00Z"
                 openAccess:
                   summary: Open access. No due date, and no copy was consumed.
                   value:
@@ -533,14 +608,14 @@ paths:
                     institutionId: inst_7f3
                     licenceModel: OPEN_ACCESS
                     status: ACTIVE
-                    borrowedAt: '2026-08-13T10:00:00Z'
+                    borrowedAt: "2026-08-13T10:00:00Z"
                     canPersist: true
-                    serverTime: '2026-08-13T10:00:00Z'
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/EntitlementRefused' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/BorrowConflict' }
+                    serverTime: "2026-08-13T10:00:00Z"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/EntitlementRefused" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/BorrowConflict" }
 
     get:
       tags: [Loans]
@@ -556,6 +631,12 @@ paths:
 
         Returns item ids, not books. Titles and covers come from wokay's
         `POST /api/v1/catalogue/items:batch`, capped at 100 ids per call.
+
+        **Each item is a `LoanListItem`, not a `Loan`.** The caller is already the owner by
+        virtue of the token, so `userId` and `institutionId` would be redundant on every
+        row; `expiredAt` is present here (absent on the borrow/accept response) because a
+        history screen is exactly where "this lapsed on its due date" needs to be
+        distinguishable from "the reader returned it".
       x-stability: FROZEN
       x-called-by: [team1]
       security: [{ appToken: [] }]
@@ -563,31 +644,29 @@ paths:
         - name: status
           in: query
           description: Omit for every loan this reader has ever held
-          schema: { $ref: '#/components/schemas/LoanStatus' }
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/Size'
+          schema: { $ref: "#/components/schemas/LoanStatus" }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
       responses:
-        '200':
+        "200":
           description: A page of loans, newest first
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/LoanPage' }
+              schema: { $ref: "#/components/schemas/LoanPage" }
               example:
                 loans:
                   - loanId: loan_7c1
                     itemId: item_42
-                    userId: user_9c2
-                    institutionId: inst_7f3
                     licenceModel: ELITE
                     status: ACTIVE
-                    borrowedAt: '2026-08-13T10:00:00Z'
-                    dueAt: '2026-08-27T10:00:00Z'
+                    borrowedAt: "2026-08-13T10:00:00Z"
+                    dueAt: "2026-08-27T10:00:00Z"
                     canPersist: false
                 page: 0
                 size: 20
                 total: 1
-                serverTime: '2026-08-13T10:00:00Z'
-        '401': { $ref: '#/components/responses/Unauthorized' }
+                serverTime: "2026-08-13T10:00:00Z"
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /api/v1/loans/{loanId}/return:
     post:
@@ -599,49 +678,41 @@ paths:
         lease, then promote the next waiter. Reverse any of it and there is a window where
         one copy is lent twice.
 
-        `returnedAt` is optional and is the **reader's** timestamp, for a return that
-        happened offline and is being reported late. It is clamped to
-        `[borrowedAt, serverTime]`: a client clock is not a source of truth, but neither is
-        discarding what the reader actually did.
+        **The request body is not wired up today.** The controller takes no request body at
+        all — any JSON sent is ignored — so `returnedAt` cannot yet be supplied by the
+        reader; the server always timestamps the return with its own clock. The clamping
+        behaviour described for `returnedAt` is the intended design, not current behaviour.
 
         Returning an already-returned loan is `409 LOAN_NOT_ACTIVE` rather than a silent
         success, because the app showing a book as returned twice means something else went
         wrong and swallowing it hides that.
 
-        A return can free a copy that somebody is queued for. When it does, the promotion
-        happens inside this call and the next waiter has an offer before the response is
-        written — which is why `promoted` is reported here rather than discovered from the
-        change feed a minute later.
+        A return can free a copy that somebody is queued for, and the promotion happens
+        inside this call. **`promoted` is not reported today** — the response has no field
+        for it yet; whether it happened is only observable from the change feed a moment
+        later, on the hold owner's side.
       x-stability: FROZEN
       x-called-by: [team1]
       security: [{ appToken: [] }]
       parameters:
-        - $ref: '#/components/parameters/LoanId'
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/ReturnRequest' }
-            example:
-              returnedAt: '2026-08-13T09:58:00Z'
+        - $ref: "#/components/parameters/LoanId"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
-        '200':
+        "200":
           description: The closed loan
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ReturnResponse' }
+              schema: { $ref: "#/components/schemas/ReturnResponse" }
               example:
                 loanId: loan_7c1
                 itemId: item_42
                 status: RETURNED
-                borrowedAt: '2026-08-13T10:00:00Z'
-                returnedAt: '2026-08-13T09:58:00Z'
-                promoted: true
-                serverTime: '2026-08-13T10:00:00Z'
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/LoanNotActive' }
+                returnedAt: "2026-08-13T09:58:00Z"
+                serverTime: "2026-08-13T10:00:00Z"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/LoanNotActive" }
 
   /api/v1/loans/changes:
     get:
@@ -675,29 +746,29 @@ paths:
           in: query
           description: The `nextCursor` from the previous call. Omit for everything.
           schema: { type: string }
-          example: '1187'
-        - $ref: '#/components/parameters/Size'
+          example: "1187"
+        - $ref: "#/components/parameters/Size"
       responses:
-        '200':
+        "200":
           description: A page of changes, oldest first
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ChangesResponse' }
+              schema: { $ref: "#/components/schemas/ChangesResponse" }
               example:
                 changes:
                   - sequence: 1188
                     reason: HOLD_PROMOTED
                     itemId: item_42
                     holdId: hold_5d1
-                    occurredAt: '2026-08-13T09:30:00Z'
+                    occurredAt: "2026-08-13T09:30:00Z"
                   - sequence: 1189
                     reason: ENTITLEMENT_REVOKED
                     itemId: item_77
-                    occurredAt: '2026-08-13T09:45:00Z'
-                nextCursor: '1189'
+                    occurredAt: "2026-08-13T09:45:00Z"
+                nextCursor: "1189"
                 hasMore: false
-                serverTime: '2026-08-13T10:00:00Z'
-        '401': { $ref: '#/components/responses/Unauthorized' }
+                serverTime: "2026-08-13T10:00:00Z"
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   # ────────────────────────────────────────────────────────────────
   # READING
@@ -711,29 +782,64 @@ paths:
       description: |
         Called **once per book open**, not once per borrow. About five minutes of validity.
 
-        Checks run in this order and stop at the first refusal: entitlement re-checked,
-        active loan via `ActiveLoanQuery`, device cap, rights, grant, forward. Entitlement
-        is re-checked rather than trusted from borrow time because a subscription can lapse
-        between the two, and the second check is the only thing standing between a revoked
-        institution and a decryption key.
-
-        **No lease is taken.** The copy was consumed at borrow. Taking another here would
-        double-count every book open.
+        Checks run in this order and stop at the first refusal: decode `devicePublicKey`,
+        entitlement re-checked, device cap (`ENTITLED_CONCURRENT` only), rights, claim a
+        copy (`ENTITLED_CONCURRENT` only), grant, forward. Entitlement is re-checked rather
+        than trusted from borrow time because a subscription can lapse between the two, and
+        this check is the only thing standing between a revoked institution and a
+        decryption key. **There is no separate active-loan check** — entitlement re-checked
+        here is the only gate; `NO_ACTIVE_LOAN` is not raised by this endpoint.
 
         **The device cap is applied here, not at borrow**, because the device key only
-        arrives with a session request. It is appended by one conditional Mongo update,
-        never read-then-write, so two devices registering at the same moment cannot both
-        see room for one.
+        arrives with a session request, and only for `ENTITLED_CONCURRENT` (`ELITE`). It is
+        appended by one conditional Mongo update, never read-then-write, so two devices
+        registering at the same moment cannot both see room for one.
 
-        `intent: DOWNLOAD` on a copy-limited title is refused with
-        `403 DOWNLOAD_NOT_PERMITTED`, whatever the UI offered. Read-online-only is the
-        reason that tier exists, and `canPersist` on the loan already said so. See the
-        Errors section: our own reference says 422 for this and wokay's says 403.
+        `intent: DOWNLOAD` on `ENTITLED_CONCURRENT` (`ELITE`) is refused with
+        `403 DOWNLOAD_NOT_PERMITTED`, whatever the UI offered — this is settled at 403 in
+        code, not an open question. Read-online-only is the reason that tier exists, and
+        `canPersist` on the loan already said so.
+
+        **`ENTITLED_CONCURRENT` claims a copy here, not at borrow — this is the one lease
+        this endpoint does take.** A copy-limited licence is possession without a reserved
+        copy; the copy itself is claimed against the Redis lease on the read that actually
+        needs bytes. If none is free, **this call does not refuse** — it places the reader
+        in the queue and returns `201` with a **queued** response: `content`, `index`,
+        `encryption` and `expiresAt` are all absent, and `holdCreatedAt` is present instead.
+        There is no `409 NO_COPIES_AVAILABLE` on this endpoint; that refusal belongs to
+        `POST /api/v1/loans` only.
+
+        ## What happens per tier, and by what was already true
+
+        | `accessLevel` (`licenceModel`) | Copy check | Result |
+        |---|---|---|
+        | `OPEN_ACCESS` (`OPEN_ACCESS`) | none — never copy limited | **granted**, always. No licence is written at all; `loanId` is absent |
+        | `ENTITLED_UNLIMITED` (`SUBSCRIPTION`) | none — unlimited concurrent reads | **granted**, always, once entitlement passes |
+        | `ENTITLED_CONCURRENT` (`ELITE`) | a copy is claimed against the Redis lease, per institution | **granted** if a copy is free, **queued** if not |
+
+        For `ENTITLED_CONCURRENT` specifically, two sub-cases most callers hit sooner or
+        later:
+
+        * **A licence already exists for this `(userId, itemId)`.** `LicenceCommand.create`
+          is idempotent while a licence is live — a second `POST` from the same reader for
+          a title they are already actively reading returns the **same licence**, not a
+          second one, and does not double-claim a copy. This is what makes re-opening a book
+          across app resumes or devices safe to call repeatedly.
+        * **The reader is already queued or already offered a copy for this title.**
+          `QueueJoin.join` (the same join `POST /api/v1/holds` uses) is idempotent on
+          `(scope, itemId, userId)`: a reader who calls this endpoint again while still
+          queued gets back their **existing** hold's `placedAt`, not a new position at the
+          back of the line. If their hold has since been promoted to `OFFERED` and the offer
+          is accepted (`POST /api/v1/holds/{holdId}/accept`) before this call is retried,
+          the copy is now leased in their name and this call takes the **granted** branch
+          instead — a queued reader who acted on their offer through the holds endpoints
+          does not need to call this again to "unstick" a queued response.
 
         **`devicePublicKey` is base64 of raw bytes**, not a PEM and not a JSON web key. It
         is passed to `ContentAccessGrant` as bytes, and the fingerprint of it is what the
         device cap counts, so the same device presenting the same key is one device without
-        anything being enrolled.
+        anything being enrolled. A key that does not decode as base64 is `400
+        INVALID_DEVICE_PUBLIC_KEY`.
 
         The response's `content`, `index` and `encryption` are forwarded from
         `ContentAccessGrant` **unchanged**. See "We never reshape the content grant".
@@ -744,7 +850,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/ReadingSessionRequest' }
+            schema: { $ref: "#/components/schemas/ReadingSessionRequest" }
             example:
               itemId: item_42
               format: PDF
@@ -752,41 +858,138 @@ paths:
               devicePublicKey: MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
               wantSearchIndex: true
       responses:
-        '201':
+        "201":
           description: >-
-            The grant. `content`, `index` and `encryption` are the catalogue team's shapes,
-            forwarded field for field.
+            Either the grant, or a queued placeholder. `content`, `index` and `encryption`
+            are the catalogue team's shapes, forwarded field for field, and are absent on
+            the queued variant.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ReadingSessionResponse' }
-              example:
-                sessionId: sess_e41
-                itemId: item_42
-                loanId: loan_7c1
-                expiresAt: '2026-08-13T10:05:00Z'
-                serverTime: '2026-08-13T10:00:00Z'
-                content:
-                  url: https://storage.tf/tf-content/item_42.enc?X-Amz-Signature=abc123
-                  expiresAt: '2026-08-13T10:15:00Z'
-                  cipherLength: 2170674
-                  originalLength: 2170646
-                  mimeType: application/pdf
-                index:
-                  url: https://storage.tf/tf-index/item_42.enc?X-Amz-Signature=def456
-                  encrypted: true
-                  termCount: 6120
-                encryption:
-                  algorithm: AES-256-GCM
-                  layout: nonce(12) || ciphertext || tag(16)
-                  wrappedBek: Y2lwaGVydGV4dC1vZi10aGUtYm9vay1rZXk
-                  wrapAlgorithm: RSA-OAEP-256
-                  keyId: bek_2026_08
-                  keyFingerprint: 'sha256:9f2b1c'
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/ReadRefused' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/ReadConflict' }
+              schema: { $ref: "#/components/schemas/ReadingSessionResponse" }
+              examples:
+                openAccess:
+                  summary: OPEN_ACCESS — always granted, no licence written, no loanId
+                  value:
+                    sessionId: sess_o12
+                    itemId: item_ab6
+                    accessLevel: OPEN_ACCESS
+                    licenceModel: OPEN_ACCESS
+                    canPersist: true
+                    expiresAt: "2026-08-13T10:05:00Z"
+                    serverTime: "2026-08-13T10:00:00Z"
+                    content:
+                      url: https://storage.tf/tf-content/item_ab6.pdf?X-Amz-Signature=aaa111
+                      expiresAt: "2026-08-13T10:15:00Z"
+                      cipherLength: 1870000
+                      originalLength: 1870000
+                      mimeType: application/pdf
+                subscription:
+                  summary: ENTITLED_UNLIMITED (SUBSCRIPTION) — always granted, no copy check at all
+                  value:
+                    sessionId: sess_s30
+                    itemId: item_7f2
+                    loanId: loan_a41
+                    accessLevel: ENTITLED_UNLIMITED
+                    licenceModel: SUBSCRIPTION
+                    canPersist: true
+                    expiresAt: "2026-08-13T10:05:00Z"
+                    serverTime: "2026-08-13T10:00:00Z"
+                    content:
+                      url: https://storage.tf/tf-content/item_7f2.enc?X-Amz-Signature=bbb222
+                      expiresAt: "2026-08-13T10:15:00Z"
+                      cipherLength: 3140000
+                      originalLength: 3139972
+                      mimeType: application/epub+zip
+                    encryption:
+                      algorithm: AES-256-GCM
+                      layout: nonce(12) || ciphertext || tag(16)
+                      wrappedBek: Y2lwaGVydGV4dC1vZi10aGUtYm9vay1rZXk
+                      wrapAlgorithm: RSA-OAEP-256
+                      keyId: bek_2026_08
+                      keyFingerprint: "sha256:1a2b3c"
+                eliteGranted:
+                  summary: ENTITLED_CONCURRENT (ELITE) — a copy was free, claimed and leased
+                  value:
+                    sessionId: sess_e41
+                    itemId: item_42
+                    loanId: loan_7c1
+                    accessLevel: ENTITLED_CONCURRENT
+                    licenceModel: ELITE
+                    canPersist: false
+                    expiresAt: "2026-08-13T10:05:00Z"
+                    serverTime: "2026-08-13T10:00:00Z"
+                    content:
+                      url: https://storage.tf/tf-content/item_42.enc?X-Amz-Signature=abc123
+                      expiresAt: "2026-08-13T10:15:00Z"
+                      cipherLength: 2170674
+                      originalLength: 2170646
+                      mimeType: application/pdf
+                    index:
+                      url: https://storage.tf/tf-index/item_42.enc?X-Amz-Signature=def456
+                      encrypted: true
+                      termCount: 6120
+                    encryption:
+                      algorithm: AES-256-GCM
+                      layout: nonce(12) || ciphertext || tag(16)
+                      wrappedBek: Y2lwaGVydGV4dC1vZi10aGUtYm9vay1rZXk
+                      wrapAlgorithm: RSA-OAEP-256
+                      keyId: bek_2026_08
+                      keyFingerprint: "sha256:9f2b1c"
+                eliteAlreadyLicensed:
+                  summary: >-
+                    ENTITLED_CONCURRENT (ELITE) — a licence for this reader and title was
+                    already live. Same licenceId is returned, not a new one; no second copy
+                    was claimed
+                  value:
+                    sessionId: sess_e42
+                    itemId: item_42
+                    loanId: loan_7c1
+                    accessLevel: ENTITLED_CONCURRENT
+                    licenceModel: ELITE
+                    canPersist: false
+                    expiresAt: "2026-08-13T10:09:00Z"
+                    serverTime: "2026-08-13T10:04:00Z"
+                    content:
+                      url: https://storage.tf/tf-content/item_42.enc?X-Amz-Signature=ccc333
+                      expiresAt: "2026-08-13T10:19:00Z"
+                      cipherLength: 2170674
+                      originalLength: 2170646
+                      mimeType: application/pdf
+                    encryption:
+                      algorithm: AES-256-GCM
+                      layout: nonce(12) || ciphertext || tag(16)
+                      wrappedBek: Y2lwaGVydGV4dC1vZi10aGUtYm9vay1rZXk
+                      wrapAlgorithm: RSA-OAEP-256
+                      keyId: bek_2026_08
+                      keyFingerprint: "sha256:9f2b1c"
+                eliteQueuedFirstTime:
+                  summary: ENTITLED_CONCURRENT (ELITE) — no copy free, newly joined the queue
+                  value:
+                    sessionId: sess_e55
+                    itemId: item_42
+                    accessLevel: ENTITLED_CONCURRENT
+                    licenceModel: ELITE
+                    canPersist: false
+                    holdCreatedAt: "2026-08-13T10:00:00Z"
+                    serverTime: "2026-08-13T10:00:00Z"
+                eliteAlreadyQueued:
+                  summary: >-
+                    ENTITLED_CONCURRENT (ELITE) — no copy free, and this reader was already
+                    queued for this title. Same hold's original placedAt is returned, not a
+                    new position at the back of the line
+                  value:
+                    sessionId: sess_e56
+                    itemId: item_42
+                    accessLevel: ENTITLED_CONCURRENT
+                    licenceModel: ELITE
+                    canPersist: false
+                    holdCreatedAt: "2026-08-10T14:00:00Z"
+                    serverTime: "2026-08-13T10:03:00Z"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/ReadRefused" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/ReadConflict" }
 
   # ────────────────────────────────────────────────────────────────
   # HOLDS
@@ -819,15 +1022,15 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/HoldRequest' }
+            schema: { $ref: "#/components/schemas/HoldRequest" }
             example:
               itemId: item_42
       responses:
-        '200':
+        "200":
           description: Already queued. The existing hold, position unchanged.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Hold' }
+              schema: { $ref: "#/components/schemas/Hold" }
               example:
                 holdId: hold_5d1
                 itemId: item_42
@@ -835,13 +1038,13 @@ paths:
                 position: 3
                 queueLength: 7
                 estimatedWaitDays: 9
-                placedAt: '2026-08-10T14:00:00Z'
-                serverTime: '2026-08-13T10:00:00Z'
-        '201':
+                placedAt: "2026-08-10T14:00:00Z"
+                serverTime: "2026-08-13T10:00:00Z"
+        "201":
           description: A new place in the queue
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Hold' }
+              schema: { $ref: "#/components/schemas/Hold" }
               example:
                 holdId: hold_9a4
                 itemId: item_42
@@ -849,13 +1052,13 @@ paths:
                 position: 8
                 queueLength: 8
                 estimatedWaitDays: 24
-                placedAt: '2026-08-13T10:00:00Z'
-                serverTime: '2026-08-13T10:00:00Z'
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/EntitlementRefused' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/HoldConflict' }
+                placedAt: "2026-08-13T10:00:00Z"
+                serverTime: "2026-08-13T10:00:00Z"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/EntitlementRefused" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/HoldConflict" }
 
     get:
       tags: [Holds]
@@ -873,39 +1076,43 @@ paths:
         A hold in `OFFERED` carries the window to accept in. **The lease is held throughout
         that window** — an offer is a copy already reassigned, not a promise of one, which is
         why letting it lapse costs the queue real time and why the window is short.
+
+        **A bare array, not a wrapper object.** There is no top-level `serverTime` here and
+        no `status` filter — each `Hold` in the array already carries its own `serverTime`.
+        `GET /api/v1/library` is the object-shaped read model that wraps holds and loans
+        together; this collection stays a plain array.
       x-stability: DRAFT
       x-called-by: [team1]
       security: [{ appToken: [] }]
-      parameters:
-        - name: status
-          in: query
-          schema: { $ref: '#/components/schemas/HoldStatus' }
       responses:
-        '200':
-          description: Every live hold for this reader
+        "200":
+          description: Every live hold for this reader, as a plain array
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/HoldListResponse' }
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Hold" }
               example:
-                holds:
-                  - holdId: hold_5d1
-                    itemId: item_42
-                    status: OFFERED
-                    position: 1
-                    queueLength: 7
-                    placedAt: '2026-08-10T14:00:00Z'
-                    offer:
-                      offerId: offer_a90
-                      expiresAt: '2026-08-13T10:30:00Z'
-                  - holdId: hold_9a4
-                    itemId: item_77
-                    status: QUEUED
-                    position: 4
-                    queueLength: 11
-                    estimatedWaitDays: 12
-                    placedAt: '2026-08-12T08:00:00Z'
-                serverTime: '2026-08-13T10:00:00Z'
-        '401': { $ref: '#/components/responses/Unauthorized' }
+                - holdId: hold_5d1
+                  itemId: item_42
+                  status: OFFERED
+                  position: 1
+                  queueLength: 7
+                  placedAt: "2026-08-10T14:00:00Z"
+                  offer:
+                    offerId: offer_a90
+                    offeredAt: "2026-08-13T10:00:00Z"
+                    expiresAt: "2026-08-13T10:30:00Z"
+                  serverTime: "2026-08-13T10:00:00Z"
+                - holdId: hold_9a4
+                  itemId: item_77
+                  status: QUEUED
+                  position: 4
+                  queueLength: 11
+                  estimatedWaitDays: 12
+                  placedAt: "2026-08-12T08:00:00Z"
+                  serverTime: "2026-08-13T10:00:00Z"
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /api/v1/holds/{holdId}:
     delete:
@@ -927,13 +1134,13 @@ paths:
       x-called-by: [team1]
       security: [{ appToken: [] }]
       parameters:
-        - $ref: '#/components/parameters/HoldId'
+        - $ref: "#/components/parameters/HoldId"
       responses:
-        '204':
+        "204":
           description: Gone. If it was offered, the copy has been passed on.
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /api/v1/holds/{holdId}/accept:
     post:
@@ -956,13 +1163,13 @@ paths:
       x-called-by: [team1]
       security: [{ appToken: [] }]
       parameters:
-        - $ref: '#/components/parameters/HoldId'
+        - $ref: "#/components/parameters/HoldId"
       responses:
-        '201':
+        "201":
           description: The loan. Same shape as borrowing.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Loan' }
+              schema: { $ref: "#/components/schemas/Loan" }
               example:
                 loanId: loan_d22
                 itemId: item_42
@@ -970,14 +1177,14 @@ paths:
                 institutionId: inst_7f3
                 licenceModel: ELITE
                 status: ACTIVE
-                borrowedAt: '2026-08-13T10:00:00Z'
-                dueAt: '2026-08-27T10:00:00Z'
+                borrowedAt: "2026-08-13T10:00:00Z"
+                dueAt: "2026-08-27T10:00:00Z"
                 canPersist: false
-                serverTime: '2026-08-13T10:00:00Z'
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/OfferExpired' }
+                serverTime: "2026-08-13T10:00:00Z"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/OfferExpired" }
 
   /api/v1/items/{itemId}/availability:
     get:
@@ -1005,40 +1212,33 @@ paths:
       x-called-by: [team1, wokay]
       security: [{ appToken: [] }]
       parameters:
-        - $ref: '#/components/parameters/ItemId'
+        - $ref: "#/components/parameters/ItemId"
       responses:
-        '200':
+        "200":
           description: >-
             Availability, or as much of it as is known. Never an error for a data reason.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/AvailabilitySnapshot' }
+              schema: { $ref: "#/components/schemas/AvailabilitySnapshot" }
               examples:
                 copyLimited:
                   summary: Two of five copies free, nobody queued
                   value:
-                    itemId: item_42
-                    licenceModel: ELITE
-                    total: 5
                     available: 2
                     queueLength: 0
-                    serverTime: '2026-08-13T10:00:00Z'
-                allOut:
-                  summary: None free, seven waiting
+                    serverTime: "2026-08-13T10:00:00Z"
+                allOutAndQueued:
+                  summary: None free, seven waiting, this caller is third in line
                   value:
-                    itemId: item_42
-                    licenceModel: ELITE
-                    total: 5
                     available: 0
                     queueLength: 7
-                    serverTime: '2026-08-13T10:00:00Z'
+                    myPosition: 3
+                    serverTime: "2026-08-13T10:00:00Z"
                 unlimited:
                   summary: No copy limit, so no number to report
                   value:
-                    itemId: item_ab6
-                    licenceModel: SUBSCRIPTION
-                    serverTime: '2026-08-13T10:00:00Z'
-        '401': { $ref: '#/components/responses/Unauthorized' }
+                    serverTime: "2026-08-13T10:00:00Z"
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   # ────────────────────────────────────────────────────────────────
   # LIBRARY
@@ -1068,19 +1268,19 @@ paths:
       x-called-by: [team1]
       security: [{ appToken: [] }]
       responses:
-        '200':
+        "200":
           description: Everything this reader currently holds or is waiting for
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/LibraryResponse' }
+              schema: { $ref: "#/components/schemas/LibraryResponse" }
               example:
                 loans:
                   - loanId: loan_7c1
                     itemId: item_42
                     licenceModel: ELITE
                     status: ACTIVE
-                    borrowedAt: '2026-08-13T10:00:00Z'
-                    dueAt: '2026-08-27T10:00:00Z'
+                    borrowedAt: "2026-08-13T10:00:00Z"
+                    dueAt: "2026-08-27T10:00:00Z"
                     canPersist: false
                 holds:
                   - holdId: hold_5d1
@@ -1088,13 +1288,13 @@ paths:
                     status: OFFERED
                     position: 1
                     queueLength: 7
-                    placedAt: '2026-08-10T14:00:00Z'
+                    placedAt: "2026-08-10T14:00:00Z"
                     offer:
                       offerId: offer_a90
-                      expiresAt: '2026-08-13T10:30:00Z'
-                cursor: '1189'
-                serverTime: '2026-08-13T10:00:00Z'
-        '401': { $ref: '#/components/responses/Unauthorized' }
+                      expiresAt: "2026-08-13T10:30:00Z"
+                cursor: "1189"
+                serverTime: "2026-08-13T10:00:00Z"
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   # ────────────────────────────────────────────────────────────────
   # OPS
@@ -1130,31 +1330,30 @@ paths:
         required: false
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/ReconcileRequest' }
+            schema: { $ref: "#/components/schemas/ReconcileRequest" }
             example:
               itemId: item_42
       responses:
-        '200':
+        "200":
           description: What was rebuilt
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ReconcileResponse' }
+              schema: { $ref: "#/components/schemas/ReconcileResponse" }
               example:
                 itemsReconciled: 1
                 leasesRebuilt: 3
                 queuesRebuilt: 1
                 ticketDispensersReset: 1
-                startedAt: '2026-08-13T10:00:00Z'
-                finishedAt: '2026-08-13T10:00:02Z'
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
+                startedAt: "2026-08-13T10:00:00Z"
+                finishedAt: "2026-08-13T10:00:02Z"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
 # ══════════════════════════════════════════════════════════════════
 #  COMPONENTS
 # ══════════════════════════════════════════════════════════════════
 
 components:
-
   securitySchemes:
     appToken:
       type: http
@@ -1201,19 +1400,27 @@ components:
       description: An opaque catalogue id. We never parse it.
       schema: { type: string }
       example: item_42
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: >-
+        Optional. Lets a caller retry a borrow or return safely across a network failure
+        without risking a duplicate write. Not required — the underlying operations are
+        already idempotent by their own guards — but honoured when present.
+      schema: { type: string }
 
   responses:
-
     BadRequest:
       description: The request body or a parameter is not usable
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema: { $ref: "#/components/schemas/Error" }
           examples:
             missingField:
               summary: 400, a required field is absent
               value:
-                timestamp: '2026-08-13T10:00:00Z'
+                timestamp: "2026-08-13T10:00:00Z"
                 status: 400
                 code: VALIDATION_FAILED
                 message: itemId is required
@@ -1222,7 +1429,7 @@ components:
             badKey:
               summary: 400, the device key is not base64 of a usable public key
               value:
-                timestamp: '2026-08-13T10:00:00Z'
+                timestamp: "2026-08-13T10:00:00Z"
                 status: 400
                 code: INVALID_DEVICE_PUBLIC_KEY
                 message: devicePublicKey must be base64 encoded raw key bytes
@@ -1237,12 +1444,12 @@ components:
         clear the keychain and sign in again.
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema: { $ref: "#/components/schemas/Error" }
           examples:
             noToken:
               summary: 401, nothing was presented
               value:
-                timestamp: '2026-08-13T10:00:00Z'
+                timestamp: "2026-08-13T10:00:00Z"
                 status: 401
                 code: UNAUTHENTICATED
                 message: This endpoint requires authentication
@@ -1251,7 +1458,7 @@ components:
             expired:
               summary: 401, a token we issued has run out
               value:
-                timestamp: '2026-08-13T10:00:00Z'
+                timestamp: "2026-08-13T10:00:00Z"
                 status: 401
                 code: TOKEN_EXPIRED
                 message: Your session has expired. Please sign in again
@@ -1266,9 +1473,9 @@ components:
         caller has or what the resource belongs to.
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema: { $ref: "#/components/schemas/Error" }
           example:
-            timestamp: '2026-08-13T10:00:00Z'
+            timestamp: "2026-08-13T10:00:00Z"
             status: 403
             code: FORBIDDEN_INSTITUTION_MISMATCH
             message: This resource belongs to another institution
@@ -1281,9 +1488,9 @@ components:
         a 403 on something that exists tells a caller it exists.
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema: { $ref: "#/components/schemas/Error" }
           example:
-            timestamp: '2026-08-13T10:00:00Z'
+            timestamp: "2026-08-13T10:00:00Z"
             status: 404
             code: NOT_FOUND
             message: No such loan
@@ -1298,12 +1505,12 @@ components:
         to a reader.
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema: { $ref: "#/components/schemas/Error" }
           examples:
             noEntitlement:
               summary: 403, this institution has no grant covering this book
               value:
-                timestamp: '2026-08-13T10:00:00Z'
+                timestamp: "2026-08-13T10:00:00Z"
                 status: 403
                 code: NO_ENTITLEMENT
                 message: This title requires a subscription
@@ -1312,7 +1519,7 @@ components:
             expired:
               summary: 403, the grant has lapsed
               value:
-                timestamp: '2026-08-13T10:00:00Z'
+                timestamp: "2026-08-13T10:00:00Z"
                 status: 403
                 code: ENTITLEMENT_EXPIRED
                 message: Your institution's access to this title has ended
@@ -1321,7 +1528,7 @@ components:
             institutionInactive:
               summary: 403, the institution itself is suspended
               value:
-                timestamp: '2026-08-13T10:00:00Z'
+                timestamp: "2026-08-13T10:00:00Z"
                 status: 403
                 code: INSTITUTION_INACTIVE
                 message: Your institution's account is not active
@@ -1335,12 +1542,12 @@ components:
         and the server refuses regardless of what the UI offered.
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema: { $ref: "#/components/schemas/Error" }
           examples:
             downloadRefused:
               summary: 403, copy-limited titles are online only
               value:
-                timestamp: '2026-08-13T10:00:00Z'
+                timestamp: "2026-08-13T10:00:00Z"
                 status: 403
                 code: DOWNLOAD_NOT_PERMITTED
                 message: This title can be read online only
@@ -1349,7 +1556,7 @@ components:
             deviceCap:
               summary: 403, too many devices for this reader
               value:
-                timestamp: '2026-08-13T10:00:00Z'
+                timestamp: "2026-08-13T10:00:00Z"
                 status: 403
                 code: DEVICE_LIMIT_REACHED
                 message: This account is already reading on the maximum number of devices
@@ -1357,24 +1564,17 @@ components:
                 traceId: b7c1f2a9
 
     ReadConflict:
-      description: The book is not readable yet, or not held
+      description: >-
+        The book is not readable yet. **`NO_ACTIVE_LOAN` is not raised here** — there is no
+        separate active-loan check on this endpoint, only the entitlement re-check.
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema: { $ref: "#/components/schemas/Error" }
           examples:
-            noLoan:
-              summary: 409, an entitled title needs a loan first
-              value:
-                timestamp: '2026-08-13T10:00:00Z'
-                status: 409
-                code: NO_ACTIVE_LOAN
-                message: Borrow this title before reading it
-                path: /api/v1/reading-sessions
-                traceId: b7c1f2a9
             notReady:
               summary: 409, ingest has not finished
               value:
-                timestamp: '2026-08-13T10:00:00Z'
+                timestamp: "2026-08-13T10:00:00Z"
                 status: 409
                 code: CONTENT_NOT_READY
                 message: This book is still being processed
@@ -1387,9 +1587,9 @@ components:
         message names the queue and the app offers it as a choice.
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema: { $ref: "#/components/schemas/Error" }
           example:
-            timestamp: '2026-08-13T10:00:00Z'
+            timestamp: "2026-08-13T10:00:00Z"
             status: 409
             code: NO_COPIES_AVAILABLE
             message: All copies are on loan. You can join the queue at /api/v1/holds
@@ -1400,9 +1600,9 @@ components:
       description: The loan is already closed
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema: { $ref: "#/components/schemas/Error" }
           example:
-            timestamp: '2026-08-13T10:00:00Z'
+            timestamp: "2026-08-13T10:00:00Z"
             status: 409
             code: LOAN_NOT_ACTIVE
             message: This loan has already been returned
@@ -1413,9 +1613,9 @@ components:
       description: Nothing to queue for
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema: { $ref: "#/components/schemas/Error" }
           example:
-            timestamp: '2026-08-13T10:00:00Z'
+            timestamp: "2026-08-13T10:00:00Z"
             status: 409
             code: VALIDATION_FAILED
             message: This title has no copy limit, so there is no queue to join
@@ -1428,9 +1628,9 @@ components:
         a reader who missed their turn rejoins at the back.
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/Error' }
+          schema: { $ref: "#/components/schemas/Error" }
           example:
-            timestamp: '2026-08-13T10:00:00Z'
+            timestamp: "2026-08-13T10:00:00Z"
             status: 409
             code: OFFER_EXPIRED
             message: This offer has expired and the copy has been passed on
@@ -1438,7 +1638,6 @@ components:
             traceId: b7c1f2a9
 
   schemas:
-
     # ── shared ──────────────────────────────────────────────────
 
     Error:
@@ -1450,7 +1649,7 @@ components:
       properties:
         timestamp: { type: string, format: date-time }
         status: { type: integer }
-        code: { $ref: '#/components/schemas/ErrorCode' }
+        code: { $ref: "#/components/schemas/ErrorCode" }
         message:
           type: string
           description: For a human. Do not switch on this, switch on `code`.
@@ -1465,18 +1664,26 @@ components:
         Machine readable, and shared with wokay through `common/error/ErrorCode`.
 
         Only the values we can actually raise are listed. Six arrive from `DenyReason` on
-        the entitlement check. Five are new with this file and need ratifying at the
-        Contracts Gate: `NO_COPIES_AVAILABLE`, `NO_ACTIVE_LOAN`, `LOAN_NOT_ACTIVE`,
-        `DEVICE_LIMIT_REACHED`, `OFFER_EXPIRED`.
+        the entitlement check. Four are new with this file and need ratifying at the
+        Contracts Gate: `NO_COPIES_AVAILABLE`, `LOAN_NOT_ACTIVE`, `DEVICE_LIMIT_REACHED`,
+        `OFFER_EXPIRED`.
 
-        Note what is absent. There is no `TOKEN_MISSING` and no `TOKEN_INVALID`: both answer
-        `UNAUTHENTICATED`, because telling a caller which part of a rejected token failed
-        tells an attacker how close they got. `TOKEN_EXPIRED` survives that argument only
-        because the app must know to clear its keychain.
+        **`TOKEN_MISSING` and `TOKEN_INVALID` exist and are used**, by `AuthController`
+        directly — a missing principal on `/auth/me` is `TOKEN_MISSING`, a bad code on
+        `/auth/token` is `TOKEN_INVALID`. Both, like `UNAUTHENTICATED`, answer 401; a caller
+        cannot tell them apart from the status code, but the codes themselves are distinct
+        on the wire, unlike an earlier version of this file claimed.
+
+        `NO_ACTIVE_LOAN` exists in `common/error/ErrorCode` but **no endpoint in this file
+        currently raises it** — `POST /api/v1/reading-sessions` has no separate active-loan
+        check. Kept in the enum because the shared code defines it; do not expect to see it
+        on the wire from any flambeau endpoint today.
       enum:
         - VALIDATION_FAILED
         - INVALID_DEVICE_PUBLIC_KEY
         - UNAUTHENTICATED
+        - TOKEN_MISSING
+        - TOKEN_INVALID
         - TOKEN_EXPIRED
         - FORBIDDEN_SCOPE
         - FORBIDDEN_INSTITUTION_MISMATCH
@@ -1538,7 +1745,7 @@ components:
             type: object
             required: [method, startUrl]
             properties:
-              method: { $ref: '#/components/schemas/SignInMethod' }
+              method: { $ref: "#/components/schemas/SignInMethod" }
               startUrl:
                 type: string
                 description: Post to this to begin. Follow it rather than building it.
@@ -1548,7 +1755,8 @@ components:
       description: >-
         Not a token envelope, and cannot be one. The assertion is delivered to our ACS by
         the identity provider, not returned down this call.
-      required: [authTxnId, authorizationUrl, institution, expiresAt, serverTime]
+      required:
+        [authTxnId, authorizationUrl, institution, expiresAt, serverTime]
       properties:
         authTxnId:
           type: string
@@ -1558,7 +1766,7 @@ components:
         authorizationUrl:
           type: string
           description: Open this. Do not construct it.
-        institution: { $ref: '#/components/schemas/Institution' }
+        institution: { $ref: "#/components/schemas/Institution" }
         expiresAt:
           type: string
           format: date-time
@@ -1587,7 +1795,7 @@ components:
       required: [userId, type, roles, collections, expiresAt, serverTime]
       properties:
         userId: { type: string, example: user_9c2 }
-        type: { $ref: '#/components/schemas/UserType' }
+        type: { $ref: "#/components/schemas/UserType" }
         institutionId:
           type: string
           description: >-
@@ -1650,7 +1858,17 @@ components:
       description: >-
         Possession. `dueAt` is absent for open access, which never expires, and the loan
         period for everything else comes from the entitlement rather than from our config.
-      required: [loanId, itemId, userId, licenceModel, status, borrowedAt, canPersist, serverTime]
+      required:
+        [
+          loanId,
+          itemId,
+          userId,
+          licenceModel,
+          status,
+          borrowedAt,
+          canPersist,
+          serverTime,
+        ]
       properties:
         loanId: { type: string, example: loan_7c1 }
         itemId: { type: string, example: item_42 }
@@ -1658,8 +1876,8 @@ components:
         institutionId:
           type: string
           description: Omitted for an individual subscriber.
-        licenceModel: { $ref: '#/components/schemas/LicenceModel' }
-        status: { $ref: '#/components/schemas/LoanStatus' }
+        licenceModel: { $ref: "#/components/schemas/LicenceModel" }
+        status: { $ref: "#/components/schemas/LoanStatus" }
         borrowedAt: { type: string, format: date-time }
         dueAt:
           type: string
@@ -1676,47 +1894,61 @@ components:
             server refuses a `DOWNLOAD` intent regardless of what the UI shows.
         serverTime: { type: string, format: date-time }
 
+    LoanListItem:
+      type: object
+      description: >-
+        The `GET /api/v1/loans` row shape. Slimmer than `Loan`: no `userId` or
+        `institutionId`, since the caller is already the owner by virtue of the token. Adds
+        `expiredAt`, absent from `Loan`, so a history screen can tell "returned" from
+        "lapsed at its due date".
+      required: [loanId, itemId, licenceModel, status, borrowedAt, canPersist]
+      properties:
+        loanId: { type: string, example: loan_7c1 }
+        itemId: { type: string, example: item_42 }
+        licenceModel: { $ref: "#/components/schemas/LicenceModel" }
+        status: { $ref: "#/components/schemas/LoanStatus" }
+        borrowedAt: { type: string, format: date-time }
+        dueAt:
+          type: string
+          format: date-time
+          description: Absent for open access.
+        returnedAt:
+          type: string
+          format: date-time
+          description: Present once the reader closed the loan.
+        expiredAt:
+          type: string
+          format: date-time
+          description: Present once the expiry sweep closed the loan at its due date.
+        canPersist: { type: boolean }
+
     LoanPage:
       type: object
       required: [loans, page, size, total, serverTime]
       properties:
         loans:
           type: array
-          items: { $ref: '#/components/schemas/Loan' }
+          items: { $ref: "#/components/schemas/LoanListItem" }
         page: { type: integer }
         size: { type: integer }
         total: { type: integer }
         serverTime: { type: string, format: date-time }
 
-    ReturnRequest:
-      type: object
-      description: Optional. Omit it and the server timestamps the return itself.
-      properties:
-        returnedAt:
-          type: string
-          format: date-time
-          description: >-
-            The **reader's** timestamp, for a return that happened offline. Clamped to
-            `[borrowedAt, serverTime]`: a client clock is not a source of truth, but
-            discarding what the reader actually did is not right either.
-
     ReturnResponse:
       type: object
-      required: [loanId, itemId, status, borrowedAt, returnedAt, promoted, serverTime]
+      description: >-
+        No `promoted` field and no `borrowedAt` field today. A return can promote a waiter,
+        but whether it did is not reported here — only observable from the change feed on
+        the hold owner's side.
+      required: [loanId, itemId, status, returnedAt, serverTime]
       properties:
         loanId: { type: string }
         itemId: { type: string }
-        status: { $ref: '#/components/schemas/LoanStatus' }
-        borrowedAt: { type: string, format: date-time }
+        status: { $ref: "#/components/schemas/LoanStatus" }
         returnedAt:
           type: string
           format: date-time
-          description: What was actually recorded, after clamping.
-        promoted:
-          type: boolean
-          description: >-
-            Whether freeing this copy promoted somebody. Reported here rather than left to
-            the change feed, because the promotion happened inside this call.
+          description: Server-timestamped. The request body's `returnedAt` is not read today.
         serverTime: { type: string, format: date-time }
 
     # ── reading ─────────────────────────────────────────────────
@@ -1737,8 +1969,8 @@ components:
       required: [itemId, format, intent, devicePublicKey]
       properties:
         itemId: { type: string, example: item_42 }
-        format: { $ref: '#/components/schemas/Format' }
-        intent: { $ref: '#/components/schemas/Intent' }
+        format: { $ref: "#/components/schemas/Format" }
+        intent: { $ref: "#/components/schemas/Intent" }
         devicePublicKey:
           type: string
           contentEncoding: base64
@@ -1759,7 +1991,14 @@ components:
         not cached. Renaming `wrappedBek` breaks decryption on the device and surfaces as
         "this file is corrupt" rather than as our bug. The shapes are wokay's `SignedUrl`,
         `IndexUrl` and `Encryption`, deliberately not redefined here.
-      required: [sessionId, itemId, expiresAt, serverTime, content]
+
+        **Two shapes on one schema.** The *granted* variant carries `content`/`index`/
+        `encryption`/`expiresAt` and no `holdCreatedAt`. The *queued* variant (only possible
+        for `ENTITLED_CONCURRENT`/`ELITE` when no copy is free) carries `holdCreatedAt` and
+        omits `content`/`index`/`encryption`/`expiresAt`/`loanId` entirely — the reader has
+        no session to read yet, only a place in the queue.
+      required:
+        [sessionId, itemId, accessLevel, licenceModel, canPersist, serverTime]
       properties:
         sessionId:
           type: string
@@ -1768,22 +2007,45 @@ components:
         itemId: { type: string }
         loanId:
           type: string
-          description: The loan this read was authorised against. Absent for open access.
+          description: >-
+            The loan this read was authorised against. Absent for open access and absent
+            on the queued variant, where no licence has been written yet.
+        accessLevel:
+          type: string
+          description: >-
+            `catalogue.api.AccessLevel`'s own name, not the translated `licenceModel` —
+            `OPEN_ACCESS`, `ENTITLED_UNLIMITED` or `ENTITLED_CONCURRENT`.
+          enum: [OPEN_ACCESS, ENTITLED_UNLIMITED, ENTITLED_CONCURRENT]
+        licenceModel: { $ref: "#/components/schemas/LicenceModel" }
+        canPersist:
+          type: boolean
+          description: Mirrors the loan's `canPersist`. False whenever `accessLevel` is `ENTITLED_CONCURRENT`.
+        holdCreatedAt:
+          type: string
+          format: date-time
+          description: >-
+            **Present only on the queued variant** — no copy was free, so this call placed
+            the reader in the queue instead of refusing. When present, `content`, `index`,
+            `encryption` and `expiresAt` are all absent.
         expiresAt:
           type: string
           format: date-time
           description: >-
-            About five minutes. The session is not closed and cannot be — it holds nothing
-            that needs releasing.
+            About five minutes. Absent on the queued variant. The session is not closed and
+            cannot be — it holds nothing that needs releasing.
         serverTime: { type: string, format: date-time }
         content:
-          description: wokay's `SignedUrl`, forwarded.
+          description: wokay's `SignedUrl`, forwarded. Absent on the queued variant.
           type: object
         index:
-          description: wokay's `IndexUrl`, forwarded. Absent when there is none or none was asked for.
+          description: >-
+            wokay's `IndexUrl`, forwarded. Absent when there is none, none was asked for, or
+            on the queued variant.
           type: object
         encryption:
-          description: wokay's `Encryption`, forwarded. Absent for open access and for all audio.
+          description: >-
+            wokay's `Encryption`, forwarded. Absent for open access, for all audio, and on
+            the queued variant.
           type: object
 
     # ── holds ───────────────────────────────────────────────────
@@ -1806,6 +2068,12 @@ components:
       required: [offerId, expiresAt]
       properties:
         offerId: { type: string, example: offer_a90 }
+        offeredAt:
+          type: string
+          format: date-time
+          description: >-
+            When the offer was made. Present on `GET /api/v1/holds`; absent from the
+            slimmer `LibraryOffer` shown on `GET /api/v1/library`.
         expiresAt:
           type: string
           format: date-time
@@ -1818,16 +2086,21 @@ components:
       description: >-
         `position` and `queueLength` are computed on read. A stored position is wrong the
         moment anybody ahead cancels.
-      required: [holdId, itemId, status, position, queueLength, placedAt, serverTime]
+      required:
+        [holdId, itemId, status, position, queueLength, placedAt, serverTime]
       properties:
         holdId: { type: string, example: hold_5d1 }
         itemId: { type: string, example: item_42 }
-        status: { $ref: '#/components/schemas/HoldStatus' }
+        status: { $ref: "#/components/schemas/HoldStatus" }
         position:
           type: integer
           minimum: 1
           description: One based, derived from a monotonic ticket. Never stored, never from a timestamp.
-        queueLength: { type: integer, minimum: 1 }
+        queueLength:
+          type: integer
+          minimum: 0
+          description: >-
+            Can legitimately be 0 — e.g. the last waiter just left. Not floored at 1.
         estimatedWaitDays:
           type: integer
           description: >-
@@ -1836,17 +2109,8 @@ components:
         placedAt: { type: string, format: date-time }
         offer:
           allOf:
-            - $ref: '#/components/schemas/Offer'
+            - $ref: "#/components/schemas/Offer"
           description: Present only while status is OFFERED.
-        serverTime: { type: string, format: date-time }
-
-    HoldListResponse:
-      type: object
-      required: [holds, serverTime]
-      properties:
-        holds:
-          type: array
-          items: { $ref: '#/components/schemas/Hold' }
         serverTime: { type: string, format: date-time }
 
     AvailabilitySnapshot:
@@ -1854,26 +2118,81 @@ components:
       description: >-
         **Absence means unknown, never zero.** A zero renders as "none free" and would hide
         a real book behind a wrong number, so an item we cannot answer for omits the fields
-        rather than guessing. Unlimited and open-access titles omit them too, because there
-        is no number to report.
-      required: [itemId, serverTime]
+        rather than guessing. Unlimited and open-access titles omit `available` too, because
+        there is no number to report. Deliberately lean: no `itemId`, `licenceModel` or
+        `total` on the wire — the caller already knows which item it asked about.
+      required: [serverTime]
       properties:
-        itemId: { type: string }
-        licenceModel: { $ref: '#/components/schemas/LicenceModel' }
-        total:
-          type: integer
-          minimum: 1
-          description: Licensed copies. Absent unless the licence model is ELITE.
         available:
           type: integer
           minimum: 0
           description: >-
             Free right now, counted with `ZCOUNT key now +inf` over the lease set — never
-            `ZCARD`, which counts leases that have already expired.
-        queueLength: { type: integer, minimum: 0 }
+            `ZCARD`, which counts leases that have already expired. Absent when unknown or
+            when the title has no copy limit.
+        queueLength:
+          type: integer
+          minimum: 0
+          description: Absent when unknown or when the title has no copy limit.
+        myPosition:
+          type: integer
+          minimum: 1
+          description: >-
+            This reader's own position, if they are currently queued. Absent otherwise —
+            including for a caller who is not queued at all.
         serverTime: { type: string, format: date-time }
 
     # ── library and sync ────────────────────────────────────────
+
+    LibraryLoan:
+      type: object
+      description: >-
+        The `GET /api/v1/library` loan row. Slimmer than `Loan`: no `userId`,
+        `institutionId` or `returnedAt` — this is the reader's own current shelf, not a
+        history screen.
+      required: [loanId, itemId, licenceModel, status, borrowedAt, canPersist]
+      properties:
+        loanId: { type: string, example: loan_7c1 }
+        itemId: { type: string, example: item_42 }
+        licenceModel: { $ref: "#/components/schemas/LicenceModel" }
+        status: { $ref: "#/components/schemas/LoanStatus" }
+        borrowedAt: { type: string, format: date-time }
+        dueAt:
+          {
+            type: string,
+            format: date-time,
+            description: Absent for open access.,
+          }
+        canPersist: { type: boolean }
+
+    LibraryOffer:
+      type: object
+      description: >-
+        Deliberately two fields, not three — no `offeredAt` here, unlike the hold module's
+        own `Offer`. The shelf only needs to know there is a window and when it closes.
+      required: [offerId, expiresAt]
+      properties:
+        offerId: { type: string, example: offer_a90 }
+        expiresAt: { type: string, format: date-time }
+
+    LibraryHold:
+      type: object
+      description: >-
+        The `GET /api/v1/library` hold row. No per-item `serverTime` — there is one, at the
+        top level of `LibraryResponse`, covering the whole shelf.
+      required: [holdId, itemId, status, position, queueLength, placedAt]
+      properties:
+        holdId: { type: string, example: hold_5d1 }
+        itemId: { type: string, example: item_77 }
+        status: { $ref: "#/components/schemas/HoldStatus" }
+        position: { type: integer, minimum: 1 }
+        queueLength: { type: integer, minimum: 0 }
+        estimatedWaitDays: { type: integer }
+        placedAt: { type: string, format: date-time }
+        offer:
+          allOf:
+            - $ref: "#/components/schemas/LibraryOffer"
+          description: Present only while status is OFFERED.
 
     LibraryResponse:
       type: object
@@ -1885,10 +2204,10 @@ components:
       properties:
         loans:
           type: array
-          items: { $ref: '#/components/schemas/Loan' }
+          items: { $ref: "#/components/schemas/LibraryLoan" }
         holds:
           type: array
-          items: { $ref: '#/components/schemas/Hold' }
+          items: { $ref: "#/components/schemas/LibraryHold" }
         cursor:
           type: string
           description: >-
@@ -1918,7 +2237,7 @@ components:
         sequence:
           type: integer
           description: Monotonic per reader. Ordering, not a count.
-        reason: { $ref: '#/components/schemas/ChangeReason' }
+        reason: { $ref: "#/components/schemas/ChangeReason" }
         itemId: { type: string }
         loanId: { type: string, description: Present for loan reasons. }
         holdId: { type: string, description: Present for hold reasons. }
@@ -1931,7 +2250,7 @@ components:
         changes:
           type: array
           description: Oldest first, so applying them in order converges.
-          items: { $ref: '#/components/schemas/ChangeEntry' }
+          items: { $ref: "#/components/schemas/ChangeEntry" }
         nextCursor:
           type: string
           description: Opaque. Do not parse it and do not construct one.
@@ -1956,7 +2275,15 @@ components:
 
     ReconcileResponse:
       type: object
-      required: [itemsReconciled, leasesRebuilt, queuesRebuilt, ticketDispensersReset, startedAt, finishedAt]
+      required:
+        [
+          itemsReconciled,
+          leasesRebuilt,
+          queuesRebuilt,
+          ticketDispensersReset,
+          startedAt,
+          finishedAt,
+        ]
       properties:
         itemsReconciled: { type: integer }
         leasesRebuilt: { type: integer }
