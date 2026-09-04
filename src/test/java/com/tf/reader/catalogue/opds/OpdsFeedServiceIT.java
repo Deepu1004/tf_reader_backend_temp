@@ -64,12 +64,16 @@ class OpdsFeedServiceIT extends ContainerisedInfrastructure {
 	@Autowired private EntitlementRepository entitlementRepository;
 
 	private Institution newInstitution(String code) {
+		return newInstitution(code, RecordStatus.ACTIVE);
+	}
+
+	private Institution newInstitution(String code, RecordStatus status) {
 		Institution institution = new Institution();
 		institution.setCode(code);
 		institution.setName(code + " Institution");
 		institution.setType(InstitutionType.ACADEMIC);
 		institution.setCountry("UK");
-		institution.setStatus(RecordStatus.ACTIVE);
+		institution.setStatus(status);
 		institution.setCatalogueVersion(1L);
 		institution.setUpdatedAt(Instant.parse("2026-08-10T09:00:00Z"));
 		return institutionRepository.save(institution);
@@ -138,6 +142,22 @@ class OpdsFeedServiceIT extends ContainerisedInfrastructure {
 	@Test
 	void loadInstitutionIs404ForAnUnknownId() {
 		assertThatThrownBy(() -> feedService.loadInstitution("does-not-exist"))
+				.isInstanceOf(ApiException.class)
+				.satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.NOT_FOUND));
+	}
+
+	/**
+	 * NOT_FOUND, not a 403: a suspended institution has to be indistinguishable from one that was
+	 * never there, or anyone who can type an id into a feed URL learns which institutions exist.
+	 * Asserting the code rather than the message is the point of the test - a 403 here would be
+	 * the disclosure this gate exists to prevent, and would still "pass" a status-only assertion.
+	 */
+	@ParameterizedTest
+	@ValueSource(strings = { "SUSPENDED", "RETIRED" })
+	void loadInstitutionIs404WhenTheInstitutionIsNotActive(String status) {
+		Institution inactive = newInstitution("OPDS-LOAD-" + status, RecordStatus.valueOf(status));
+
+		assertThatThrownBy(() -> feedService.loadInstitution(inactive.getId()))
 				.isInstanceOf(ApiException.class)
 				.satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.NOT_FOUND));
 	}

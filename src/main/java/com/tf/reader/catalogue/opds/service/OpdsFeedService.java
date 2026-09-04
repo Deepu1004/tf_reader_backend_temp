@@ -29,7 +29,7 @@ import com.tf.reader.catalogue.opds.dto.OpdsPublicationDocument;
 import com.tf.reader.catalogue.opds.dto.OpdsPublicationFeed;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.FeedSettingsRepository;
-import com.tf.reader.catalogue.repository.InstitutionRepository;
+import com.tf.reader.catalogue.repository.InstitutionSearchRepository;
 import com.tf.reader.catalogue.service.CatalogueUrlBuilder;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
@@ -50,7 +50,7 @@ public class OpdsFeedService {
     private static final int GROUP_PREVIEW_SIZE = 10;
     private static final String OPDS_MEDIA_TYPE = "application/opds+json";
 
-    private final InstitutionRepository institutionRepository;
+    private final InstitutionSearchRepository institutionSearchRepository;
     private final FeedSettingsRepository feedSettingsRepository;
     private final CatalogueItemRepository catalogueItemRepository;
     private final OpdsEntitlementFilter entitlementFilter;
@@ -58,8 +58,19 @@ public class OpdsFeedService {
     private final OpdsSearchQuery searchQuery;
     private final CatalogueUrlBuilder catalogueUrlBuilder;
 
+    /**
+     * ACTIVE only, and NOT_FOUND rather than a 403 when it is not - a suspended institution has to
+     * read exactly like an unknown one, or its existence is disclosed to anyone who can type an id
+     * into a feed URL. Same rule and same reason as
+     * {@link InstitutionSearchRepository#findActiveById} and {@code InstitutionLookupImpl}; the
+     * status filter lives in the query rather than in a check after the read so there is no path
+     * that forgets it.
+     *
+     * <p>Every OPDS institution endpoint goes through here, so this is the single gate for all
+     * four.
+     */
     public Institution loadInstitution(String institutionId) {
-        return institutionRepository.findById(institutionId)
+        return institutionSearchRepository.findActiveById(institutionId)
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "No such institution"));
     }
 

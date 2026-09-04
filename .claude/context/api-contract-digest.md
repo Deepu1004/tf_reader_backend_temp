@@ -1,7 +1,7 @@
 # API contract digest
 
 **GENERATED FILE. Do not edit.** Run `./scripts/gen-api-digest.sh` after the contract changes.
-Source `api-docs/wokay-api.yaml`, generated 2026-08-26.
+Source `api-docs/wokay-api.yaml`, generated 2026-09-04.
 
 46 operations across 34 paths, 84 schemas. **`FROZEN` means another team is already building against it: changing one needs a cohort conversation.**
 
