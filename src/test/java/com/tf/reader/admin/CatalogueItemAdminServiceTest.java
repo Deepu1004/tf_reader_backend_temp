@@ -394,8 +394,8 @@ class CatalogueItemAdminServiceTest {
 
 		var result = service.list(null, null, null, null, null, null, null, null, null);
 
-		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("active");
-		assertThat(result.items().get(1).entitlementStatus()).isEqualTo("none");
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("ACTIVE");
+		assertThat(result.items().get(1).entitlementStatus()).isEqualTo("NONE");
 	}
 
 	@Test
@@ -411,7 +411,7 @@ class CatalogueItemAdminServiceTest {
 
 		var result = service.list(null, null, null, null, null, null, null, null, "inst_7f3");
 
-		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("active");
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("ACTIVE");
 	}
 
 	@Test
@@ -453,7 +453,7 @@ class CatalogueItemAdminServiceTest {
 
 		var result = service.list(null, null, null, null, null, null, null, null, "inst_other");
 
-		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("none");
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("NONE");
 		verify(entitlementRepository, never()).findByInstitutionId(eq("inst_other"), any());
 	}
 
@@ -477,7 +477,7 @@ class CatalogueItemAdminServiceTest {
 
 		var result = service.list(null, null, null, null, null, null, null, null, null);
 
-		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("active");
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("ACTIVE");
 	}
 
 	// ---------------------------------------------------------------- fixtures

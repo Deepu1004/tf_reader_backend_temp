@@ -12,6 +12,7 @@ import com.tf.reader.catalogue.api.AccessLevel;
 import com.tf.reader.catalogue.api.DenyReason;
 import com.tf.reader.catalogue.api.EntitlementDecision;
 import com.tf.reader.catalogue.api.EntitlementQuery;
+import com.tf.reader.catalogue.api.InstitutionLookup;
 import com.tf.reader.catalogue.api.SubjectRef;
 import com.tf.reader.catalogue.entity.AccessTier;
 import com.tf.reader.catalogue.entity.CatalogueItem;
@@ -31,11 +32,19 @@ class EntitlementQueryImpl implements EntitlementQuery {
 
     private final CatalogueItemRepository catalogueItemRepository;
     private final EntitlementRepository entitlementRepository;
+    private final InstitutionLookup institutionLookup;
 
     @Override
     public EntitlementDecision check(SubjectRef subject, String itemId) {
         if (itemId == null || itemId.isBlank()) {
             throw new IllegalArgumentException("itemId is required");
+        }
+
+        // A suspended institution must read exactly like an unknown one, same reason
+        // InstitutionLookup itself collapses the two - so this is NOT_FOUND, not a distinct
+        // reason that would disclose the institution's existence or status.
+        if (institutionLookup.find(subject.institutionId()).isEmpty()) {
+            return denied(DenyReason.NOT_FOUND);
         }
 
         Optional<CatalogueItem> maybeItem = catalogueItemRepository.findById(itemId);
