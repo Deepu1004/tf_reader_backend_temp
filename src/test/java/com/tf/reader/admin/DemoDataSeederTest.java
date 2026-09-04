@@ -456,10 +456,15 @@ class DemoDataSeederTest {
                 .extracting(SeedDataset.SeedEntitlement::copies)
                 .containsExactlyInAnyOrder(2, null, 2);
 
-        // At least one book with no cover. The multi-format-per-item case (item_dual used to
-        // carry it, one PDF asset plus one EPUB asset) has no seed-data coverage right now -
-        // see the _readme note in demo-dataset.json.
-        assertThat(dataset.catalogueItems()).anySatisfy(i -> assertThat(i.coverUrl()).isNull());
+        // Six of the eight have a real uploaded cover (coverKey), two do not - both cases are
+        // real data, not a gap. coverUrl itself is null on every item: the bucket is private, so
+        // there is never a durable literal to seed, only a coverKey CoverUrlResolver presigns
+        // fresh on every read. The multi-format-per-item case (item_dual used to carry it, one
+        // PDF asset plus one EPUB asset) has no seed-data coverage right now - see the _readme
+        // note in demo-dataset.json.
+        assertThat(dataset.catalogueItems()).allSatisfy(i -> assertThat(i.coverUrl()).isNull());
+        assertThat(dataset.catalogueItems()).filteredOn(i -> i.coverKey() != null).hasSize(6);
+        assertThat(dataset.catalogueItems()).filteredOn(i -> i.coverKey() == null).hasSize(2);
 
         // One empty shelf, so the hidden-shelf case is real data, and one shelf with several books so
         // display order can be tested.
