@@ -155,7 +155,10 @@ public class BorrowService implements LicenceCommand {
 
 		boolean canPersist = (accessLevel != AccessLevel.ENTITLED_CONCURRENT);
 		Instant now = clock.instant();
-		Instant dueAt = (accessLevel == AccessLevel.ENTITLED_CONCURRENT && loanPeriodDays > 0)
+		// dueAt = borrowedAt + loanPeriodDays for anything but OPEN_ACCESS (which never expires),
+		// per the Loan contract. loanPeriodDays <= 0 means the entitlement is unlimited, so the loan
+		// stays open-ended (null) — a Subscription can be either windowed or open-ended (D-030).
+		Instant dueAt = (accessLevel != AccessLevel.OPEN_ACCESS && loanPeriodDays > 0)
 				? now.plus(java.time.Duration.ofDays(loanPeriodDays))
 				: null;
 
