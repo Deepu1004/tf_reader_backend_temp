@@ -31,6 +31,7 @@ import com.tf.reader.common.audit.AuditLog;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.common.page.PageResponse;
+import com.tf.reader.ingest.service.CoverUrlResolver;
 
 import lombok.RequiredArgsConstructor;
 
@@ -50,6 +51,7 @@ public class CatalogueItemAdminService {
 	private final CatalogueVersionBumper catalogueVersionBumper;
 	private final AdminAuditWriter auditWriter;
 	private final AdminScopeAuthorizer adminScope;
+	private final CoverUrlResolver coverUrlResolver;
 
 	private static final List<EntitlementStatus> STATUS_RANK = List.of(EntitlementStatus.REVOKED,
 			EntitlementStatus.SUSPENDED, EntitlementStatus.PENDING, EntitlementStatus.ACTIVE);
@@ -174,6 +176,7 @@ public class CatalogueItemAdminService {
 			throw new ApiException(ErrorCode.FORBIDDEN_ROLE, "Not permitted to move a book to this publisher");
 		}
 		validateDuration(write);
+		requireIsbnImmutable(item.getIsbn(), write.isbn());
 		requireIsbnFree(write.isbn(), itemId);
 
 		Map<String, Object> before = afterMap(item);
@@ -286,6 +289,19 @@ public class CatalogueItemAdminService {
 				+ ". To add that book to a collection use PUT /api/admin/v1/collections/{collectionId}/items";
 	}
 
+	// Once an ISBN is set it is a fact about the physical book, not a form field an admin can
+	// second-guess later - a later PUT that tries to change it is almost always a copy-paste
+	// mistake, not an intentional correction, and an intentional one is a new book, not an edit.
+	private static void requireIsbnImmutable(String existingIsbn, String newIsbn) {
+		String existing = normalizeIsbn(existingIsbn);
+		if (existing == null) {
+			return;
+		}
+		if (!existing.equals(normalizeIsbn(newIsbn))) {
+			throw new ApiException(ErrorCode.VALIDATION_FAILED, "isbn cannot be changed once it has been set");
+		}
+	}
+
 	private static String normalizeIsbn(String isbn) {
 		return isbn == null ? null : isbn.replaceAll("[\\s-]", "").toUpperCase();
 	}
@@ -301,7 +317,7 @@ public class CatalogueItemAdminService {
 		return toView(item, null, List.of(), entitlementStatusLabel);
 	}
 
-	private CatalogueItemView toFullView(CatalogueItem item) {
+	public CatalogueItemView toFullView(CatalogueItem item) {
 		String publisherName = publisherRepository.findById(item.getPublisherId()).map(Publisher::getName)
 				.orElse(null);
 		List<CatalogueItemView.Asset> assets = item.getAssets() == null ? List.of()
@@ -315,8 +331,8 @@ public class CatalogueItemAdminService {
 				item.getTitle(), item.getSubtitle(), item.getAuthors(), item.getEditors(), item.getNarrators(),
 				item.getIsbn(), item.getContentType(), item.getAccessTier(), item.getSubjects(), item.getLanguage(),
 				item.getDescription(), item.getPublishedAt(), item.getNumberOfPages(), item.getDuration(),
-				item.getCoverUrl(), item.getStatus(), item.getContentState(), item.getContentError(), assets,
-				item.getCreatedAt(), item.getUpdatedAt(), entitlementStatusLabel);
+				coverUrlResolver.resolve(item), item.getStatus(), item.getContentState(), item.getContentError(),
+				assets, item.getCreatedAt(), item.getUpdatedAt(), entitlementStatusLabel);
 	}
 
 	private CatalogueItemView.Asset toAssetView(CatalogueItem.Asset asset) {

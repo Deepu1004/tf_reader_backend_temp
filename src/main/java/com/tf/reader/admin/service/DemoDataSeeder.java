@@ -405,6 +405,8 @@ public class DemoDataSeeder implements ApplicationRunner {
                 null, // numberOfPages: not carried by the seed dataset yet, ingest's territory
                 null, // duration: not carried by the seed dataset yet
                 s.coverUrl(),
+                null, // coverKey: nothing in the seed has been uploaded through the console
+                null, // coverMimeType: ditto
                 ContentType.valueOf(s.contentType()),
                 AccessTier.valueOf(s.accessTier()),
                 ItemStatus.valueOf(s.status()),

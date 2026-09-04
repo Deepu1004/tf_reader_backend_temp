@@ -26,8 +26,8 @@ import tools.jackson.databind.ObjectMapper;
  * so local sign-in (samlmock.dev, or the local mock SAML/OIDC providers) resolves the same
  * identities it always has, now from the real {@code readerUsers} collection.
  *
- * <p>Shares {@code flambeau-seed.json}'s {@code users} array with the sibling seeders in
- * loan/hold/reading/library — one file, one array per module. Same safety rails as those: local
+ * <p>Shares {@code common-dataset.json}'s {@code users} array with wokay's seeders — one shared
+ * file for the array both sides need. Same safety rails as the loan/hold/reading/library seeders: local
  * profile, the shared {@code tnf.seed.enabled} flag, insert-missing-only, never a delete or
  * overwrite of a row a developer has edited by hand.
  */
@@ -37,7 +37,7 @@ import tools.jackson.databind.ObjectMapper;
 public class ReaderUserDevDataSeeder implements ApplicationRunner {
 
 	private static final Logger log = LoggerFactory.getLogger(ReaderUserDevDataSeeder.class);
-	private static final String DATASET_PATH = "seed/flambeau-seed.json";
+	private static final String DATASET_PATH = "seed/common-dataset.json";
 
 	private final ReaderUserRepository readerUsers;
 	private final ObjectMapper mapper;

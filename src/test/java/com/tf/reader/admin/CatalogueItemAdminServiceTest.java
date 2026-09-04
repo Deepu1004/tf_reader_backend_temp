@@ -42,6 +42,7 @@ import com.tf.reader.common.security.TokenClaims;
 import com.tf.reader.admin.service.CatalogueItemAdminService;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
+import com.tf.reader.ingest.service.CoverUrlResolver;
 
 /** Business rules for the four catalogue item admin operations, tested without a servlet or a database. */
 class CatalogueItemAdminServiceTest {
@@ -52,6 +53,7 @@ class CatalogueItemAdminServiceTest {
 	private EntitlementRepository entitlementRepository;
 	private CatalogueVersionBumper versionBumper;
 	private AdminAuditWriter auditWriter;
+	private CoverUrlResolver coverUrlResolver;
 
 	private CatalogueItemAdminService service;
 
@@ -63,9 +65,10 @@ class CatalogueItemAdminServiceTest {
 		entitlementRepository = mock(EntitlementRepository.class);
 		versionBumper = mock(CatalogueVersionBumper.class);
 		auditWriter = mock(AdminAuditWriter.class);
+		coverUrlResolver = mock(CoverUrlResolver.class);
 
 		service = new CatalogueItemAdminService(catalogueItemRepository, searchRepository, publisherRepository,
-				entitlementRepository, versionBumper, auditWriter, new AdminScopeAuthorizer());
+				entitlementRepository, versionBumper, auditWriter, new AdminScopeAuthorizer(), coverUrlResolver);
 
 		actingAs(AdminRole.SUPER_ADMIN, null, null);
 	}
@@ -227,6 +230,18 @@ class CatalogueItemAdminServiceTest {
 		var view = service.update("item_42", isbnWrite("pub_rtlg", "9780132350884"));
 
 		assertThat(view.isbn()).isEqualTo("9780132350884");
+	}
+
+	@Test
+	@DisplayName("update may not change an ISBN once it has been set")
+	void rejectsUpdateThatChangesAnAlreadySetIsbn() {
+		CatalogueItem existing = isbnItem("item_42", "pub_rtlg", "9780132350884");
+		when(catalogueItemRepository.findById("item_42")).thenReturn(Optional.of(existing));
+
+		assertThatThrownBy(() -> service.update("item_42", isbnWrite("pub_rtlg", "9780321356680")))
+				.isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+		verify(catalogueItemRepository, never()).save(any());
 	}
 
 	@Test

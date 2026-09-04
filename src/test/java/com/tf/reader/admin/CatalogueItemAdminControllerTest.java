@@ -34,6 +34,7 @@ import com.tf.reader.admin.dto.IngestStatus;
 import com.tf.reader.admin.security.AdminScopeAuthorizer;
 import com.tf.reader.admin.service.CatalogueItemAdminService;
 import com.tf.reader.catalogue.entity.AccessTier;
+import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.ContentType;
 import com.tf.reader.catalogue.entity.ItemStatus;
@@ -41,6 +42,7 @@ import com.tf.reader.common.page.PageResponse;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.common.error.GlobalExceptionHandler;
+import com.tf.reader.ingest.service.CoverImageService;
 import com.tf.reader.ingest.service.IngestService;
 
 import tools.jackson.databind.ObjectMapper;
@@ -66,6 +68,9 @@ class CatalogueItemAdminControllerTest {
 
 	@MockitoBean
 	IngestService ingestService;
+
+	@MockitoBean
+	CoverImageService coverImageService;
 
 	private static final Instant CREATED = Instant.parse("2026-08-10T09:00:00Z");
 
@@ -216,6 +221,30 @@ class CatalogueItemAdminControllerTest {
 
 		mvc.perform(get("/api/admin/v1/catalogue-items/item_nope/ingest-status")).andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("NOT_FOUND"));
+	}
+
+	// ---------------------------------------------------------------- cover
+
+	@Test
+	void uploadCoverReturns200WithTheRefreshedItem() throws Exception {
+		CatalogueItem savedItem = new CatalogueItem();
+		savedItem.setId("item_42");
+		when(coverImageService.upload(eq("item_42"), any())).thenReturn(savedItem);
+		when(service.toFullView(savedItem)).thenReturn(fullView());
+		MockMultipartFile file = new MockMultipartFile("file", "cover.jpg", "image/jpeg", new byte[10]);
+
+		mvc.perform(multipart("/api/admin/v1/catalogue-items/item_42/cover").file(file))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.id").value("item_42"));
+	}
+
+	@Test
+	void uploadCoverOnUnknownItemIs404() throws Exception {
+		when(coverImageService.upload(eq("item_nope"), any()))
+				.thenThrow(new ApiException(ErrorCode.NOT_FOUND, "No such catalogue item"));
+		MockMultipartFile file = new MockMultipartFile("file", "cover.jpg", "image/jpeg", new byte[10]);
+
+		mvc.perform(multipart("/api/admin/v1/catalogue-items/item_nope/cover").file(file))
+				.andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("NOT_FOUND"));
 	}
 
 }
