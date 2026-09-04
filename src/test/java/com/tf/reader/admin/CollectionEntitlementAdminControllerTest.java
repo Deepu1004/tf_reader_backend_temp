@@ -42,12 +42,12 @@ class CollectionEntitlementAdminControllerTest {
 	@Test
 	void listReturns200WithEntitlementStatusPerCollection() throws Exception {
 		var view = new CollectionEntitlementView("col_law2024", "pub_rtlg", "LAW2024", "Law Essentials", null,
-				"active");
+				"ACTIVE");
 		when(service.list(any(), any(), any(), any(), any())).thenReturn(new PageResponse<>(List.of(view), 0, 20, 1));
 
 		mvc.perform(get("/api/admin/v1/collections")).andExpect(status().isOk()).andExpect(jsonPath("$.page").value(0))
 				.andExpect(jsonPath("$.total").value(1))
-				.andExpect(jsonPath("$.items[0].entitlementStatus").value("active"));
+				.andExpect(jsonPath("$.items[0].entitlementStatus").value("ACTIVE"));
 	}
 
 }

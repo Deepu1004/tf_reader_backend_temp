@@ -282,7 +282,7 @@ class PublisherAdminServiceTest {
 
 		var result = service.list(null, null, new PageQuery(0, 20), "inst_7f3");
 
-		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("active");
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("ACTIVE");
 	}
 
 	@Test
@@ -293,7 +293,7 @@ class PublisherAdminServiceTest {
 
 		var result = service.list(null, null, new PageQuery(0, 20), "inst_7f3");
 
-		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("none");
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("NONE");
 	}
 
 	@Test
@@ -316,7 +316,7 @@ class PublisherAdminServiceTest {
 
 		var result = service.list(null, null, new PageQuery(0, 20), "inst_7f3");
 
-		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("none");
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("NONE");
 	}
 
 	@Test
@@ -328,7 +328,7 @@ class PublisherAdminServiceTest {
 
 		var result = service.list(null, null, new PageQuery(0, 20), "inst_7f3");
 
-		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("active");
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("ACTIVE");
 	}
 
 	@Test
@@ -340,7 +340,7 @@ class PublisherAdminServiceTest {
 
 		var result = service.list(null, null, new PageQuery(0, 20), "inst_someone_else");
 
-		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("active");
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("ACTIVE");
 		verify(entitlementRepository, never()).findByInstitutionId(eq("inst_someone_else"), any());
 	}
 
