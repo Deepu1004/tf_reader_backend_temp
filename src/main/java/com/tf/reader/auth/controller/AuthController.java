@@ -115,11 +115,18 @@ public class AuthController {
 	 * <p>{@code institutionId} travels as a query parameter, not a request body, per the RN
 	 * client's integration shape. {@code idpHint} is accepted and deliberately unused: we run one
 	 * SAML integration for every institution, so nothing about the request selects an IdP.
+	 *
+	 * <p>{@code username} is likewise accepted and, against a real IdP, unused - identity there is
+	 * decided on the IdP's own login page, which this backend has no channel to influence. It only
+	 * has an effect when {@code saml-mock.enabled=true}: the local mock IdP has no login page of
+	 * its own, so this is how a caller picks which seeded user it should assert instead of its
+	 * configured default. See {@link AuthTransaction#usernameHint()}.
 	 */
 	@PostMapping("/saml/start")
 	public SamlStartResponse samlStart(
 			@RequestParam(required = false) String institutionId,
-			@RequestParam(required = false) String idpHint) {
+			@RequestParam(required = false) String idpHint,
+			@RequestParam(required = false) String username) {
 		log.info("saml/start: institutionId={}", institutionId);
 
 		if (institutionId == null || institutionId.isBlank()) {
@@ -131,7 +138,7 @@ public class AuthController {
 						"No institution is registered with id '" + institutionId + "'."));
 		Institution institution = new Institution(institutionRef.institutionId(), institutionRef.name());
 
-		AuthTransaction transaction = transactions.open(institution.institutionId());
+		AuthTransaction transaction = transactions.open(institution.institutionId(), username);
 		log.info("saml/start: opened authTxnId={} for institutionId={}", transaction.id(), institutionId);
 
 		return new SamlStartResponse(
