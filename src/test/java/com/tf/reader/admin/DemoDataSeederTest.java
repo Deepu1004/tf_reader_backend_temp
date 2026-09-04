@@ -37,12 +37,11 @@ class DemoDataSeederTest {
     private static final Instant SEED_EPOCH = Instant.parse("2026-08-10T09:00:00Z");
 
     /**
-     * These six are not week 1 placeholders like the other eight items: their ids and their
-     * {@code storageKey}s are matched by exact string equality in
-     * {@code ContentAccessGrantImpl}, against real AES-256-GCM fixture files under
-     * {@code src/main/resources/static/mock-content/}. The {@code item_}/{@code seed/}
-     * conventions below don't apply to them - renaming either would silently disconnect them
-     * from working content, not just fail a naming check.
+     * These six predate the two items added alongside them and don't follow the {@code item_}
+     * prefix the rest of the seed uses - kept as their original ids since nothing requires
+     * renaming them. All eight catalogue items are real, ingested books today; there is no
+     * special-cased routing to a static mock file left anywhere in the codebase (that existed
+     * only in an earlier, retired mock version of {@code ContentAccessGrantImpl}).
      */
     private static final Set<String> DEV_CONTENT_FIXTURE_ITEM_IDS =
             Set.of(
@@ -78,15 +77,16 @@ class DemoDataSeederTest {
         assertThat(dataset.publishers()).hasSize(2);
         assertThat(dataset.collections()).hasSize(2);
         assertThat(dataset.institutions()).hasSize(3);
-        // Eight week 1 placeholders plus the six real dev-content fixtures (see
-        // DEV_CONTENT_FIXTURE_ITEM_IDS) that ContentAccessGrantImpl routes to real files.
-        assertThat(dataset.catalogueItems()).hasSize(14);
+        // The eight week 1 placeholders are retired. Every remaining item is a real book that
+        // has gone through the real ingest pipeline - the six original dev-content ids (see
+        // DEV_CONTENT_FIXTURE_ITEM_IDS) plus two more added alongside them.
+        assertThat(dataset.catalogueItems()).hasSize(8);
         assertThat(dataset.entitlements()).hasSize(3);
         assertThat(dataset.adminUsers()).hasSize(3);
         assertThat(dataset.feedSettings()).hasSize(3);
 
         // One number, so an extra row cannot be added without someone updating the plan too.
-        assertThat(dataset.documentCount()).isEqualTo(30);
+        assertThat(dataset.documentCount()).isEqualTo(24);
     }
 
     @Test
@@ -175,11 +175,12 @@ class DemoDataSeederTest {
     }
 
     @Test
-    @DisplayName("the eight canonical books still agree with the frozen day 1 fixtures")
+    @DisplayName("the seed still agrees with the published catalogue-items.json fixture")
     void datasetAgreesWithDay1Fixtures() throws IOException {
-        // team1 built their browse screens against these ids, titles and byte lengths in week 1.
-        // If the seed and the fixtures drift, their mocked screen shows different books than the real
-        // API and nobody finds out until week 4. This is the guard.
+        // canonical-items.json is a hand-maintained mirror of these eight ids, titles and byte
+        // lengths for whoever builds against the seed without running this app - if the two
+        // drift, that consumer sees different books than the real API and nobody finds out
+        // until it is in front of them. This is the guard.
         JsonNode canonical = mapper.readTree(open(DAY1_CANONICAL));
         Map<String, SeedDataset.SeedItem> seeded =
                 dataset.catalogueItems().stream()
@@ -276,17 +277,12 @@ class DemoDataSeederTest {
             }
 
             if (hasAssets) {
-                if (DEV_CONTENT_FIXTURE_ITEM_IDS.contains(id)) {
-                    // A real fixture, not a placeholder - ContentAccessGrantImpl serves this
-                    // exact path from src/main/resources/static/mock-content/.
-                    assertThat(item.get("storageKey").asText())
-                            .as("%s storageKey is a real dev-content fixture", id)
-                            .startsWith("static/mock-content/");
-                } else {
-                    assertThat(item.get("storageKey").asText())
-                            .as("%s storageKey is a week 1 placeholder", id)
-                            .startsWith("seed/");
-                }
+                // Every item today is a real book that went through the real ingest pipeline,
+                // so every storageKey is a real "items/<id>/content" object in the bucket - no
+                // "seed/" or "static/mock-content/" placeholder is left in this file.
+                assertThat(item.get("storageKey").asText())
+                        .as("%s storageKey is a real ingested object", id)
+                        .startsWith("items/" + id + "/");
             } else {
                 // A key pointing at nothing is worse than no key: it looks like content exists.
                 for (String field : List.of("storageKey", "indexKey", "wrappedBek")) {
@@ -428,9 +424,10 @@ class DemoDataSeederTest {
     void compositionIsDeliberate() {
         // These assertions are the composition table in the approach document, made executable. They
         // exist so that "tidying" a row that another team's test depends on fails here first.
-        // Six of the original eight (item_q7 is QUEUED, item_f3 is FAILED) plus all six
-        // dev-content fixtures, which are PUBLISHED and READY.
-        assertThat(dataset.catalogueItems()).filteredOn(SeedDataset.SeedItem::isFeedVisible).hasSize(12);
+        // All eight are real, ingested books, so all eight are PUBLISHED and READY. The QUEUED/
+        // FAILED, "must never appear in a feed" case (item_q7/item_f3 used to carry it) has no
+        // seed-data coverage right now - see the _readme note in demo-dataset.json.
+        assertThat(dataset.catalogueItems()).filteredOn(SeedDataset.SeedItem::isFeedVisible).hasSize(8);
 
         assertThat(dataset.catalogueItems())
                 .extracting(SeedDataset.SeedItem::accessTier)
@@ -440,7 +437,7 @@ class DemoDataSeederTest {
                 .contains("PDF", "EPUB", "AUDIO");
         assertThat(dataset.catalogueItems())
                 .extracting(SeedDataset.SeedItem::contentState)
-                .contains("READY", "QUEUED", "FAILED");
+                .containsOnly("READY");
 
         // One institution suspended, so "an inactive institution does not appear in the public list"
         // has something to prove. There is no INACTIVE: RecordStatus is ACTIVE, SUSPENDED, RETIRED.
@@ -459,9 +456,10 @@ class DemoDataSeederTest {
                 .extracting(SeedDataset.SeedEntitlement::copies)
                 .containsExactlyInAnyOrder(2, null, 2);
 
-        // At least one book with no cover and one with two assets.
+        // At least one book with no cover. The multi-format-per-item case (item_dual used to
+        // carry it, one PDF asset plus one EPUB asset) has no seed-data coverage right now -
+        // see the _readme note in demo-dataset.json.
         assertThat(dataset.catalogueItems()).anySatisfy(i -> assertThat(i.coverUrl()).isNull());
-        assertThat(dataset.catalogueItems()).anySatisfy(i -> assertThat(i.assets()).hasSize(2));
 
         // One empty shelf, so the hidden-shelf case is real data, and one shelf with several books so
         // display order can be tested.
