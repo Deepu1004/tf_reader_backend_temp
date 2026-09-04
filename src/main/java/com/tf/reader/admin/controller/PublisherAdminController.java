@@ -34,9 +34,12 @@ import jakarta.validation.Valid;
  * </pre>
  *
  * <p>
- * The list endpoint is restricted to {@code SUPER_ADMIN} — a scoped admin can
- * only reach their own publisher by id, not enumerate all publishers. Every
- * other endpoint is guarded by
+ * The list endpoint is open to all three admin roles, because an
+ * {@code INSTITUTION_ADMIN} cannot request access from a publisher they cannot
+ * see. A scoped admin still cannot enumerate all publishers: a
+ * {@code PUBLISHER_ADMIN} is pinned to their own publisher inside
+ * {@link PublisherAdminService#list}, so their list is one row. Every other
+ * endpoint is guarded by
  * {@link com.tf.reader.admin.security.AdminScopeAuthorizer#canAccessPublisher}.
  *
  * <p>
@@ -56,8 +59,9 @@ public class PublisherAdminController {
 
 	@GetMapping
 	public PageResponse<PublisherView> list(@RequestParam(required = false) String q,
-			@RequestParam(required = false) RecordStatus status, PageQuery pageQuery) {
-		return publishers.list(q, status, pageQuery);
+			@RequestParam(required = false) RecordStatus status, PageQuery pageQuery,
+			@RequestParam(required = false) String institutionId) {
+		return publishers.list(q, status, pageQuery, institutionId);
 	}
 
 	@PostMapping
