@@ -19,9 +19,12 @@ import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.Entitlement;
 import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.ItemStatus;
+import com.tf.reader.catalogue.entity.Publisher;
 import com.tf.reader.catalogue.entity.ScopeType;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
+import com.tf.reader.catalogue.repository.PublisherRepository;
+import com.tf.reader.common.model.RecordStatus;
 
 import lombok.RequiredArgsConstructor;
 
@@ -31,6 +34,7 @@ class EntitlementQueryImpl implements EntitlementQuery {
 
     private final CatalogueItemRepository catalogueItemRepository;
     private final EntitlementRepository entitlementRepository;
+    private final PublisherRepository publisherRepository;
 
     @Override
     public EntitlementDecision check(SubjectRef subject, String itemId) {
@@ -46,6 +50,17 @@ class EntitlementQueryImpl implements EntitlementQuery {
         CatalogueItem item = maybeItem.get();
         if (item.getStatus() != ItemStatus.PUBLISHED || item.getContentState() != ContentState.READY) {
             return denied(DenyReason.CONTENT_NOT_READY);
+        }
+
+        // A suspended (or retired) publisher's catalogue disappears whole, including its open
+        // access titles - checked before the OPEN_ACCESS bypass below, or a suspended publisher's
+        // open access book would keep granting itself regardless. Reuses NO_ENTITLEMENT rather
+        // than a new DenyReason: the three callers that switch on DenyReason
+        // (ReadBrokerService, BorrowService, QueueService) are flambeau's, and to a caller a
+        // suspended publisher's book is indistinguishable from never having had a grant at all.
+        Optional<Publisher> publisher = publisherRepository.findById(item.getPublisherId());
+        if (publisher.isEmpty() || publisher.get().getStatus() != RecordStatus.ACTIVE) {
+            return denied(DenyReason.NO_ENTITLEMENT);
         }
 
         // Open access was never something an institution had to buy, so it needs no grant at
