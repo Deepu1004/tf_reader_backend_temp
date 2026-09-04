@@ -9,7 +9,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
@@ -25,9 +24,12 @@ import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.common.error.PayloadTooLargeException;
 import com.tf.reader.ingest.api.BookStorage;
-import com.tf.reader.ingest.api.PresignedObject;
 
-/** Cover art through the same BookStorage/signed-URL seam as the book file, but synchronous. */
+/**
+ * Cover art through the same BookStorage seam as the book file, but synchronous. Only the
+ * storage key is ever persisted - {@link CoverUrlResolverTest} covers turning that key back
+ * into a URL.
+ */
 class CoverImageServiceTest {
 
 	private static final Instant NOW = Instant.parse("2026-09-04T10:00:00Z");
@@ -48,21 +50,21 @@ class CoverImageServiceTest {
 	}
 
 	@Test
-	void storesTheImageAndSavesThePresignedUrlAsTheCover() throws java.io.IOException {
+	void storesTheImageAndSavesOnlyTheStorageKeyAndMimeType() throws java.io.IOException {
 		CatalogueItem item = item();
 		when(items.findById("item_42")).thenReturn(Optional.of(item));
 		when(adminScope.canAccessPublisher("pub_rtlg")).thenReturn(true);
 		when(items.save(any())).thenAnswer(i -> i.getArgument(0));
-		when(bookStorage.presign("items/item_42/cover", Duration.ofDays(7)))
-				.thenReturn(new PresignedObject("https://b2.example/items/item_42/cover?sig=abc", NOW));
 		MockMultipartFile file = new MockMultipartFile("file", "cover.jpg", "image/jpeg", new byte[10]);
 
-		String url = service.upload("item_42", file);
+		CatalogueItem saved = service.upload("item_42", file);
 
-		assertThat(url).isEqualTo("https://b2.example/items/item_42/cover?sig=abc");
-		assertThat(item.getCoverUrl()).isEqualTo(url);
-		assertThat(item.getUpdatedAt()).isEqualTo(NOW);
+		assertThat(saved.getCoverKey()).isEqualTo("items/item_42/cover");
+		assertThat(saved.getCoverMimeType()).isEqualTo("image/jpeg");
+		assertThat(saved.getCoverUrl()).isNull();
+		assertThat(saved.getUpdatedAt()).isEqualTo(NOW);
 		verify(bookStorage).store("items/item_42/cover", file.getBytes(), "image/jpeg");
+		verify(bookStorage, never()).presign(any(), any());
 	}
 
 	@Test

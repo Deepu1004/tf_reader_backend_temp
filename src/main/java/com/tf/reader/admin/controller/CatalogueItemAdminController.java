@@ -91,8 +91,7 @@ public class CatalogueItemAdminController {
 
 	@PostMapping(value = "/{itemId}/cover", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 	public CatalogueItemView uploadCover(@PathVariable String itemId, @RequestParam("file") MultipartFile file) {
-		coverImages.upload(itemId, file);
-		return catalogueItems.get(itemId);
+		return catalogueItems.toFullView(coverImages.upload(itemId, file));
 	}
 
 }

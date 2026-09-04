@@ -34,6 +34,7 @@ import com.tf.reader.admin.dto.IngestStatus;
 import com.tf.reader.admin.security.AdminScopeAuthorizer;
 import com.tf.reader.admin.service.CatalogueItemAdminService;
 import com.tf.reader.catalogue.entity.AccessTier;
+import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.ContentType;
 import com.tf.reader.catalogue.entity.ItemStatus;
@@ -226,8 +227,10 @@ class CatalogueItemAdminControllerTest {
 
 	@Test
 	void uploadCoverReturns200WithTheRefreshedItem() throws Exception {
-		when(coverImageService.upload(eq("item_42"), any())).thenReturn("https://b2.example/items/item_42/cover");
-		when(service.get("item_42")).thenReturn(fullView());
+		CatalogueItem savedItem = new CatalogueItem();
+		savedItem.setId("item_42");
+		when(coverImageService.upload(eq("item_42"), any())).thenReturn(savedItem);
+		when(service.toFullView(savedItem)).thenReturn(fullView());
 		MockMultipartFile file = new MockMultipartFile("file", "cover.jpg", "image/jpeg", new byte[10]);
 
 		mvc.perform(multipart("/api/admin/v1/catalogue-items/item_42/cover").file(file))

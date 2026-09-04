@@ -2,7 +2,6 @@ package com.tf.reader.ingest.service;
 
 import java.io.IOException;
 import java.time.Clock;
-import java.time.Duration;
 import java.util.Map;
 
 import org.springframework.stereotype.Service;
@@ -22,20 +21,16 @@ import com.tf.reader.ingest.storage.StorageKeys;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Cover art through the same {@link BookStorage}/signed-URL seam as the book file itself, but
- * synchronous - there is no encryption and no {@link IngestProcessor} step, so the URL is ready
- * in the same request rather than being polled for.
- *
- * <p>The bucket is private, so the URL handed back is presigned rather than a permanent public
- * link, and it is re-signed on every upload rather than assumed to outlive the upload that made
- * it - the same reason nothing else in this codebase treats a signed URL as durable.
+ * Cover art through the same {@link BookStorage} seam as the book file itself, but synchronous -
+ * there is no encryption and no {@link IngestProcessor} step. Only the storage key is persisted,
+ * never a URL: the bucket is private, so a presigned link expires, and {@link CoverUrlResolver}
+ * is what turns the key back into a working URL on every read.
  */
 @Service
 @RequiredArgsConstructor
 public class CoverImageService {
 
 	private static final long MAX_BYTES = 5L * 1024 * 1024;
-	private static final Duration URL_TTL = Duration.ofDays(7);
 
 	private final CatalogueItemRepository catalogueItemRepository;
 	private final AdminScopeAuthorizer adminScope;
@@ -43,7 +38,7 @@ public class CoverImageService {
 	private final BookStorage bookStorage;
 	private final Clock clock;
 
-	public String upload(String itemId, MultipartFile file) {
+	public CatalogueItem upload(String itemId, MultipartFile file) {
 		CatalogueItem item = findOrThrow(itemId);
 		requireAccess(item);
 
@@ -60,16 +55,16 @@ public class CoverImageService {
 
 		String key = StorageKeys.cover(itemId);
 		bookStorage.store(key, readBytes(file), contentType);
-		String url = bookStorage.presign(key, URL_TTL).url();
 
-		item.setCoverUrl(url);
+		item.setCoverKey(key);
+		item.setCoverMimeType(contentType);
 		item.setUpdatedAt(clock.instant());
-		catalogueItemRepository.save(item);
+		CatalogueItem saved = catalogueItemRepository.save(item);
 
 		auditWriter.record(adminScope.currentAdminId(), AuditLog.Action.UPDATE, "CATALOGUE_ITEM", itemId, null,
 				Map.of("coverUploaded", true));
 
-		return url;
+		return saved;
 	}
 
 	private CatalogueItem findOrThrow(String itemId) {

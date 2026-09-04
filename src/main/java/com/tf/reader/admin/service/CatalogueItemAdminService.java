@@ -31,6 +31,7 @@ import com.tf.reader.common.audit.AuditLog;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.common.page.PageResponse;
+import com.tf.reader.ingest.service.CoverUrlResolver;
 
 import lombok.RequiredArgsConstructor;
 
@@ -50,6 +51,7 @@ public class CatalogueItemAdminService {
 	private final CatalogueVersionBumper catalogueVersionBumper;
 	private final AdminAuditWriter auditWriter;
 	private final AdminScopeAuthorizer adminScope;
+	private final CoverUrlResolver coverUrlResolver;
 
 	private static final List<EntitlementStatus> STATUS_RANK = List.of(EntitlementStatus.REVOKED,
 			EntitlementStatus.SUSPENDED, EntitlementStatus.PENDING, EntitlementStatus.ACTIVE);
@@ -315,7 +317,7 @@ public class CatalogueItemAdminService {
 		return toView(item, null, List.of(), entitlementStatusLabel);
 	}
 
-	private CatalogueItemView toFullView(CatalogueItem item) {
+	public CatalogueItemView toFullView(CatalogueItem item) {
 		String publisherName = publisherRepository.findById(item.getPublisherId()).map(Publisher::getName)
 				.orElse(null);
 		List<CatalogueItemView.Asset> assets = item.getAssets() == null ? List.of()
@@ -329,8 +331,8 @@ public class CatalogueItemAdminService {
 				item.getTitle(), item.getSubtitle(), item.getAuthors(), item.getEditors(), item.getNarrators(),
 				item.getIsbn(), item.getContentType(), item.getAccessTier(), item.getSubjects(), item.getLanguage(),
 				item.getDescription(), item.getPublishedAt(), item.getNumberOfPages(), item.getDuration(),
-				item.getCoverUrl(), item.getStatus(), item.getContentState(), item.getContentError(), assets,
-				item.getCreatedAt(), item.getUpdatedAt(), entitlementStatusLabel);
+				coverUrlResolver.resolve(item), item.getStatus(), item.getContentState(), item.getContentError(),
+				assets, item.getCreatedAt(), item.getUpdatedAt(), entitlementStatusLabel);
 	}
 
 	private CatalogueItemView.Asset toAssetView(CatalogueItem.Asset asset) {

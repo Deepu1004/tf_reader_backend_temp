@@ -27,14 +27,18 @@ import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
+import com.tf.reader.ingest.api.BookStorage;
+import com.tf.reader.ingest.service.CoverUrlResolver;
 
 /** Business rules for turning a list of ids into details, tested without a servlet or a database. */
 class CatalogueBatchServiceTest {
 
 	private final CatalogueItemRepository catalogueItemRepository = mock(CatalogueItemRepository.class);
 	private final EntitlementQuery entitlementQuery = mock(EntitlementQuery.class);
+	private final CoverUrlResolver coverUrlResolver = new CoverUrlResolver(mock(BookStorage.class));
 
-	private final CatalogueBatchService service = new CatalogueBatchService(catalogueItemRepository, entitlementQuery);
+	private final CatalogueBatchService service = new CatalogueBatchService(catalogueItemRepository, entitlementQuery,
+			coverUrlResolver);
 
 	private static final SubjectRef SUBJECT = new SubjectRef("usr_1", "inst_7f3");
 
