@@ -189,6 +189,26 @@ class IngestProcessorTest {
 	}
 
 	@Test
+	void aFailureAfterContentIsWrittenCleansUpTheOrphanedObjects() {
+		CatalogueItem item = queued("item_torn", AccessTier.OPEN_ACCESS, ContentType.EPUB);
+		when(items.findByContentState(ContentState.QUEUED)).thenReturn(List.of(item));
+		when(bookStorage.load("items/item_torn/upload")).thenReturn("plain".getBytes());
+		// storeUnlocked writes the content object before search-index extraction runs, so a
+		// throw here reproduces a real failure landing after bytes already exist in storage.
+		when(searchIndexBuilder.build(any(), any(), any(), any()))
+				.thenThrow(new IllegalStateException("failed to read EPUB archive"));
+		when(items.save(any())).thenAnswer(i -> i.getArgument(0));
+
+		processor.processQueued();
+
+		assertThat(item.getContentState()).isEqualTo(ContentState.FAILED);
+		assertThat(item.getContentError()).contains("failed to read EPUB archive");
+		verify(bookStorage).delete("items/item_torn/upload");
+		verify(bookStorage).delete("items/item_torn/content");
+		verify(bookStorage).delete("items/item_torn/index");
+	}
+
+	@Test
 	void oneFailingItemDoesNotAbortTheBatch() {
 		CatalogueItem bad = queued("item_bad", AccessTier.OPEN_ACCESS, ContentType.PDF);
 		CatalogueItem good = queued("item_good", AccessTier.OPEN_ACCESS, ContentType.PDF);
