@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 import org.springframework.data.domain.Pageable;
@@ -268,10 +267,7 @@ public class PublisherAdminService {
 	private PublisherView toView(Publisher p, boolean institutionView, EntitlementStatus status) {
 		long itemCount = catalogueItemRepository.countByPublisherId(p.getId());
 		long collectionCount = bookCollectionRepository.countByPublisherId(p.getId());
-		// Locale.ROOT, not the default: on a Turkish-configured machine "ACTIVE".toLowerCase()
-		// is "actıve" with a dotless i, which is not a value the contract lists.
-		String entitlementStatusLabel = !institutionView ? null
-				: (status == null ? "none" : status.name().toLowerCase(Locale.ROOT));
+		String entitlementStatusLabel = !institutionView ? null : (status == null ? "NONE" : status.name());
 		return new PublisherView(p.getId(), p.getCode(), p.getName(), p.getDescription(), p.getLogoUrl(), p.getStatus(),
 				itemCount, collectionCount, p.getCreatedAt(), entitlementStatusLabel);
 	}
