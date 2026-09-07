@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import com.tf.reader.hold.api.HoldPromotion;
 import com.tf.reader.library.api.ChangeLog;
+import com.tf.reader.sync.api.DownloadInvalidation;
 import com.tf.reader.library.api.ChangeReason;
 import com.tf.reader.library.api.ChangeRecord;
 import com.tf.reader.loan.entity.Loan;
@@ -36,16 +37,16 @@ public class ExpirySweeper {
 	private final CopyLease copyLease;
 	private final HoldPromotion holdPromotion;
 	private final ChangeLog changeLog;
+	private final DownloadInvalidation downloads;
 	private final Clock clock;
 
-	// Five collaborators (repo + two ports + change-feed port + clock) — the change-feed write is the
-	// only addition to the same order return uses (D-029).
 	public ExpirySweeper(LoanRepository loans, CopyLease copyLease, HoldPromotion holdPromotion,
-			ChangeLog changeLog, Clock clock) {
+			ChangeLog changeLog, DownloadInvalidation downloads, Clock clock) {
 		this.loans = loans;
 		this.copyLease = copyLease;
 		this.holdPromotion = holdPromotion;
 		this.changeLog = changeLog;
+		this.downloads = downloads;
 		this.clock = clock;
 	}
 
@@ -71,6 +72,7 @@ public class ExpirySweeper {
 		// port never throws, and the per-item try/catch in sweep() already isolates any failure.
 		changeLog.record(ChangeRecord.forLoan(closed.getUserId(), ChangeReason.LOAN_EXPIRED,
 				closed.getItemId(), closed.getLoanId(), now));
+		downloads.invalidate(closed.getUserId(), closed.getItemId());
 		if (closed.getLeaseId() != null) {          // Elite only — release exactly once
 			copyLease.release(closed.getLeaseId());
 		}
