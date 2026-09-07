@@ -33,12 +33,23 @@ class ProgressRequestTest {
 
     @Test
     void anInconsistentNestedLocatorFailsValidationOnTheProgressRequestItself() {
-        Locator brokenEpub = new Locator(Locator.TYPE_EPUB, null, null, null);
+        Locator brokenEpub = new Locator(Locator.TYPE_EPUB, null, null, null, null, null);
         ProgressRequest request = new ProgressRequest("progress-1", "user-001", "book-001", 31L, brokenEpub);
 
         Set<ConstraintViolation<ProgressRequest>> violations = validator.validate(request);
 
         assertThat(violations).isNotEmpty();
+    }
+
+    @Test
+    void audioProgressForcesOffsetToZeroRegardlessOfWhatClientSends() {
+        Locator audio = Locator.audio(45000L, "track-1");
+        ProgressRequest request = new ProgressRequest("progress-1", "user-001", "book-001", 99L, audio);
+
+        com.tf.reader.sync.model.Progress doc = request.toDocument();
+
+        assertThat(doc.getOffset()).isZero();
+        assertThat(doc.getLocator().getPositionMs()).isEqualTo(45000L);
     }
 
     @Test
