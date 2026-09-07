@@ -164,6 +164,20 @@ class PublisherAdminServiceTest {
 		verify(publisherRepository, never()).save(any());
 	}
 
+	@Test
+	@DisplayName("create is refused for a non-super admin before anything is read")
+	void createRequiresSuperAdmin() {
+		actingAs(AdminRole.PUBLISHER_ADMIN, "pub_r1");
+
+		PublisherWrite write = new PublisherWrite("routledge", "Routledge", null, null);
+
+		assertThatThrownBy(() -> service.create(write)).isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.FORBIDDEN_ROLE));
+
+		verify(publisherRepository, never()).findByCode(any());
+		verify(publisherRepository, never()).save(any());
+	}
+
 	// ---------------------------------------------------------------- get
 
 	@Test
@@ -282,7 +296,7 @@ class PublisherAdminServiceTest {
 
 		var result = service.list(null, null, new PageQuery(0, 20), "inst_7f3");
 
-		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("active");
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("ACTIVE");
 	}
 
 	@Test
@@ -293,7 +307,7 @@ class PublisherAdminServiceTest {
 
 		var result = service.list(null, null, new PageQuery(0, 20), "inst_7f3");
 
-		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("none");
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("NONE");
 	}
 
 	@Test
@@ -316,7 +330,7 @@ class PublisherAdminServiceTest {
 
 		var result = service.list(null, null, new PageQuery(0, 20), "inst_7f3");
 
-		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("none");
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("NONE");
 	}
 
 	@Test
@@ -328,7 +342,7 @@ class PublisherAdminServiceTest {
 
 		var result = service.list(null, null, new PageQuery(0, 20), "inst_7f3");
 
-		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("active");
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("ACTIVE");
 	}
 
 	@Test
@@ -340,7 +354,7 @@ class PublisherAdminServiceTest {
 
 		var result = service.list(null, null, new PageQuery(0, 20), "inst_someone_else");
 
-		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("active");
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("ACTIVE");
 		verify(entitlementRepository, never()).findByInstitutionId(eq("inst_someone_else"), any());
 	}
 

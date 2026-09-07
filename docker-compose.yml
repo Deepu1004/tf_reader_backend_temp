@@ -36,48 +36,6 @@ services:
       retries: 10
       start_period: 5s
 
-  # Local stand-in for Backblaze B2 (an S3-compatible API), so BookStorageConfig's real S3Client
-  # has something to talk to on a dev machine instead of the actual bucket. Root credentials come
-  # from .env's B2_KEY_ID/B2_APPLICATION_KEY so this always matches whatever the app is configured
-  # to authenticate with - never hardcode a second set here.
-  minio:
-    container_name: tf_reader_minio
-    image: minio/minio:latest
-    restart: unless-stopped
-    ports:
-      - "9000:9000"
-    environment:
-      MINIO_ROOT_USER: ${B2_KEY_ID}
-      MINIO_ROOT_PASSWORD: ${B2_APPLICATION_KEY}
-    command: server /data
-    volumes:
-      - minio-data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 5s
-
-  # One-shot: creates the bucket and uploads the dev/mock-content fixtures under the same
-  # storageKeys demo-dataset.json's dev-* items already use, so a real reading-session grant has a
-  # real object behind the presigned URL. Runs once per `docker compose up` and exits; not
-  # restarted, since re-running mc cp on an unchanged fixture set is a harmless no-op anyway.
-  minio-seed:
-    container_name: tf_reader_minio_seed
-    image: minio/mc:latest
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 ${B2_KEY_ID} ${B2_APPLICATION_KEY} &&
-      (mc mb local/${B2_BUCKET} || true) &&
-      mc cp --recursive /fixtures/static/mock-content/ local/${B2_BUCKET}/static/mock-content/
-      "
-    volumes:
-      - ./src/main/resources/static:/fixtures/static:ro
-
   app:
     container_name: tf_reader_backend
     build: .
@@ -91,16 +49,12 @@ services:
       MONGODB_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/tnfreader?authSource=admin
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      B2_ENDPOINT: http://minio:9000
 
     depends_on:
       mongo:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
-        condition: service_healthy
 
 volumes:
   mongo-data:
-  minio-data:

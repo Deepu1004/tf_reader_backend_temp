@@ -25,4 +25,9 @@ public final class StorageKeys {
 		return "items/" + itemId + "/index";
 	}
 
+	/** The cover image, always plaintext - a cover is never a secret. */
+	public static String cover(String itemId) {
+		return "items/" + itemId + "/cover";
+	}
+
 }

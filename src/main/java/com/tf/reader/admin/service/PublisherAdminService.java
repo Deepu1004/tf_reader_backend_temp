@@ -45,6 +45,12 @@ import lombok.RequiredArgsConstructor;
  * endpoint added later cannot bypass them.
  *
  * <p>
+ * Creating a publisher is SUPER_ADMIN only, same as institutions and admin
+ * users — there is no existing publisher to scope a PUBLISHER_ADMIN against
+ * yet. Every other write is scoped to the publisher itself via
+ * {@link AdminScopeAuthorizer#canAccessPublisher(String)}.
+ *
+ * <p>
  * {@code itemCount} and {@code collectionCount} are derived on every read by
  * counting documents in {@code catalogueItems} and {@code collections} — they
  * are never stored on the publisher.
@@ -166,6 +172,11 @@ public class PublisherAdminService {
 	// ---------------------------------------------------------------- create
 
 	public PublisherView create(PublisherWrite write) {
+		// Minting a brand-new publisher, so there is no existing publisherId to scope
+		// against yet - only a SUPER_ADMIN may do this, same as institutions and admin
+		// users.
+		adminScope.requireSuperAdmin();
+
 		// findByCode normalises to upper-case inside the entity; match that here.
 		String normalised = write.code().toUpperCase();
 		publisherRepository.findByCode(normalised).ifPresent(existing -> {
@@ -268,10 +279,7 @@ public class PublisherAdminService {
 	private PublisherView toView(Publisher p, boolean institutionView, EntitlementStatus status) {
 		long itemCount = catalogueItemRepository.countByPublisherId(p.getId());
 		long collectionCount = bookCollectionRepository.countByPublisherId(p.getId());
-		// Locale.ROOT, not the default: on a Turkish-configured machine "ACTIVE".toLowerCase()
-		// is "actıve" with a dotless i, which is not a value the contract lists.
-		String entitlementStatusLabel = !institutionView ? null
-				: (status == null ? "none" : status.name().toLowerCase(Locale.ROOT));
+		String entitlementStatusLabel = !institutionView ? null : (status == null ? "NONE" : status.name());
 		return new PublisherView(p.getId(), p.getCode(), p.getName(), p.getDescription(), p.getLogoUrl(), p.getStatus(),
 				itemCount, collectionCount, p.getCreatedAt(), entitlementStatusLabel);
 	}

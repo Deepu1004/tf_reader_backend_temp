@@ -19,6 +19,7 @@ import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
+import com.tf.reader.ingest.service.CoverUrlResolver;
 
 import lombok.RequiredArgsConstructor;
 
@@ -36,6 +37,7 @@ public class CatalogueBatchService {
 
 	private final CatalogueItemRepository catalogueItemRepository;
 	private final EntitlementQuery entitlementQuery;
+	private final CoverUrlResolver coverUrlResolver;
 
 	public BatchItemsResponse batch(SubjectRef subject, BatchItemsRequest request) {
 		List<String> ids = request.ids();
@@ -76,8 +78,8 @@ public class CatalogueBatchService {
 		boolean hasSearchIndex = item.getAssets() != null
 				&& item.getAssets().stream().anyMatch(CatalogueItem.Asset::isHasSearchIndex);
 
-		return new BatchItem(item.getId(), item.getTitle(), item.getAuthors(), item.getCoverUrl(), item.getIsbn(),
-				item.getContentType(), item.getAccessTier(), decision.copies(), hasSearchIndex);
+		return new BatchItem(item.getId(), item.getTitle(), item.getAuthors(), coverUrlResolver.resolve(item),
+				item.getIsbn(), item.getContentType(), item.getAccessTier(), decision.copies(), hasSearchIndex);
 	}
 
 }

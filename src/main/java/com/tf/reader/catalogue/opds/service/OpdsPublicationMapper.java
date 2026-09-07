@@ -25,6 +25,7 @@ import com.tf.reader.catalogue.opds.dto.OpdsPublication;
 import com.tf.reader.catalogue.opds.dto.OpdsPublicationMetadata;
 import com.tf.reader.catalogue.service.CatalogueUrlBuilder;
 import com.tf.reader.catalogue.service.FlambeauUrlBuilder;
+import com.tf.reader.ingest.service.CoverUrlResolver;
 
 import lombok.RequiredArgsConstructor;
 
@@ -54,6 +55,7 @@ class OpdsPublicationMapper {
 
     private final CatalogueUrlBuilder catalogueUrlBuilder;
     private final FlambeauUrlBuilder flambeauUrlBuilder;
+    private final CoverUrlResolver coverUrlResolver;
 
     OpdsPublication toPublication(CatalogueItem item, EntitlementDecision decision, String institutionId,
             Map<String, Publisher> publishersById) {
@@ -121,15 +123,17 @@ class OpdsPublicationMapper {
     }
 
     private List<OpdsImageLink> coverImages(CatalogueItem item) {
-        String coverUrl = item.getCoverUrl();
+        String coverUrl = coverUrlResolver.resolve(item);
         if (coverUrl == null || coverUrl.isBlank()) {
             return null;
         }
-        return List.of(new OpdsImageLink(coverUrl, imageMimeType(coverUrl), null, null));
+        // An uploaded cover knows its real content type; a pasted-in external link does not,
+        // so the extension is all we have there, and an unrecognised one is omitted rather
+        // than guessed.
+        String mimeType = item.getCoverMimeType() != null ? item.getCoverMimeType() : imageMimeType(coverUrl);
+        return List.of(new OpdsImageLink(coverUrl, mimeType, null, null));
     }
 
-    // Covers are URLs an operator pastes in, pointing at a bucket we never read - the
-    // extension is all we have, and an unrecognised one is omitted rather than guessed.
     private String imageMimeType(String url) {
         String lower = url.toLowerCase(Locale.ROOT);
         if (lower.endsWith(".png")) {

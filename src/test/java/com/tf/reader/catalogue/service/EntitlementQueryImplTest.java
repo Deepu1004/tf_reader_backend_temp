@@ -11,6 +11,8 @@ import com.tf.reader.catalogue.api.AccessLevel;
 import com.tf.reader.catalogue.api.DenyReason;
 import com.tf.reader.catalogue.api.EntitlementDecision;
 import com.tf.reader.catalogue.api.EntitlementQuery;
+import com.tf.reader.catalogue.api.InstitutionLookup;
+import com.tf.reader.catalogue.api.InstitutionRef;
 import com.tf.reader.catalogue.api.SubjectRef;
 import com.tf.reader.catalogue.entity.AccessTier;
 import com.tf.reader.catalogue.entity.CatalogueItem;
@@ -18,15 +20,20 @@ import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.Entitlement;
 import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.ItemStatus;
+import com.tf.reader.catalogue.entity.Publisher;
 import com.tf.reader.catalogue.entity.ScopeType;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
+import com.tf.reader.catalogue.repository.PublisherRepository;
+import com.tf.reader.common.model.RecordStatus;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class EntitlementQueryImplTest {
@@ -35,16 +42,23 @@ class EntitlementQueryImplTest {
 
     private CatalogueItemRepository catalogueItemRepository;
     private EntitlementRepository entitlementRepository;
+    private PublisherRepository publisherRepository;
+    private InstitutionLookup institutionLookup;
     private EntitlementQuery query;
 
     @BeforeEach
     void setUp() {
         catalogueItemRepository = mock(CatalogueItemRepository.class);
         entitlementRepository = mock(EntitlementRepository.class);
-        query = new EntitlementQueryImpl(catalogueItemRepository, entitlementRepository);
+        publisherRepository = mock(PublisherRepository.class);
+        institutionLookup = mock(InstitutionLookup.class);
+        query = new EntitlementQueryImpl(catalogueItemRepository, entitlementRepository, publisherRepository,
+                institutionLookup);
 
         when(entitlementRepository.findByInstitutionIdAndScopeTypeAndScopeId(any(), any(), any()))
                 .thenReturn(Optional.empty());
+        when(institutionLookup.find("inst_7f3")).thenReturn(Optional.of(new InstitutionRef("inst_7f3", "Imperial")));
+        when(publisherRepository.findById("pub_1")).thenReturn(Optional.of(activePublisher("pub_1")));
     }
 
     @Test
@@ -133,9 +147,125 @@ class EntitlementQueryImplTest {
     }
 
     @Test
+    void deniesWithNoEntitlementWhenThePublisherIsSuspended() {
+        // A suspended publisher's whole catalogue disappears, not just books an institution
+        // would otherwise need a grant for.
+        CatalogueItem item = readyItem("item_c25", List.of("col_1"));
+        when(catalogueItemRepository.findById("item_c25")).thenReturn(Optional.of(item));
+        when(publisherRepository.findById("pub_1")).thenReturn(Optional.of(suspendedPublisher("pub_1")));
+
+        Entitlement grant = entitlement("ent_1", ScopeType.COLLECTION, "col_1", 3, 21,
+                LocalDate.now().plusDays(30));
+        when(entitlementRepository.findByInstitutionIdAndScopeTypeAndScopeId(
+                eq("inst_7f3"), eq(ScopeType.COLLECTION), eq("col_1")))
+                .thenReturn(Optional.of(grant));
+
+        EntitlementDecision decision = query.check(SUBJECT, "item_c25");
+
+        assertThat(decision.entitled()).isFalse();
+        assertThat(decision.reason()).isEqualTo(DenyReason.NO_ENTITLEMENT);
+    }
+
+    @Test
+    void deniesAnOpenAccessItemWhenThePublisherIsSuspended() {
+        // The OPEN_ACCESS bypass must not run before the publisher check, or a suspended
+        // publisher's open access book keeps granting itself regardless of status.
+        CatalogueItem item = readyItem("item_c25", List.of());
+        item.setAccessTier(AccessTier.OPEN_ACCESS);
+        when(catalogueItemRepository.findById("item_c25")).thenReturn(Optional.of(item));
+        when(publisherRepository.findById("pub_1")).thenReturn(Optional.of(suspendedPublisher("pub_1")));
+
+        EntitlementDecision decision = query.check(SUBJECT, "item_c25");
+
+        assertThat(decision.entitled()).isFalse();
+        assertThat(decision.reason()).isEqualTo(DenyReason.NO_ENTITLEMENT);
+    }
+
+    @Test
+    void deniesWithNoEntitlementWhenThePublisherNoLongerExists() {
+        CatalogueItem item = readyItem("item_c25", List.of());
+        when(catalogueItemRepository.findById("item_c25")).thenReturn(Optional.of(item));
+        when(publisherRepository.findById("pub_1")).thenReturn(Optional.empty());
+
+        EntitlementDecision decision = query.check(SUBJECT, "item_c25");
+
+        assertThat(decision.entitled()).isFalse();
+        assertThat(decision.reason()).isEqualTo(DenyReason.NO_ENTITLEMENT);
+    }
+
+    @Test
     void rejectsAMissingItemId() {
         assertThatIllegalArgumentException().isThrownBy(() -> query.check(SUBJECT, " "));
         assertThatIllegalArgumentException().isThrownBy(() -> query.check(SUBJECT, null));
+    }
+
+    @Test
+    void deniesWithNotFoundWhenTheInstitutionIsSuspended() {
+        // InstitutionLookup itself collapses "suspended" and "unknown" into an empty Optional -
+        // check() never sees the difference, so this test only needs to stub the empty case.
+        when(institutionLookup.find("inst_7f3")).thenReturn(Optional.empty());
+
+        EntitlementDecision decision = query.check(SUBJECT, "item_c25");
+
+        assertThat(decision.entitled()).isFalse();
+        assertThat(decision.reason()).isEqualTo(DenyReason.NOT_FOUND);
+        verify(catalogueItemRepository, never()).findById(any());
+    }
+
+    @Test
+    void deniesWithNotFoundWhenTheInstitutionIsUnknown() {
+        when(institutionLookup.find("inst_7f3")).thenReturn(Optional.empty());
+
+        EntitlementDecision decision = query.check(SUBJECT, "item_c25");
+
+        assertThat(decision.entitled()).isFalse();
+        assertThat(decision.reason()).isEqualTo(DenyReason.NOT_FOUND);
+        verify(catalogueItemRepository, never()).findById(any());
+    }
+
+    @Test
+    void anItemGrantWinsOverAMorePermissiveCollectionGrant() {
+        CatalogueItem item = readyItem("item_c25", List.of("col_1"));
+        when(catalogueItemRepository.findById("item_c25")).thenReturn(Optional.of(item));
+
+        Entitlement itemGrant = entitlement("ent_item", ScopeType.ITEM, "item_c25", 1, 14,
+                LocalDate.now().plusDays(30));
+        when(entitlementRepository.findByInstitutionIdAndScopeTypeAndScopeId(
+                eq("inst_7f3"), eq(ScopeType.ITEM), eq("item_c25")))
+                .thenReturn(Optional.of(itemGrant));
+
+        Entitlement collectionGrant = entitlement("ent_collection", ScopeType.COLLECTION, "col_1", null, 21,
+                LocalDate.now().plusDays(30));
+        when(entitlementRepository.findByInstitutionIdAndScopeTypeAndScopeId(
+                eq("inst_7f3"), eq(ScopeType.COLLECTION), eq("col_1")))
+                .thenReturn(Optional.of(collectionGrant));
+
+        EntitlementDecision decision = query.check(SUBJECT, "item_c25");
+
+        assertThat(decision.entitlementId()).isEqualTo("ent_item");
+        assertThat(decision.loanPeriodDays()).isEqualTo(14);
+    }
+
+    @Test
+    void theMorePermissiveOfTwoCollectionGrantsWinsWhenAnItemBelongsToBoth() {
+        CatalogueItem item = readyItem("item_c25", List.of("col_1", "col_2"));
+        when(catalogueItemRepository.findById("item_c25")).thenReturn(Optional.of(item));
+
+        Entitlement limited = entitlement("ent_limited", ScopeType.COLLECTION, "col_1", 2, 14,
+                LocalDate.now().plusDays(30));
+        when(entitlementRepository.findByInstitutionIdAndScopeTypeAndScopeId(
+                eq("inst_7f3"), eq(ScopeType.COLLECTION), eq("col_1")))
+                .thenReturn(Optional.of(limited));
+
+        Entitlement unlimited = entitlement("ent_unlimited", ScopeType.COLLECTION, "col_2", null, 14,
+                LocalDate.now().plusDays(30));
+        when(entitlementRepository.findByInstitutionIdAndScopeTypeAndScopeId(
+                eq("inst_7f3"), eq(ScopeType.COLLECTION), eq("col_2")))
+                .thenReturn(Optional.of(unlimited));
+
+        EntitlementDecision decision = query.check(SUBJECT, "item_c25");
+
+        assertThat(decision.entitlementId()).isEqualTo("ent_unlimited");
     }
 
     private CatalogueItem readyItem(String id, List<String> collectionIds) {
@@ -147,6 +277,20 @@ class EntitlementQueryImplTest {
         item.setStatus(ItemStatus.PUBLISHED);
         item.setContentState(ContentState.READY);
         return item;
+    }
+
+    private Publisher activePublisher(String id) {
+        Publisher publisher = new Publisher();
+        publisher.setId(id);
+        publisher.setStatus(RecordStatus.ACTIVE);
+        return publisher;
+    }
+
+    private Publisher suspendedPublisher(String id) {
+        Publisher publisher = new Publisher();
+        publisher.setId(id);
+        publisher.setStatus(RecordStatus.SUSPENDED);
+        return publisher;
     }
 
     private Entitlement entitlement(String id, ScopeType scopeType, String scopeId, Integer copies,

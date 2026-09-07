@@ -17,6 +17,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.Page;
@@ -204,6 +205,56 @@ class EntitlementAdminServiceTest {
 		assertThat(created.status()).isEqualTo(EntitlementStatus.ACTIVE);
 	}
 
+	@Test
+	void createSupersedesARevokedEntitlementForTheSameScope() {
+		when(institutionRepository.existsById("inst_7f3")).thenReturn(true);
+		when(publisherRepository.existsById("pub_rtlg")).thenReturn(true);
+
+		Entitlement revoked = entitlement("ent_5a1", "inst_7f3", ScopeType.PUBLISHER, "pub_rtlg", 3, 0);
+		revoked.setStatus(EntitlementStatus.REVOKED);
+		when(entitlementRepository.findByInstitutionIdAndScopeTypeAndScopeId("inst_7f3", ScopeType.PUBLISHER,
+				"pub_rtlg")).thenReturn(Optional.of(revoked));
+		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+		EntitlementCreate write = new EntitlementCreate(ScopeType.PUBLISHER, "pub_rtlg", null, null, null, null, null);
+
+		EntitlementView created = service.create("inst_7f3", write);
+
+		assertThat(created.id()).isEqualTo("ent_5a1");
+		assertThat(created.status()).isEqualTo(EntitlementStatus.ACTIVE);
+		assertThat(created.version()).isEqualTo(1);
+		verify(versionBumper).bump(CatalogueVersionBumper.Scope.INSTITUTION, "inst_7f3");
+
+		ArgumentCaptor<Map<String, Object>> beforeCaptor = ArgumentCaptor.forClass(Map.class);
+		verify(auditWriter).record(any(), eq(com.tf.reader.common.audit.AuditLog.Action.CREATE), eq("ENTITLEMENT"),
+				eq("ent_5a1"), beforeCaptor.capture(), any());
+		// The revoked row's own terms, not just its status - a re-request silently overwrites
+		// them, and the audit trail must show what was replaced.
+		assertThat(beforeCaptor.getValue()).containsEntry("status", "REVOKED").containsEntry("copies", "3");
+	}
+
+	@Test
+	void createByInstitutionAdminSupersedesTheirOwnRevokedEntitlementAsPending() {
+		actingAs(AdminRole.INSTITUTION_ADMIN, "inst_7f3");
+		when(institutionRepository.existsById("inst_7f3")).thenReturn(true);
+		when(publisherRepository.existsById("pub_rtlg")).thenReturn(true);
+
+		Entitlement revoked = entitlement("ent_5a1", "inst_7f3", ScopeType.PUBLISHER, "pub_rtlg", null, 3);
+		revoked.setStatus(EntitlementStatus.REVOKED);
+		when(entitlementRepository.findByInstitutionIdAndScopeTypeAndScopeId("inst_7f3", ScopeType.PUBLISHER,
+				"pub_rtlg")).thenReturn(Optional.of(revoked));
+		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+		EntitlementCreate write = new EntitlementCreate(ScopeType.PUBLISHER, "pub_rtlg", null, null, null, null,
+				EntitlementStatus.ACTIVE);
+
+		EntitlementView created = service.create("inst_7f3", write);
+
+		assertThat(created.id()).isEqualTo("ent_5a1");
+		assertThat(created.status()).isEqualTo(EntitlementStatus.PENDING);
+		assertThat(created.version()).isEqualTo(4);
+	}
+
 	// ---------------------------------------------------------------- update
 
 	@Test
@@ -223,6 +274,25 @@ class EntitlementAdminServiceTest {
 		assertThat(updated.loanPeriodDays()).isEqualTo(30);
 		assertThat(updated.version()).isEqualTo(4);
 		verify(versionBumper).bump(CatalogueVersionBumper.Scope.INSTITUTION, "inst_7f3");
+	}
+
+	@Test
+	@DisplayName("update with an explicit null copies clears the copy limit to UNLIMITED")
+	void updateWithNullCopiesClearsTheLimit() {
+		// copies staying nullable (no @NotNull) is deliberate: null is UNLIMITED, a real value,
+		// not an omission - see EntitlementUpdate. loanPeriodDays and validTo must still be
+		// supplied since a full replace always resends them.
+		Entitlement existing = entitlement("ent_5a1", "inst_7f3", ScopeType.COLLECTION, "col_law2024", 2, 3);
+		when(entitlementRepository.findById("ent_5a1")).thenReturn(Optional.of(existing));
+		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+		when(bookCollectionRepository.findById("col_law2024")).thenReturn(Optional.empty());
+		when(catalogueItemRepository.countByCollectionIds("col_law2024")).thenReturn(0L);
+
+		EntitlementUpdate write = new EntitlementUpdate(null, 30, LocalDate.parse("2026-09-01"), null, 3L);
+
+		EntitlementView updated = service.update("ent_5a1", write);
+
+		assertThat(updated.copies()).isNull();
 	}
 
 	@Test

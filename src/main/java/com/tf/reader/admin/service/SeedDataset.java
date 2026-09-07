@@ -109,6 +109,8 @@ public record SeedDataset(
             List<String> subjects,
             LocalDate publishedAt,
             String coverUrl,
+            String coverKey,
+            String coverMimeType,
             String contentType,
             String accessTier,
             String status,
