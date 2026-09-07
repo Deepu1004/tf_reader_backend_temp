@@ -25,7 +25,6 @@ import com.tf.reader.hold.api.HoldPromotion;
 import com.tf.reader.library.api.ChangeLog;
 import com.tf.reader.library.api.ChangeReason;
 import com.tf.reader.library.api.ChangeRecord;
-import com.tf.reader.sync.api.DownloadInvalidation;
 import com.tf.reader.loan.dto.ReturnResponse;
 import com.tf.reader.loan.entity.LicenceModel;
 import com.tf.reader.loan.entity.Loan;
@@ -48,9 +47,8 @@ class ReturnServiceTest {
 	private final CopyLease copyLease = mock(CopyLease.class);
 	private final HoldPromotion holdPromotion = mock(HoldPromotion.class);
 	private final ChangeLog changeLog = mock(ChangeLog.class);
-	private final DownloadInvalidation downloads = mock(DownloadInvalidation.class);
 	private final ReturnService service =
-			new ReturnService(loans, copyLease, holdPromotion, changeLog, downloads, CLOCK);
+			new ReturnService(loans, copyLease, holdPromotion, changeLog, CLOCK);
 
 	@Test
 	void closesAnActiveEliteLoanThenReleasesTheLeaseThenPromotes() {
@@ -99,17 +97,6 @@ class ReturnServiceTest {
 
 		verify(copyLease, never()).release(anyString());
 		verify(holdPromotion).promote("inst_1", "item_2");
-	}
-
-	@Test
-	void invalidatesDownloadOnReturn() {
-		Loan loan = subscription("loan_2", "user_1", "item_2");
-		when(loans.findById("loan_2")).thenReturn(Optional.of(loan));
-		when(loans.save(any(Loan.class))).thenAnswer(i -> i.getArgument(0));
-
-		service.returnLoan("user_1", "loan_2");
-
-		verify(downloads).invalidate("user_1", "item_2");
 	}
 
 	@Test
