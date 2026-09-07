@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 
 import com.tf.reader.TestcontainersConfiguration;
+import com.tf.reader.auth.AuthTestInstitutions;
 import com.tf.reader.auth.model.TnfUser;
 import com.tf.reader.auth.model.UserType;
 import com.tf.reader.auth.token.JwtTokenService;
@@ -39,6 +40,7 @@ import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
 import com.tf.reader.catalogue.repository.InstitutionRepository;
 import com.tf.reader.catalogue.repository.PublisherRepository;
+import com.tf.reader.common.model.RecordStatus;
 import com.tf.reader.loan.repository.LoanRepository;
 
 /**
@@ -95,7 +97,12 @@ class LoanLifecycleIT {
 		inst.setStatus(RecordStatus.ACTIVE);
 		institutions.save(inst);
 
-		// Publisher must exist before items can be saved (CatalogueItemPersistenceGuard)
+		// EntitlementQuery now checks the institution exists and is ACTIVE before anything else —
+		// inst_7f3 is AuthTestInstitutions.IMPERIAL, seeded ACTIVE for exactly this reason.
+		AuthTestInstitutions.seed(institutions);
+
+		// Publisher must exist before items can be saved (CatalogueItemPersistenceGuard), and must
+		// be ACTIVE or EntitlementQuery denies every item under it as NO_ENTITLEMENT.
 		Publisher pub = new Publisher();
 		pub.setId(TEST_PUBLISHER);
 		pub.setCode("TEST");

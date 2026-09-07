@@ -81,6 +81,20 @@ class PromotionIT extends HoldContainerTest {
     void seedCatalogueAndEntitlement() {
         mongo.remove(Query.query(Criteria.where("_id").is(ITEM)), "catalogueItems");
         mongo.remove(Query.query(Criteria.where("institutionId").is(SCOPE)), "entitlements");
+        mongo.remove(Query.query(Criteria.where("_id").is(SCOPE)), "institutions");
+        mongo.remove(Query.query(Criteria.where("_id").is("pub_promotion_it")), "publishers");
+
+        // join() runs through the real EntitlementQuery, which now also requires a real, ACTIVE
+        // institution and publisher document to exist — not just the item and entitlement.
+        mongo.save(new Document()
+                .append("_id", SCOPE)
+                .append("code", "hold-it-promotion")
+                .append("status", "ACTIVE"), "institutions");
+
+        mongo.save(new Document()
+                .append("_id", "pub_promotion_it")
+                .append("code", "HOLD-IT-PROMOTION")
+                .append("status", "ACTIVE"), "publishers");
 
         mongo.save(new Document()
                 .append("_id", ITEM)
@@ -108,6 +122,8 @@ class PromotionIT extends HoldContainerTest {
         redisConnectionFactory.getConnection().serverCommands().flushAll();
         mongo.remove(Query.query(Criteria.where("_id").is(ITEM)), "catalogueItems");
         mongo.remove(Query.query(Criteria.where("institutionId").is(SCOPE)), "entitlements");
+        mongo.remove(Query.query(Criteria.where("_id").is(SCOPE)), "institutions");
+        mongo.remove(Query.query(Criteria.where("_id").is("pub_promotion_it")), "publishers");
     }
 
     private static CurrentUser user(String suffix) {
@@ -190,6 +206,13 @@ class PromotionIT extends HoldContainerTest {
 
         mongo.remove(Query.query(Criteria.where("_id").is(item)), "catalogueItems");
         mongo.remove(Query.query(Criteria.where("institutionId").in(scopeX, scopeY)), "entitlements");
+        mongo.remove(Query.query(Criteria.where("_id").in(scopeX, scopeY)), "institutions");
+        mongo.remove(Query.query(Criteria.where("_id").is("pub_two_inst")), "publishers");
+
+        mongo.save(new Document().append("_id", scopeX).append("code", "hold-it-two-x").append("status", "ACTIVE"), "institutions");
+        mongo.save(new Document().append("_id", scopeY).append("code", "hold-it-two-y").append("status", "ACTIVE"), "institutions");
+        mongo.save(new Document().append("_id", "pub_two_inst").append("code", "HOLD-IT-TWO-INST").append("status", "ACTIVE"), "publishers");
+
         mongo.save(new Document()
                 .append("_id", item)
                 .append("status", "PUBLISHED")
@@ -220,6 +243,8 @@ class PromotionIT extends HoldContainerTest {
         } finally {
             mongo.remove(Query.query(Criteria.where("_id").is(item)), "catalogueItems");
             mongo.remove(Query.query(Criteria.where("institutionId").in(scopeX, scopeY)), "entitlements");
+            mongo.remove(Query.query(Criteria.where("_id").in(scopeX, scopeY)), "institutions");
+            mongo.remove(Query.query(Criteria.where("_id").is("pub_two_inst")), "publishers");
         }
     }
 

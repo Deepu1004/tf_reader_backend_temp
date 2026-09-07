@@ -67,6 +67,20 @@ class ChangeFeedEndpointIT extends HoldContainerTest {
     void seedCatalogueAndEntitlement() {
         mongo.remove(Query.query(Criteria.where("_id").is(ITEM)), "catalogueItems");
         mongo.remove(Query.query(Criteria.where("institutionId").is(SCOPE)), "entitlements");
+        mongo.remove(Query.query(Criteria.where("_id").is(SCOPE)), "institutions");
+        mongo.remove(Query.query(Criteria.where("_id").is("pub_change_feed_it")), "publishers");
+
+        // join() runs through the real EntitlementQuery, which now also requires a real, ACTIVE
+        // institution and publisher document to exist — not just the item and entitlement.
+        mongo.save(new Document()
+                .append("_id", SCOPE)
+                .append("code", "hold-it-changefeed")
+                .append("status", "ACTIVE"), "institutions");
+
+        mongo.save(new Document()
+                .append("_id", "pub_change_feed_it")
+                .append("code", "HOLD-IT-CHANGEFEED")
+                .append("status", "ACTIVE"), "publishers");
 
         mongo.save(new Document()
                 .append("_id", ITEM)
@@ -94,6 +108,8 @@ class ChangeFeedEndpointIT extends HoldContainerTest {
         redisConnectionFactory.getConnection().serverCommands().flushAll();
         mongo.remove(Query.query(Criteria.where("_id").is(ITEM)), "catalogueItems");
         mongo.remove(Query.query(Criteria.where("institutionId").is(SCOPE)), "entitlements");
+        mongo.remove(Query.query(Criteria.where("_id").is(SCOPE)), "institutions");
+        mongo.remove(Query.query(Criteria.where("_id").is("pub_change_feed_it")), "publishers");
     }
 
     private static CurrentUser user(String suffix) {

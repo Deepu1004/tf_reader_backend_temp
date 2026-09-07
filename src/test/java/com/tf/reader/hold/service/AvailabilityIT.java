@@ -53,6 +53,20 @@ class AvailabilityIT extends HoldContainerTest {
         // own cleanup having actually run.
         mongo.remove(Query.query(Criteria.where("_id").is(ITEM)), "catalogueItems");
         mongo.remove(Query.query(Criteria.where("institutionId").is(SCOPE)), "entitlements");
+        mongo.remove(Query.query(Criteria.where("_id").is(SCOPE)), "institutions");
+        mongo.remove(Query.query(Criteria.where("_id").is("pub_availability_it")), "publishers");
+
+        // join() runs through the real EntitlementQuery, which now also requires a real, ACTIVE
+        // institution and publisher document to exist — not just the item and entitlement.
+        mongo.save(new Document()
+                .append("_id", SCOPE)
+                .append("code", "hold-it-availability")
+                .append("status", "ACTIVE"), "institutions");
+
+        mongo.save(new Document()
+                .append("_id", "pub_availability_it")
+                .append("code", "HOLD-IT-AVAILABILITY")
+                .append("status", "ACTIVE"), "publishers");
 
         mongo.save(new Document()
                 .append("_id", ITEM)
@@ -80,6 +94,8 @@ class AvailabilityIT extends HoldContainerTest {
         redisConnectionFactory.getConnection().serverCommands().flushAll();
         mongo.remove(Query.query(Criteria.where("_id").is(ITEM)), "catalogueItems");
         mongo.remove(Query.query(Criteria.where("institutionId").is(SCOPE)), "entitlements");
+        mongo.remove(Query.query(Criteria.where("_id").is(SCOPE)), "institutions");
+        mongo.remove(Query.query(Criteria.where("_id").is("pub_availability_it")), "publishers");
     }
 
     private static CurrentUser user(String suffix) {
