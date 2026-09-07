@@ -136,6 +136,10 @@ public class UserSecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/token").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/refresh").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/logout").permitAll()
+						// B2C email-and-password: how a reader with no institution obtains a
+						// credential at all, and proves one they already have.
+						.requestMatchers(HttpMethod.POST, "/api/v1/auth/signup").permitAll()
+						.requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
 						.anyRequest().authenticated())
 				// Every request after sign-in presents the JWT that sign-in produced. Spring
 				// Security's own bearer-token filter does the header parsing and the decoding, so

@@ -70,7 +70,9 @@ public enum ErrorCode {
 	// The repeat-return code, and the whole replay guard for the offline return outbox: the
 	// client treats this 409 as success, so renaming it silently breaks that retry path.
 	LOAN_NOT_ACTIVE(HttpStatus.CONFLICT),
-	OFFER_EXPIRED(HttpStatus.CONFLICT);
+	OFFER_EXPIRED(HttpStatus.CONFLICT),
+	// Added by Deepak (reading) — B2C signup, an email already registered as an individual.
+	EMAIL_TAKEN(HttpStatus.CONFLICT);
 
 	private final HttpStatus status;
 

@@ -45,6 +45,10 @@ public class ReaderUser {
 
 	private List<String> collections;
 
+	/** BCrypt hash. Only an INDIVIDUAL ever has one - an INSTITUTION member authenticates against
+	 *  their institution's SAML/OIDC identity provider, never a password of ours. */
+	private String passwordHash;
+
 	public TnfUser toTnfUser() {
 		return new TnfUser(id, type, institutionId, roles, collections);
 	}
