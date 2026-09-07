@@ -9,7 +9,6 @@ import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.hold.api.HoldPromotion;
 import com.tf.reader.library.api.ChangeLog;
-import com.tf.reader.sync.api.DownloadInvalidation;
 import com.tf.reader.library.api.ChangeReason;
 import com.tf.reader.library.api.ChangeRecord;
 import com.tf.reader.loan.dto.ReturnResponse;
@@ -35,16 +34,16 @@ public class ReturnService {
 	private final CopyLease copyLease;
 	private final HoldPromotion holdPromotion;
 	private final ChangeLog changeLog;
-	private final DownloadInvalidation downloads;
 	private final Clock clock;
 
+	// Five collaborators (repo + two ports + change-feed port + clock) — above the 3-param guideline,
+	// but each is a distinct capability this one job genuinely needs; splitting would scatter the order.
 	public ReturnService(LoanRepository loans, CopyLease copyLease, HoldPromotion holdPromotion,
-			ChangeLog changeLog, DownloadInvalidation downloads, Clock clock) {
+			ChangeLog changeLog, Clock clock) {
 		this.loans = loans;
 		this.copyLease = copyLease;
 		this.holdPromotion = holdPromotion;
 		this.changeLog = changeLog;
-		this.downloads = downloads;
 		this.clock = clock;
 	}
 
@@ -71,7 +70,6 @@ public class ReturnService {
 		// a feed miss is a delay, not a wrong answer, because GET /library reads the real loans.
 		changeLog.record(ChangeRecord.forLoan(closed.getUserId(), ChangeReason.LOAN_RETURNED,
 				closed.getItemId(), closed.getLoanId(), now));
-		downloads.invalidate(closed.getUserId(), closed.getItemId());
 
 		if (closed.getLeaseId() != null) {          // Elite only — release exactly once
 			copyLease.release(closed.getLeaseId());
