@@ -54,23 +54,26 @@ final class EpubArchive {
 	}
 
 	List<Chapter> chapters() {
-		Map<String, String> hrefById = manifestHrefs();
+		Map<String, String[]> items = manifestItems();
 		List<Chapter> chapters = new ArrayList<>();
 		for (String idref : spineIdrefs()) {
-			Document doc = parseXml(fileOrThrow(files, resolve(hrefById.get(idref))));
+			String[] item = items.get(idref);
+			if ("text/html".equals(item[1])) continue;
+			Document doc = parseXml(fileOrThrow(files, resolve(item[0])));
 			chapters.add(new Chapter(idref, firstByLocalName(doc, "body")));
 		}
 		return chapters;
 	}
 
-	private Map<String, String> manifestHrefs() {
-		Map<String, String> hrefById = new LinkedHashMap<>();
-		NodeList items = opf.getElementsByTagNameNS("*", "item");
-		for (int i = 0; i < items.getLength(); i++) {
-			Element item = (Element) items.item(i);
-			hrefById.put(item.getAttribute("id"), item.getAttribute("href"));
+	/** Returns id → {href, media-type} for every manifest item. */
+	private Map<String, String[]> manifestItems() {
+		Map<String, String[]> out = new LinkedHashMap<>();
+		NodeList nodes = opf.getElementsByTagNameNS("*", "item");
+		for (int i = 0; i < nodes.getLength(); i++) {
+			Element e = (Element) nodes.item(i);
+			out.put(e.getAttribute("id"), new String[]{e.getAttribute("href"), e.getAttribute("media-type")});
 		}
-		return hrefById;
+		return out;
 	}
 
 	private List<String> spineIdrefs() {
