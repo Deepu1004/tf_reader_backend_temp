@@ -127,14 +127,19 @@ public class UserSecurityConfig {
 						// every profile but a developer's own. This entry is harmless when it is off:
 						// with no bean, the path is unmapped and 404s regardless of this matcher.
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/dev-token").permitAll()
-						// OIDC: the individual, no-institution flow. Start cannot require a token;
-						// callback is a browser redirect from the IdP.
+						// OIDC: the individual, no-institution flow. Neither call can require a bearer
+						// token - /start is how a caller obtains one at all, and /token is
+						// authenticated by the one-time id in its own body, exactly like /auth/token.
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/oidc/start").permitAll()
-						.requestMatchers(HttpMethod.GET, "/api/v1/auth/oidc/callback").permitAll()
+						.requestMatchers(HttpMethod.POST, "/api/v1/auth/oidc/token").permitAll()
 						// Authenticated by the opaque code/refresh token in the body, not a bearer JWT.
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/token").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/refresh").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/logout").permitAll()
+						// B2C email-and-password: how a reader with no institution obtains a
+						// credential at all, and proves one they already have.
+						.requestMatchers(HttpMethod.POST, "/api/v1/auth/signup").permitAll()
+						.requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
 						.anyRequest().authenticated())
 				// Every request after sign-in presents the JWT that sign-in produced. Spring
 				// Security's own bearer-token filter does the header parsing and the decoding, so

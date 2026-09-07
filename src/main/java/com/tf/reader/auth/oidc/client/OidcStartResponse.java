@@ -8,18 +8,17 @@ import java.time.Instant;
  * <p>No institution to report: this is the individual sign-in flow, and an identity here
  * <b>is</b> the account - there is nothing for a caller to belong to.
  *
- * <p><b>Why this is not the token envelope.</b> OIDC's authorization code flow is a browser
- * redirect protocol: the code is delivered to our callback by the identity provider, not
- * returned down this JSON call, so no endpoint can both start OIDC and hand back a session. The
- * token is minted at the callback, once an ID token has been validated.
+ * <p><b>Why this is not the token envelope.</b> The username and password are exchanged with the
+ * provider and validated right here, but the resulting token pair is handed back once, by
+ * redeeming {@code oidcTxnId} at {@code POST /api/v1/auth/oidc/token}, rather than in this same
+ * response - so a client that only ever inspects a start response, a log line, or a stack trace
+ * downstream of one is never in a position to see a token pair it did not explicitly ask for.
  *
- * <p>{@code authTxnId} is echoed back for the client to correlate its own state. It is the value
- * that travels as the OAuth 2.0 {@code state} parameter, and it is not a credential - it proves
- * nothing on its own.
+ * <p>{@code oidcTxnId} is a one-time id, single use and short-lived, and is not itself a
+ * credential - it proves nothing on its own, and redeeming it twice fails the second time.
  */
 public record OidcStartResponse(
-		String authTxnId,
-		String authorizationUrl,
+		String oidcTxnId,
 		Instant expiresAt,
 		Instant serverTime) {
 }

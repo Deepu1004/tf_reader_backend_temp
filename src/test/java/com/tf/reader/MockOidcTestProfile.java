@@ -55,6 +55,9 @@ public abstract class MockOidcTestProfile extends ContainerisedInfrastructure {
 
 	public static final String REDIRECT_URI = ISSUER + "/api/v1/auth/oidc/callback";
 
+	/** What the mock's single pre-populated user authenticates with under the password grant. */
+	public static final String PASSWORD = "test-only-not-a-real-password";
+
 	/** The application's base url, which in these tests is the same origin as the provider. */
 	public static String baseUrl() {
 		return ISSUER;
@@ -93,15 +96,14 @@ public abstract class MockOidcTestProfile extends ContainerisedInfrastructure {
 		registry.add("mock-oidc.client-id", () -> CLIENT_ID);
 		registry.add("mock-oidc.client-secret", () -> CLIENT_SECRET);
 		registry.add("mock-oidc.redirect-uris[0]", () -> REDIRECT_URI);
+		registry.add("mock-oidc.user.password", () -> PASSWORD);
 
-		// The relying party, pointed at it. These are the six values that become a B2C tenant's
+		// The relying party, pointed at it. These are the four values that become a B2C tenant's
 		// in production, and nothing else changes.
 		registry.add("tnf.auth.oidc.client-id", () -> CLIENT_ID);
 		registry.add("tnf.auth.oidc.client-secret", () -> CLIENT_SECRET);
 		registry.add("tnf.auth.oidc.issuer", () -> ISSUER);
-		registry.add("tnf.auth.oidc.authorization-uri", () -> ISSUER + "/oauth2/authorize");
 		registry.add("tnf.auth.oidc.token-uri", () -> ISSUER + "/oauth2/token");
 		registry.add("tnf.auth.oidc.jwk-set-uri", () -> ISSUER + "/oauth2/jwks");
-		registry.add("tnf.auth.oidc.redirect-uri", () -> REDIRECT_URI);
 	}
 }

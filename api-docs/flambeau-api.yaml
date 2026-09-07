@@ -342,6 +342,69 @@ paths:
                 expiresAt: "2026-08-13T10:10:00Z"
                 serverTime: "2026-08-13T10:00:00Z"
 
+  /api/v1/auth/signup:
+    post:
+      tags: [Auth]
+      operationId: signup
+      summary: Create a B2C account with an email and password
+      description: |
+        No token, because sign-in is how a caller obtains one. The credential store here is
+        our own, not an identity provider's: `password` is hashed with BCrypt before it ever
+        reaches Mongo and is never returned by any endpoint.
+
+        Provisions a new INDIVIDUAL reader — no institution, same as an OIDC first sign-in —
+        and signs them straight in, so the response is a token pair, not a redirect. There is
+        no separate "confirm your email" step yet.
+      x-stability: DRAFT
+      x-called-by: [team1]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SignupRequest" }
+            example:
+              email: reader@example.com
+              password: at-least-8-chars
+      responses:
+        "200":
+          description: Account created, signed in
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/EmailTaken" }
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Sign in a B2C account with an email and password
+      description: |
+        The direct counterpart of `POST /auth/signup` for a reader who already has one.
+        Verified against the stored BCrypt hash, with a timing-equalisation hash checked
+        when no account matches, so an unknown email costs the same as a known one with the
+        wrong password — the response is the same `UNAUTHENTICATED` either way, on purpose.
+      x-stability: DRAFT
+      x-called-by: [team1]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+            example:
+              email: reader@example.com
+              password: at-least-8-chars
+      responses:
+        "200":
+          description: A fresh token pair
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /api/v1/auth/me:
     get:
       tags: [Auth]
@@ -1622,6 +1685,21 @@ components:
             path: /api/v1/holds
             traceId: b7c1f2a9
 
+    EmailTaken:
+      description: >-
+        An individual reader is already registered with this email. Signup does not log
+        that reader in instead — use `POST /auth/login`.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example:
+            timestamp: "2026-08-13T10:00:00Z"
+            status: 409
+            code: EMAIL_TAKEN
+            message: An individual reader is already registered with this email.
+            path: /api/v1/auth/signup
+            traceId: b7c1f2a9
+
     OfferExpired:
       description: >-
         The window closed. The hold is gone rather than restored to its old position —
@@ -1699,6 +1777,7 @@ components:
         - NO_ACTIVE_LOAN
         - LOAN_NOT_ACTIVE
         - OFFER_EXPIRED
+        - EMAIL_TAKEN
 
     LicenceModel:
       type: string
@@ -1827,6 +1906,25 @@ components:
       required: [refreshToken]
       properties:
         refreshToken: { type: string }
+
+    SignupRequest:
+      type: object
+      description: A new individual reader's own email and password, not an identity provider's.
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password:
+          type: string
+          format: password
+          minLength: 8
+          description: Hashed with BCrypt before storage. Never returned by any endpoint.
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password }
 
     TokenResponse:
       type: object
