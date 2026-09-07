@@ -52,8 +52,6 @@ public class AuthorizationService {
 	 */
 	public void requireAnyRole(CurrentUser currentUser, Role... permitted) {
 		if (!hasAnyRole(currentUser, permitted)) {
-			// The message names what was needed, not what the caller has. Echoing somebody's
-			// roles back at them tells an attacker how close they got.
 			throw new ApiException(ErrorCode.FORBIDDEN_ROLE,
 					"This operation requires one of: " + Arrays.toString(permitted) + ".");
 		}
