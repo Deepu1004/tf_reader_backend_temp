@@ -23,6 +23,7 @@ import com.tf.reader.hold.api.HoldPromotion;
 import com.tf.reader.library.api.ChangeLog;
 import com.tf.reader.library.api.ChangeReason;
 import com.tf.reader.library.api.ChangeRecord;
+import com.tf.reader.sync.api.DownloadInvalidation;
 import com.tf.reader.loan.entity.LicenceModel;
 import com.tf.reader.loan.entity.Loan;
 import com.tf.reader.loan.entity.LoanStatus;
@@ -44,8 +45,9 @@ class ExpirySweeperTest {
 	private final CopyLease copyLease = mock(CopyLease.class);
 	private final HoldPromotion holdPromotion = mock(HoldPromotion.class);
 	private final ChangeLog changeLog = mock(ChangeLog.class);
+	private final DownloadInvalidation downloads = mock(DownloadInvalidation.class);
 	private final ExpirySweeper sweeper =
-			new ExpirySweeper(loans, copyLease, holdPromotion, changeLog, CLOCK);
+			new ExpirySweeper(loans, copyLease, holdPromotion, changeLog, downloads, CLOCK);
 
 	@Test
 	void expiresAPastDueEliteLoanThenReleasesTheLeaseThenPromotes() {
@@ -77,6 +79,17 @@ class ExpirySweeperTest {
 		order.verify(loans).save(any(Loan.class));
 		order.verify(changeLog).record(any(ChangeRecord.class));
 		order.verify(copyLease).release("lease_1");
+	}
+
+	@Test
+	void invalidatesDownloadOnExpiry() {
+		Loan elite = pastDueElite("loan_1", "item_1", "lease_1");
+		when(loans.findByStatusAndDueAtLessThanEqual(LoanStatus.ACTIVE, NOW)).thenReturn(List.of(elite));
+		when(loans.save(any(Loan.class))).thenAnswer(i -> i.getArgument(0));
+
+		sweeper.sweep();
+
+		verify(downloads).invalidate("user_1", "item_1");
 	}
 
 	@Test

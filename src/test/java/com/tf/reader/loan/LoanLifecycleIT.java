@@ -32,7 +32,10 @@ import com.tf.reader.catalogue.entity.Entitlement;
 import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.catalogue.entity.ScopeType;
+import com.tf.reader.catalogue.entity.Institution;
+import com.tf.reader.catalogue.entity.InstitutionType;
 import com.tf.reader.catalogue.entity.Publisher;
+import com.tf.reader.common.model.RecordStatus;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
 import com.tf.reader.catalogue.repository.InstitutionRepository;
@@ -83,6 +86,16 @@ class LoanLifecycleIT {
 		items.deleteAll();
 		entitlements.deleteAll();
 		publishers.deleteAll();
+		institutions.deleteAll();
+
+		// EntitlementQueryImpl checks that the institution exists and is ACTIVE (added Week 4)
+		Institution inst = new Institution();
+		inst.setId("inst_7f3");
+		inst.setCode("INST7F3");
+		inst.setName("Test Institution");
+		inst.setType(InstitutionType.ACADEMIC);
+		inst.setStatus(RecordStatus.ACTIVE);
+		institutions.save(inst);
 
 		// EntitlementQuery now checks the institution exists and is ACTIVE before anything else —
 		// inst_7f3 is AuthTestInstitutions.IMPERIAL, seeded ACTIVE for exactly this reason.
@@ -94,7 +107,7 @@ class LoanLifecycleIT {
 		pub.setId(TEST_PUBLISHER);
 		pub.setCode("TEST");
 		pub.setName("Test Publisher");
-		pub.setStatus(RecordStatus.ACTIVE);
+		pub.setStatus(RecordStatus.ACTIVE);   // required since wokay added suspended-publisher check
 		publishers.save(pub);
 
 		// Seed one PUBLISHED+READY item per tier — enough to exercise every borrow path

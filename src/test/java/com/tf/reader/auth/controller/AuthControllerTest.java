@@ -30,6 +30,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.tf.reader.auth.dto.TokenResponse;
 import com.tf.reader.auth.entity.ReaderSession;
 import com.tf.reader.auth.model.UserType;
+import com.tf.reader.auth.service.ReaderAuthService;
 import com.tf.reader.auth.service.ReaderSessionService;
 import com.tf.reader.auth.service.ReaderSessionService.IssuedRefreshToken;
 import com.tf.reader.auth.token.AuthorizationCodeStore;
@@ -67,6 +68,11 @@ class AuthControllerTest {
 
 	@MockitoBean
 	private AuthorizationCodeStore authorizationCodes;
+
+	// signup/login live on this controller too; neither is exercised by this slice's tests - the
+	// bean only needs to exist for the controller to be constructed.
+	@MockitoBean
+	private ReaderAuthService readerAuth;
 
 	@TestConfiguration
 	static class FixedClockConfig {
