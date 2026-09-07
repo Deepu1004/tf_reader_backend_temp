@@ -64,6 +64,11 @@ public class AuthorizationCodeStore {
 		return code;
 	}
 
+	/** How long an issued code lives, for a caller that needs to report its own expiry. */
+	public Duration lifetime() {
+		return LIFETIME;
+	}
+
 	/**
 	 * Redeems a code, removing it so it cannot be used twice.
 	 *
