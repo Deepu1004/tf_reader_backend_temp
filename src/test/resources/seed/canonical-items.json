@@ -187,12 +187,12 @@
       "appearsInFeeds": true,
       "reachableBy": ["inst_7f3"],
       "opdsForImperial": {
-        "rel": "acquisition",
-        "licenceModel": "UNLIMITED",
-        "copiesTotal": null,
+        "rel": "borrow",
+        "licenceModel": "CONCURRENT",
+        "copiesTotal": 2,
         "canPersist": false
       },
-      "note": "Real audio (chapter 1), ELITE, so encrypted like any other locked asset - audio is not exempt above OPEN_ACCESS. Reached through ent_imp2 (PUBLISHER scope pub_rtlg, UNLIMITED); no new entitlement needed. canPersist is false because the tier is ELITE, independent of the entitlement being UNLIMITED."
+      "note": "Real audio (chapter 1), ELITE, so encrypted like any other locked asset - audio is not exempt above OPEN_ACCESS. Reached through ent_dev_elite_audio (ITEM scope, copies 2), its own narrow grant, not pub_rtlg's UNLIMITED publisher grant (ent_imp2) - every ELITE item carries a real copy limit. canPersist is false because the tier is ELITE, independent of the entitlement's copy count."
     },
     {
       "id": "dev-fixture-epub",
