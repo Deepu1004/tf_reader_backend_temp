@@ -132,6 +132,19 @@ public class EntitlementAdminService {
 		return requested != null ? requested : EntitlementStatus.ACTIVE;
 	}
 
+	/**
+	 * Mirrors {@link #resolveCreateStatus}: a non-super-admin's edit to an existing grant's terms
+	 * is a new request, not a self-approval, so it drops back to PENDING for the same re-approval
+	 * a create would need. A super admin's edit leaves status untouched - {@link #changeStatus}
+	 * and {@link #revoke} are the only paths that move it.
+	 */
+	private EntitlementStatus resolveUpdateStatus(EntitlementStatus current) {
+		if (!adminScope.isSuperAdmin()) {
+			return EntitlementStatus.PENDING;
+		}
+		return current;
+	}
+
 	// update
 
 	public EntitlementView update(String entitlementId, EntitlementUpdate write) {
@@ -149,6 +162,7 @@ public class EntitlementAdminService {
 		entitlement.setLoanPeriodDays(write.loanPeriodDays());
 		entitlement.setValidFrom(write.validFrom());
 		entitlement.setValidTo(write.validTo());
+		entitlement.setStatus(resolveUpdateStatus(entitlement.getStatus()));
 		entitlement.setVersion(entitlement.getVersion() + 1);
 		entitlement.setUpdatedAt(Instant.now());
 

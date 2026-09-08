@@ -277,6 +277,42 @@ class EntitlementAdminServiceTest {
 	}
 
 	@Test
+	@DisplayName("an institution admin's update drops an ACTIVE grant back to PENDING, mirroring create's approval gate")
+	void updateByAnInstitutionAdminDropsBackToPending() {
+		actingAs(AdminRole.INSTITUTION_ADMIN, "inst_7f3");
+		Entitlement existing = entitlement("ent_5a1", "inst_7f3", ScopeType.COLLECTION, "col_law2024", 2, 3);
+		when(entitlementRepository.findById("ent_5a1")).thenReturn(Optional.of(existing));
+		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+		when(bookCollectionRepository.findById("col_law2024")).thenReturn(Optional.empty());
+		when(catalogueItemRepository.countByCollectionIds("col_law2024")).thenReturn(0L);
+
+		EntitlementUpdate write = new EntitlementUpdate(500000, 30, LocalDate.parse("2026-09-01"),
+				LocalDate.parse("2036-01-31"), 3L);
+
+		EntitlementView updated = service.update("ent_5a1", write);
+
+		assertThat(updated.status()).isEqualTo(EntitlementStatus.PENDING);
+		assertThat(updated.copies()).isEqualTo(500000);
+	}
+
+	@Test
+	@DisplayName("a super admin's update leaves the grant's status untouched")
+	void updateBySuperAdminLeavesStatusUnchanged() {
+		Entitlement existing = entitlement("ent_5a1", "inst_7f3", ScopeType.COLLECTION, "col_law2024", 2, 3);
+		when(entitlementRepository.findById("ent_5a1")).thenReturn(Optional.of(existing));
+		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+		when(bookCollectionRepository.findById("col_law2024")).thenReturn(Optional.empty());
+		when(catalogueItemRepository.countByCollectionIds("col_law2024")).thenReturn(0L);
+
+		EntitlementUpdate write = new EntitlementUpdate(5, 30, LocalDate.parse("2026-09-01"),
+				LocalDate.parse("2027-01-31"), 3L);
+
+		EntitlementView updated = service.update("ent_5a1", write);
+
+		assertThat(updated.status()).isEqualTo(EntitlementStatus.ACTIVE);
+	}
+
+	@Test
 	@DisplayName("update with an explicit null copies clears the copy limit to UNLIMITED")
 	void updateWithNullCopiesClearsTheLimit() {
 		// copies staying nullable (no @NotNull) is deliberate: null is UNLIMITED, a real value,
