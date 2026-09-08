@@ -91,7 +91,14 @@ services:
       MONGODB_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/tnfreader?authSource=admin
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      B2_ENDPOINT: http://minio:9000
+      # NOT overridden to http://minio:9000 here, deliberately. BookStorageConfig.java uses this
+      # ONE property for both the internal S3Client AND the S3Presigner, and a presigned URL bakes
+      # the endpoint straight into its SigV4 signature — a host only this container can resolve
+      # breaks every asset fetch from the phone/simulator/device (ASSET_FETCH_FAILED), even though
+      # the container's own S3 calls would have worked fine against "minio". .env's B2_ENDPOINT is
+      # already the LAN IP every real client needs, and this container can reach that same LAN IP
+      # (confirmed: it hairpins back through the host), so env_file's value is left to apply here
+      # too instead of narrowing it back to a docker-only hostname.
 
     depends_on:
       mongo:
