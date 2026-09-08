@@ -100,7 +100,7 @@ public class MockOidcController {
 		document.put("response_types_supported", List.of("code"));
 		document.put("subject_types_supported", List.of("public"));
 		document.put("id_token_signing_alg_values_supported", List.of("RS256"));
-		document.put("grant_types_supported", List.of("authorization_code"));
+		document.put("grant_types_supported", List.of("authorization_code", "password"));
 		document.put("token_endpoint_auth_methods_supported", List.of("client_secret_post"));
 		document.put("scopes_supported", List.of("openid", "profile", "email"));
 		document.put("claims_supported",
@@ -176,17 +176,29 @@ public class MockOidcController {
 				.build();
 	}
 
-	/** The back-channel exchange. Form-encoded in, JSON out, exactly as RFC 6749 specifies. */
+	/**
+	 * The back-channel exchange. Form-encoded in, JSON out, exactly as RFC 6749 specifies.
+	 *
+	 * <p>Two grants share this one endpoint, exactly as a real provider's would:
+	 * {@code authorization_code} (the SAML-style redirect leg's back channel) and
+	 * {@code password} (the relying party's direct sign-in screen, RFC 6749 §4.3).
+	 */
 	@PostMapping(path = TOKEN_PATH,
 			consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
 			produces = MediaType.APPLICATION_JSON_VALUE)
 	public Map<String, Object> token(
 			@RequestParam(name = "grant_type", required = false) String grantType,
 			@RequestParam(name = "code", required = false) String code,
+			@RequestParam(name = "username", required = false) String username,
+			@RequestParam(name = "password", required = false) String password,
 			@RequestParam(name = "client_id", required = false) String clientId,
 			@RequestParam(name = "client_secret", required = false) String clientSecret,
-			@RequestParam(name = "redirect_uri", required = false) String redirectUri) {
+			@RequestParam(name = "redirect_uri", required = false) String redirectUri,
+			@RequestParam(name = "scope", required = false) String scope) {
 
+		if ("password".equals(grantType)) {
+			return tokens.exchangePassword(username, password, clientId, clientSecret, scope);
+		}
 		return tokens.exchange(grantType, code, clientId, clientSecret, redirectUri);
 	}
 

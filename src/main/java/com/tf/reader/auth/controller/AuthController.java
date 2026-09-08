@@ -21,7 +21,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import com.tf.reader.auth.dto.AuthMeResponse;
+import com.tf.reader.auth.dto.LoginRequest;
 import com.tf.reader.auth.dto.RefreshRequest;
+import com.tf.reader.auth.dto.SignupRequest;
 import com.tf.reader.auth.dto.TokenExchangeRequest;
 import com.tf.reader.auth.dto.TokenResponse;
 import com.tf.reader.auth.entity.ReaderSession;
@@ -31,6 +33,7 @@ import com.tf.reader.auth.model.Institution;
 import com.tf.reader.auth.model.TnfUser;
 import com.tf.reader.auth.security.CurrentUserAuthenticationToken;
 import com.tf.reader.auth.security.UserSecurityConfig;
+import com.tf.reader.auth.service.ReaderAuthService;
 import com.tf.reader.auth.service.ReaderSessionService;
 import com.tf.reader.auth.service.ReaderSessionService.IssuedRefreshToken;
 import com.tf.reader.catalogue.api.InstitutionLookup;
@@ -60,17 +63,44 @@ public class AuthController {
 	private final TokenService tokenService;
 	private final ReaderSessionService readerSessions;
 	private final AuthorizationCodeStore authorizationCodes;
+	private final ReaderAuthService readerAuth;
 	private final Clock clock;
 
 	public AuthController(AuthTransactionStore transactions, InstitutionLookup institutions,
 			TokenService tokenService, ReaderSessionService readerSessions,
-			AuthorizationCodeStore authorizationCodes, Clock clock) {
+			AuthorizationCodeStore authorizationCodes, ReaderAuthService readerAuth, Clock clock) {
 		this.transactions = transactions;
 		this.institutions = institutions;
 		this.tokenService = tokenService;
 		this.readerSessions = readerSessions;
 		this.authorizationCodes = authorizationCodes;
+		this.readerAuth = readerAuth;
 		this.clock = clock;
+	}
+
+	/**
+	 * Registers a new individual reader with an email and password of their own, and signs them
+	 * straight in - the B2C "create account" button, with no institution and no identity provider
+	 * involved.
+	 */
+	@PostMapping("/signup")
+	public TokenResponse signup(@Valid @RequestBody SignupRequest request) {
+		log.info("signup: new individual reader");
+		TokenResponse tokens = readerAuth.signUp(request.email(), request.password());
+		log.info("signup: issued a token pair, expiresIn={}s", tokens.expiresIn());
+		return tokens;
+	}
+
+	/**
+	 * Signs in an individual reader against their own stored password, the direct counterpart of
+	 * {@link #signup} for a reader who already has an account.
+	 */
+	@PostMapping("/login")
+	public TokenResponse login(@Valid @RequestBody LoginRequest request) {
+		log.info("login: individual reader");
+		TokenResponse tokens = readerAuth.login(request.email(), request.password());
+		log.info("login: issued a token pair, expiresIn={}s", tokens.expiresIn());
+		return tokens;
 	}
 
 	/**

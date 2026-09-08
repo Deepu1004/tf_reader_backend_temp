@@ -2,6 +2,7 @@ package com.tf.reader.auth.oidc.mock.service;
 
 import com.tf.reader.auth.oidc.mock.config.MockOidcComponent;
 import com.tf.reader.auth.oidc.mock.config.MockOidcProperties;
+import com.tf.reader.auth.oidc.mock.model.MockOidcUser;
 import com.tf.reader.auth.oidc.mock.security.MockOidcKeyService;
 import com.tf.reader.auth.oidc.mock.store.MockAuthorizationCodeStore;
 
@@ -66,7 +67,7 @@ public class MockOidcTokenService {
 
 		if (!"authorization_code".equals(grantType)) {
 			throw new MockOidcRequestException("unsupported_grant_type",
-					"Only the authorization_code grant is supported.");
+					"Only the authorization_code and password grants are supported.");
 		}
 
 		// The client authenticates BEFORE the code is looked at. Reversing these leaks whether a
@@ -94,12 +95,40 @@ public class MockOidcTokenService {
 					"redirect_uri does not match the one the code was issued for.");
 		}
 
-		Instant issuedAt = clock.instant().truncatedTo(ChronoUnit.SECONDS);
-		Instant expiresAt = issuedAt.plus(properties.idTokenTtl());
-		String idToken = signIdToken(issued, issuedAt, expiresAt);
-
+		String idToken = signIdToken(issued.user(), issued.clientId(), issued.nonce());
 		log.info("Mock OIDC token exchange succeeded for {}", issued.user().sub());
+		return tokenResponse(idToken, issued.scope());
+	}
 
+	/**
+	 * Exchanges the reader's own username and password for tokens, the way the relying party's
+	 * direct sign-in screen does it.
+	 *
+	 * <p>There is no authorization request behind this grant - no code, no redirect uri, no
+	 * nonce - so the checks are just the client's credentials and the user's own.
+	 *
+	 * @throws MockOidcRequestException {@code invalid_grant} if the username or password is wrong,
+	 *                                  the same error a real provider gives so a caller cannot
+	 *                                  tell "no such user" from "wrong password"
+	 */
+	public Map<String, Object> exchangePassword(String username, String password, String clientId,
+			String clientSecret, String scope) {
+
+		requireClient(clientId, clientSecret);
+
+		MockOidcUser user = properties.user();
+		if (!user.email().equals(username) || !user.password().equals(password)) {
+			log.warn("Mock OIDC password grant refused: username or password did not match");
+			throw new MockOidcRequestException("invalid_grant",
+					"The username or password is not valid.");
+		}
+
+		String idToken = signIdToken(user, clientId, null);
+		log.info("Mock OIDC password grant succeeded for {}", user.sub());
+		return tokenResponse(idToken, scope);
+	}
+
+	private Map<String, Object> tokenResponse(String idToken, String scope) {
 		// LinkedHashMap so the JSON reads in the order the specification lists the fields, which
 		// matters only to the human reading a demo, which is the entire audience for this mock.
 		Map<String, Object> response = new LinkedHashMap<>();
@@ -107,7 +136,7 @@ public class MockOidcTokenService {
 		response.put("token_type", "Bearer");
 		response.put("expires_in", properties.idTokenTtl().toSeconds());
 		response.put("id_token", idToken);
-		response.put("scope", issued.scope());
+		response.put("scope", scope);
 		return response;
 	}
 
@@ -133,19 +162,24 @@ public class MockOidcTokenService {
 	 * that dropped it would make the client's nonce check impossible to test, and a nonce check
 	 * nobody tests is a nonce check that will be quietly deleted one day.
 	 */
-	private String signIdToken(IssuedCode issued, Instant issuedAt, Instant expiresAt) {
+	private String signIdToken(MockOidcUser user, String audience, String nonce) {
 		try {
+			Instant issuedAt = clock.instant().truncatedTo(ChronoUnit.SECONDS);
+			Instant expiresAt = issuedAt.plus(properties.idTokenTtl());
+
 			JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
 					.issuer(properties.issuer())
-					.subject(issued.user().sub())
-					.audience(issued.clientId())
+					.subject(user.sub())
+					.audience(audience)
 					.issueTime(Date.from(issuedAt))
 					.expirationTime(Date.from(expiresAt))
-					.claim("email", issued.user().email())
-					.claim("name", issued.user().name());
+					.claim("email", user.email())
+					.claim("name", user.name());
 
-			if (StringUtils.hasText(issued.nonce())) {
-				claims.claim("nonce", issued.nonce());
+			// Absent for the password grant - there is no authorization request behind it, and
+			// therefore no nonce to bind the token to.
+			if (StringUtils.hasText(nonce)) {
+				claims.claim("nonce", nonce);
 			}
 
 			// The key service signs; the private key never leaves it.
