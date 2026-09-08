@@ -132,24 +132,23 @@ public class EntitlementAdminService {
 		return requested != null ? requested : EntitlementStatus.ACTIVE;
 	}
 
-	/**
-	 * Mirrors {@link #resolveCreateStatus}: a non-super-admin's edit to an existing grant's terms
-	 * is a new request, not a self-approval, so it drops back to PENDING for the same re-approval
-	 * a create would need. A super admin's edit leaves status untouched - {@link #changeStatus}
-	 * and {@link #revoke} are the only paths that move it.
-	 */
-	private EntitlementStatus resolveUpdateStatus(EntitlementStatus current) {
-		if (!adminScope.isSuperAdmin()) {
-			return EntitlementStatus.PENDING;
-		}
-		return current;
-	}
-
 	// update
 
+	/**
+	 * A non-super-admin may still amend a grant while it is PENDING - nothing is live yet, so
+	 * there is nothing to disrupt. Once a super admin has approved it, only a super admin may
+	 * touch its terms; unlike {@link #resolveCreateStatus}, this never silently reopens approval
+	 * by changing status, because an ACTIVE grant already has readers depending on it and demoting
+	 * it out from under them would revoke access as a side effect of an unrelated edit.
+	 */
 	public EntitlementView update(String entitlementId, EntitlementUpdate write) {
 		Entitlement entitlement = findOrThrow(entitlementId);
 		requireInstitutionAccess(entitlement.getInstitutionId());
+
+		if (!adminScope.isSuperAdmin() && entitlement.getStatus() != EntitlementStatus.PENDING) {
+			throw new ApiException(ErrorCode.FORBIDDEN_ROLE,
+					"Only a super admin may amend a grant that is not PENDING.");
+		}
 
 		if (entitlement.getVersion() != write.version()) {
 			throw new ApiException(ErrorCode.STALE_VERSION,
@@ -162,7 +161,6 @@ public class EntitlementAdminService {
 		entitlement.setLoanPeriodDays(write.loanPeriodDays());
 		entitlement.setValidFrom(write.validFrom());
 		entitlement.setValidTo(write.validTo());
-		entitlement.setStatus(resolveUpdateStatus(entitlement.getStatus()));
 		entitlement.setVersion(entitlement.getVersion() + 1);
 		entitlement.setUpdatedAt(Instant.now());
 
