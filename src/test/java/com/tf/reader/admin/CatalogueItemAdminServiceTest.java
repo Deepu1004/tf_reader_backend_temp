@@ -24,6 +24,7 @@ import com.tf.reader.admin.dto.CatalogueItemWrite;
 import com.tf.reader.admin.entity.AdminRole;
 import com.tf.reader.admin.security.AdminScopeAuthorizer;
 import com.tf.reader.catalogue.entity.AccessTier;
+import com.tf.reader.catalogue.entity.BookCollection;
 import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.ContentType;
@@ -31,6 +32,7 @@ import com.tf.reader.catalogue.entity.Entitlement;
 import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.catalogue.entity.ScopeType;
+import com.tf.reader.catalogue.repository.BookCollectionRepository;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.CatalogueItemSearchRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
@@ -50,6 +52,7 @@ class CatalogueItemAdminServiceTest {
 	private CatalogueItemRepository catalogueItemRepository;
 	private CatalogueItemSearchRepository searchRepository;
 	private PublisherRepository publisherRepository;
+	private BookCollectionRepository bookCollectionRepository;
 	private EntitlementRepository entitlementRepository;
 	private CatalogueVersionBumper versionBumper;
 	private AdminAuditWriter auditWriter;
@@ -62,13 +65,15 @@ class CatalogueItemAdminServiceTest {
 		catalogueItemRepository = mock(CatalogueItemRepository.class);
 		searchRepository = mock(CatalogueItemSearchRepository.class);
 		publisherRepository = mock(PublisherRepository.class);
+		bookCollectionRepository = mock(BookCollectionRepository.class);
 		entitlementRepository = mock(EntitlementRepository.class);
 		versionBumper = mock(CatalogueVersionBumper.class);
 		auditWriter = mock(AdminAuditWriter.class);
 		coverUrlResolver = mock(CoverUrlResolver.class);
 
 		service = new CatalogueItemAdminService(catalogueItemRepository, searchRepository, publisherRepository,
-				entitlementRepository, versionBumper, auditWriter, new AdminScopeAuthorizer(), coverUrlResolver);
+				bookCollectionRepository, entitlementRepository, versionBumper, auditWriter,
+				new AdminScopeAuthorizer(), coverUrlResolver);
 
 		actingAs(AdminRole.SUPER_ADMIN, null, null);
 	}
@@ -170,6 +175,66 @@ class CatalogueItemAdminServiceTest {
 		assertThatThrownBy(() -> service.create(pdfWrite("pub_other"))).isInstanceOf(ApiException.class)
 				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.FORBIDDEN_ROLE));
 		verify(catalogueItemRepository, never()).save(any());
+	}
+
+	// ------------------------------------------------- collection/publisher cross-check
+
+	@Test
+	@DisplayName("create with a collection belonging to another publisher throws VALIDATION_FAILED")
+	void createRejectsACollectionFromAnotherPublisher() {
+		when(bookCollectionRepository.findAllById(List.of("col_1")))
+				.thenReturn(List.of(collection("col_1", "pub_other")));
+		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of("col_1"), "Title", null, List.of(),
+				List.of(), List.of(), null, ContentType.PDF, AccessTier.ELITE, List.of(), "en", null, null, null,
+				null, null);
+
+		assertThatThrownBy(() -> service.create(write)).isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+		verify(catalogueItemRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("create with an unknown collection id throws VALIDATION_FAILED")
+	void createRejectsAnUnknownCollectionId() {
+		when(bookCollectionRepository.findAllById(List.of("col_missing"))).thenReturn(List.of());
+		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of("col_missing"), "Title", null,
+				List.of(), List.of(), List.of(), null, ContentType.PDF, AccessTier.ELITE, List.of(), "en", null, null,
+				null, null, null);
+
+		assertThatThrownBy(() -> service.create(write)).isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+		verify(catalogueItemRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("update with a collection belonging to another publisher throws VALIDATION_FAILED")
+	void updateRejectsACollectionFromAnotherPublisher() {
+		CatalogueItem existing = pdfItem("item_42", "pub_rtlg");
+		when(catalogueItemRepository.findById("item_42")).thenReturn(Optional.of(existing));
+		when(bookCollectionRepository.findAllById(List.of("col_1")))
+				.thenReturn(List.of(collection("col_1", "pub_other")));
+		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of("col_1"), "Title", null, List.of(),
+				List.of(), List.of(), null, ContentType.PDF, AccessTier.ELITE, List.of(), "en", null, null, null,
+				null, null);
+
+		assertThatThrownBy(() -> service.update("item_42", write)).isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+		verify(catalogueItemRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("create with a collection genuinely belonging to the same publisher succeeds")
+	void createAllowsACollectionFromTheSamePublisher() {
+		when(bookCollectionRepository.findAllById(List.of("col_1")))
+				.thenReturn(List.of(collection("col_1", "pub_rtlg")));
+		when(catalogueItemRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of("col_1"), "Title", null, List.of(),
+				List.of(), List.of(), null, ContentType.PDF, AccessTier.ELITE, List.of(), "en", null, null, null,
+				null, null);
+
+		var view = service.create(write);
+
+		assertThat(view.collectionIds()).containsExactly("col_1");
 	}
 
 	// ------------------------------------------------- duplicate ISBN (workstream 2)
@@ -519,6 +584,13 @@ class CatalogueItemAdminServiceTest {
 		item.setStatus(ItemStatus.DRAFT);
 		item.setContentState(ContentState.NONE);
 		return item;
+	}
+
+	private static BookCollection collection(String id, String publisherId) {
+		BookCollection collection = new BookCollection();
+		collection.setId(id);
+		collection.setPublisherId(publisherId);
+		return collection;
 	}
 
 	private static com.tf.reader.catalogue.entity.Publisher publisher(String id, String name) {

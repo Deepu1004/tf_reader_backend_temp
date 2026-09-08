@@ -192,6 +192,19 @@ class GlobalExceptionHandlerTest {
 	}
 
 	@Test
+	void identifiesAnEntitlementScopeCollisionAsCodeTaken() {
+		DuplicateKeyException ex = new DuplicateKeyException(
+				"E11000 duplicate key error collection: reader.entitlements index: institution_scope dup key: { }");
+
+		ResponseEntity<ErrorResponse> response = handler.handleDuplicateKey(ex, new MockHttpServletRequest());
+
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+		assertThat(response.getBody().code()).isEqualTo("CODE_TAKEN");
+		assertThat(response.getBody().message())
+				.isEqualTo("An active grant already exists for this institution and scope.");
+	}
+
+	@Test
 	void fallsBackToTheGenericMessageForAnUnrecognisedUniqueIndex() {
 		DuplicateKeyException ex = new DuplicateKeyException(
 				"E11000 duplicate key error collection: reader.progress index: progress_user_book_uk dup key: { }");

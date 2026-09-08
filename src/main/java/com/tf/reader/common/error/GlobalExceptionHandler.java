@@ -59,6 +59,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 		if (raw.contains("bookmark_locator_uk")) {
 			return "BOOKMARK_LOCATOR_DUPLICATION";
 		}
+		if (raw.contains("institution_scope")) {
+			return "An active grant already exists for this institution and scope.";
+		}
 		return "A record already exists for this scope.";
 	}
 

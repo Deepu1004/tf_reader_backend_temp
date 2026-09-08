@@ -3,16 +3,21 @@ package com.tf.reader.content.service;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import com.tf.reader.catalogue.api.DenyReason;
+import com.tf.reader.catalogue.api.EntitlementDecision;
+import com.tf.reader.catalogue.api.EntitlementQuery;
 import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
+import com.tf.reader.content.api.LoanProof;
 import com.tf.reader.content.api.ContentAccessGrant;
 import com.tf.reader.content.api.ContentGrant;
 import com.tf.reader.content.api.ContentGrantRequest;
@@ -44,6 +49,7 @@ class ContentAccessGrantImpl implements ContentAccessGrant {
 	private final CatalogueItemRepository catalogueItemRepository;
 	private final BookStorage bookStorage;
 	private final BookEncryptionKeys bookEncryptionKeys;
+	private final EntitlementQuery entitlementQuery;
 
 	@Override
 	public ContentGrant grant(ContentGrantRequest request) {
@@ -53,12 +59,26 @@ class ContentAccessGrantImpl implements ContentAccessGrant {
 		if (request.itemId() == null || request.itemId().isBlank()) {
 			throw new IllegalArgumentException("itemId is required");
 		}
+		if (request.subject() == null) {
+			throw new IllegalArgumentException("subject is required");
+		}
 
 		CatalogueItem item = catalogueItemRepository.findById(request.itemId())
 				.orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "No such catalogue item"));
 		if (item.getContentState() != ContentState.READY) {
 			throw new ApiException(ErrorCode.CONTENT_NOT_READY, "This book is not ready to be read yet.");
 		}
+
+		// Never trusted implicitly, even though the one caller today already checks both before
+		// calling grant() - a second caller of this public seam must not be able to skip either.
+		// Runs after the item lookup above so a genuinely missing/not-ready item still gets its
+		// own specific message, rather than the generic "not entitled" this check would otherwise
+		// produce for the same two DenyReasons.
+		EntitlementDecision decision = entitlementQuery.check(request.subject(), request.itemId());
+		if (!decision.entitled()) {
+			throw new ApiException(mapDenyReason(decision.reason()), "Not entitled to this content.");
+		}
+		requireActiveLoan(request.loanProof());
 
 		CatalogueItem.Asset asset = assetFor(item, request);
 		if (asset.isEncrypted() && request.devicePublicKey() == null) {
@@ -92,6 +112,28 @@ class ContentAccessGrantImpl implements ContentAccessGrant {
 	 * multi-format item is a real, if unused, shape), so this matches by format rather than
 	 * assuming index 0.
 	 */
+	// A null dueAt is a valid, non-expiring loan (ELITE, per LoanProof's own convention) - only a
+	// dueAt already in the past is rejected.
+	private static void requireActiveLoan(LoanProof loanProof) {
+		if (loanProof == null || (loanProof.dueAt() != null && loanProof.dueAt().isBefore(Instant.now()))) {
+			throw new ApiException(ErrorCode.NO_ACTIVE_LOAN, "No active loan backs this request.");
+		}
+	}
+
+	private static ErrorCode mapDenyReason(DenyReason reason) {
+		if (reason == null) {
+			return ErrorCode.NO_ENTITLEMENT;
+		}
+		return switch (reason) {
+			case NO_ENTITLEMENT -> ErrorCode.NO_ENTITLEMENT;
+			case ENTITLEMENT_EXPIRED -> ErrorCode.ENTITLEMENT_EXPIRED;
+			case ENTITLEMENT_SUSPENDED -> ErrorCode.ENTITLEMENT_SUSPENDED;
+			case INSTITUTION_INACTIVE -> ErrorCode.INSTITUTION_INACTIVE;
+			case CONTENT_NOT_READY -> ErrorCode.CONTENT_NOT_READY;
+			case NOT_FOUND -> ErrorCode.NOT_FOUND;
+		};
+	}
+
 	private static CatalogueItem.Asset assetFor(CatalogueItem item, ContentGrantRequest request) {
 		List<CatalogueItem.Asset> assets = item.getAssets();
 		if (assets != null) {

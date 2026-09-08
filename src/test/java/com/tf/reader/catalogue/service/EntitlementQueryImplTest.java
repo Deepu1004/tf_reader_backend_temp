@@ -2,6 +2,7 @@ package com.tf.reader.catalogue.service;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +34,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -221,6 +223,33 @@ class EntitlementQueryImplTest {
         assertThat(decision.entitled()).isFalse();
         assertThat(decision.reason()).isEqualTo(DenyReason.NOT_FOUND);
         verify(catalogueItemRepository, never()).findById(any());
+    }
+
+    @Test
+    void checkAllLooksUpTheInstitutionAndEachPublisherOnceForTheWholeBatch() {
+        CatalogueItem itemA = readyItem("item_a", List.of());
+        CatalogueItem itemB = readyItem("item_b", List.of());
+        when(catalogueItemRepository.findAllById(List.of("item_a", "item_b"))).thenReturn(List.of(itemA, itemB));
+        when(publisherRepository.findAllById(List.of("pub_1"))).thenReturn(List.of(activePublisher("pub_1")));
+
+        Map<String, EntitlementDecision> decisions = query.checkAll(SUBJECT, List.of("item_a", "item_b"));
+
+        assertThat(decisions.get("item_a").reason()).isEqualTo(DenyReason.NO_ENTITLEMENT);
+        assertThat(decisions.get("item_b").reason()).isEqualTo(DenyReason.NO_ENTITLEMENT);
+        verify(institutionLookup, times(1)).find("inst_7f3");
+        verify(publisherRepository, times(1)).findAllById(List.of("pub_1"));
+        verify(publisherRepository, never()).findById(any());
+    }
+
+    @Test
+    void checkAllDeniesEveryIdWithNotFoundWhenTheInstitutionIsUnknown() {
+        when(institutionLookup.find("inst_7f3")).thenReturn(Optional.empty());
+
+        Map<String, EntitlementDecision> decisions = query.checkAll(SUBJECT, List.of("item_a", "item_b"));
+
+        assertThat(decisions.get("item_a").reason()).isEqualTo(DenyReason.NOT_FOUND);
+        assertThat(decisions.get("item_b").reason()).isEqualTo(DenyReason.NOT_FOUND);
+        verify(catalogueItemRepository, never()).findAllById(any());
     }
 
     @Test

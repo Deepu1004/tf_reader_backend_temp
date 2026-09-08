@@ -1911,6 +1911,18 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: An active, pending or suspended grant already exists for this institution and scope
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                timestamp: '2026-09-08T14:00:00Z'
+                status: 409
+                code: CODE_TAKEN
+                message: An active grant already exists for this institution and scope.
+                path: /api/admin/v1/institutions/inst_9c2/entitlements
+                traceId: a3f1c9e2
   /api/admin/v1/entitlements/{entitlementId}:
     parameters:
       - name: entitlementId

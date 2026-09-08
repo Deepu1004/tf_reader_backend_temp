@@ -1,9 +1,11 @@
 package com.tf.reader.admin.service;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.data.domain.Pageable;
@@ -14,6 +16,7 @@ import com.tf.reader.admin.dto.CatalogueItemWrite;
 import com.tf.reader.admin.entity.AdminRole;
 import com.tf.reader.admin.security.AdminScopeAuthorizer;
 import com.tf.reader.catalogue.entity.AccessTier;
+import com.tf.reader.catalogue.entity.BookCollection;
 import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.ContentType;
@@ -21,6 +24,7 @@ import com.tf.reader.catalogue.entity.Entitlement;
 import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.catalogue.entity.Publisher;
+import com.tf.reader.catalogue.repository.BookCollectionRepository;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.CatalogueItemSearchRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
@@ -47,6 +51,7 @@ public class CatalogueItemAdminService {
 	private final CatalogueItemRepository catalogueItemRepository;
 	private final CatalogueItemSearchRepository searchRepository;
 	private final PublisherRepository publisherRepository;
+	private final BookCollectionRepository bookCollectionRepository;
 	private final EntitlementRepository entitlementRepository;
 	private final CatalogueVersionBumper catalogueVersionBumper;
 	private final AdminAuditWriter auditWriter;
@@ -141,6 +146,7 @@ public class CatalogueItemAdminService {
 		}
 		validateDuration(write);
 		requireIsbnFree(write.isbn(), null);
+		requireCollectionsBelongToPublisher(write.publisherId(), write.collectionIds());
 
 		CatalogueItem item = new CatalogueItem();
 		item.setId("item_" + UUID.randomUUID().toString().substring(0, 8));
@@ -178,6 +184,7 @@ public class CatalogueItemAdminService {
 		validateDuration(write);
 		requireIsbnImmutable(item.getIsbn(), write.isbn());
 		requireIsbnFree(write.isbn(), itemId);
+		requireCollectionsBelongToPublisher(write.publisherId(), write.collectionIds());
 
 		Map<String, Object> before = afterMap(item);
 
@@ -240,6 +247,28 @@ public class CatalogueItemAdminService {
 	private void bumpIfPublishedOrArchived(CatalogueItem item) {
 		if (item.getStatus() == ItemStatus.PUBLISHED || item.getStatus() == ItemStatus.ARCHIVED) {
 			catalogueVersionBumper.bump(CatalogueVersionBumper.Scope.ITEM, item.getId());
+		}
+	}
+
+	private void requireCollectionsBelongToPublisher(String publisherId, List<String> collectionIds) {
+		if (collectionIds == null || collectionIds.isEmpty()) {
+			return;
+		}
+		List<BookCollection> found = bookCollectionRepository.findAllById(collectionIds);
+		Map<String, BookCollection> byId = new HashMap<>();
+		for (BookCollection collection : found) {
+			byId.put(collection.getId(), collection);
+		}
+		List<String> invalid = new ArrayList<>();
+		for (String collectionId : collectionIds) {
+			BookCollection collection = byId.get(collectionId);
+			if (collection == null || !Objects.equals(collection.getPublisherId(), publisherId)) {
+				invalid.add(collectionId);
+			}
+		}
+		if (!invalid.isEmpty()) {
+			throw new ApiException(ErrorCode.VALIDATION_FAILED,
+					"Collections not belonging to publisher '" + publisherId + "': " + invalid);
 		}
 	}
 

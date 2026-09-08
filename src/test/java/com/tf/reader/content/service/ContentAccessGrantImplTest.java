@@ -17,8 +17,13 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.tf.reader.catalogue.api.AccessLevel;
+import com.tf.reader.catalogue.api.DenyReason;
+import com.tf.reader.catalogue.api.EntitlementDecision;
+import com.tf.reader.catalogue.api.EntitlementQuery;
 import com.tf.reader.catalogue.api.SubjectRef;
 import com.tf.reader.catalogue.entity.AccessTier;
 import com.tf.reader.catalogue.entity.CatalogueItem;
@@ -51,7 +56,15 @@ class ContentAccessGrantImplTest {
 	private final CatalogueItemRepository items = mock(CatalogueItemRepository.class);
 	private final BookStorage bookStorage = mock(BookStorage.class);
 	private final BookEncryptionKeys bookEncryptionKeys = mock(BookEncryptionKeys.class);
-	private final ContentAccessGrant grant = new ContentAccessGrantImpl(items, bookStorage, bookEncryptionKeys);
+	private final EntitlementQuery entitlementQuery = mock(EntitlementQuery.class);
+	private final ContentAccessGrant grant = new ContentAccessGrantImpl(items, bookStorage, bookEncryptionKeys,
+			entitlementQuery);
+
+	@BeforeEach
+	void entitledByDefault() {
+		when(entitlementQuery.check(any(), any()))
+				.thenReturn(new EntitlementDecision(true, AccessLevel.ENTITLED_UNLIMITED, "ent_1", null, 14, null, null));
+	}
 
 	private static CatalogueItem readyItem(ContentType contentType, AccessTier tier, CatalogueItem.Asset asset,
 			String indexKey) {
@@ -96,7 +109,7 @@ class ContentAccessGrantImplTest {
 	private static ContentGrantRequest request(String itemId, Format format, boolean wantSearchIndex,
 			byte[] devicePublicKey) {
 		return new ContentGrantRequest(itemId, format, Intent.STREAM, devicePublicKey,
-				new SubjectRef("u_88", "inst_7f3"), new LoanProof("loan_88", Instant.parse("2026-08-21T10:00:00Z")),
+				new SubjectRef("u_88", "inst_7f3"), new LoanProof("loan_88", Instant.parse("2099-01-01T00:00:00Z")),
 				wantSearchIndex);
 	}
 
@@ -209,6 +222,54 @@ class ContentAccessGrantImplTest {
 		assertThatExceptionOfType(ApiException.class)
 				.isThrownBy(() -> grant.grant(request(Format.PDF, false, "short-key".getBytes())))
 				.satisfies(e -> assertThat(e.getCode()).isEqualTo(ErrorCode.INVALID_DEVICE_PUBLIC_KEY));
+	}
+
+	@Test
+	void rejectsAnUnentitledSubject() {
+		CatalogueItem item = readyItem(ContentType.PDF, AccessTier.OPEN_ACCESS, unlockedAsset(), null);
+		when(items.findById("item_42")).thenReturn(Optional.of(item));
+		when(entitlementQuery.check(any(), any()))
+				.thenReturn(new EntitlementDecision(false, null, null, null, 0, null, DenyReason.ENTITLEMENT_EXPIRED));
+
+		assertThatExceptionOfType(ApiException.class).isThrownBy(() -> grant.grant(request(Format.PDF, false, null)))
+				.satisfies(e -> assertThat(e.getCode()).isEqualTo(ErrorCode.ENTITLEMENT_EXPIRED));
+		verify(bookStorage, never()).presign(any(), any());
+	}
+
+	@Test
+	void rejectsAMissingLoanProof() {
+		CatalogueItem item = readyItem(ContentType.PDF, AccessTier.OPEN_ACCESS, unlockedAsset(), null);
+		when(items.findById("item_42")).thenReturn(Optional.of(item));
+		ContentGrantRequest request = new ContentGrantRequest("item_42", Format.PDF, Intent.STREAM, null,
+				new SubjectRef("u_88", "inst_7f3"), null, false);
+
+		assertThatExceptionOfType(ApiException.class).isThrownBy(() -> grant.grant(request))
+				.satisfies(e -> assertThat(e.getCode()).isEqualTo(ErrorCode.NO_ACTIVE_LOAN));
+	}
+
+	@Test
+	void rejectsAnExpiredLoanProof() {
+		CatalogueItem item = readyItem(ContentType.PDF, AccessTier.OPEN_ACCESS, unlockedAsset(), null);
+		when(items.findById("item_42")).thenReturn(Optional.of(item));
+		ContentGrantRequest request = new ContentGrantRequest("item_42", Format.PDF, Intent.STREAM, null,
+				new SubjectRef("u_88", "inst_7f3"), new LoanProof("loan_88", Instant.parse("2020-01-01T00:00:00Z")),
+				false);
+
+		assertThatExceptionOfType(ApiException.class).isThrownBy(() -> grant.grant(request))
+				.satisfies(e -> assertThat(e.getCode()).isEqualTo(ErrorCode.NO_ACTIVE_LOAN));
+	}
+
+	@Test
+	void aLoanProofWithNoDueDateNeverExpires() {
+		CatalogueItem item = readyItem(ContentType.PDF, AccessTier.ELITE, unlockedAsset(), null);
+		when(items.findById("item_42")).thenReturn(Optional.of(item));
+		when(bookStorage.presign(any(), any())).thenReturn(new PresignedObject("https://b2.example/x", EXPIRES));
+		ContentGrantRequest request = new ContentGrantRequest("item_42", Format.PDF, Intent.STREAM, null,
+				new SubjectRef("u_88", "inst_7f3"), new LoanProof("loan_88", null), false);
+
+		ContentGrant result = grant.grant(request);
+
+		assertThat(result.content().url()).isEqualTo("https://b2.example/x");
 	}
 
 	@Test
