@@ -277,6 +277,58 @@ class EntitlementAdminServiceTest {
 	}
 
 	@Test
+	@DisplayName("an institution admin may not amend an ACTIVE grant - only a super admin can")
+	void updateByAnInstitutionAdminOnAnActiveGrantIsForbidden() {
+		actingAs(AdminRole.INSTITUTION_ADMIN, "inst_7f3");
+		Entitlement existing = entitlement("ent_5a1", "inst_7f3", ScopeType.COLLECTION, "col_law2024", 2, 3);
+		when(entitlementRepository.findById("ent_5a1")).thenReturn(Optional.of(existing));
+
+		EntitlementUpdate write = new EntitlementUpdate(500000, 30, LocalDate.parse("2026-09-01"),
+				LocalDate.parse("2036-01-31"), 3L);
+
+		assertThatThrownBy(() -> service.update("ent_5a1", write)).isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.FORBIDDEN_ROLE));
+		verify(entitlementRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("an institution admin may still amend a still-PENDING grant, since nothing is live yet")
+	void updateByAnInstitutionAdminOnAPendingGrantIsAllowed() {
+		actingAs(AdminRole.INSTITUTION_ADMIN, "inst_7f3");
+		Entitlement existing = entitlement("ent_5a1", "inst_7f3", ScopeType.COLLECTION, "col_law2024", 2, 3,
+				EntitlementStatus.PENDING);
+		when(entitlementRepository.findById("ent_5a1")).thenReturn(Optional.of(existing));
+		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+		when(bookCollectionRepository.findById("col_law2024")).thenReturn(Optional.empty());
+		when(catalogueItemRepository.countByCollectionIds("col_law2024")).thenReturn(0L);
+
+		EntitlementUpdate write = new EntitlementUpdate(5, 30, LocalDate.parse("2026-09-01"),
+				LocalDate.parse("2027-01-31"), 3L);
+
+		EntitlementView updated = service.update("ent_5a1", write);
+
+		assertThat(updated.status()).isEqualTo(EntitlementStatus.PENDING);
+		assertThat(updated.copies()).isEqualTo(5);
+	}
+
+	@Test
+	@DisplayName("a super admin may amend an ACTIVE grant directly")
+	void updateBySuperAdminOnAnActiveGrantIsAllowed() {
+		Entitlement existing = entitlement("ent_5a1", "inst_7f3", ScopeType.COLLECTION, "col_law2024", 2, 3);
+		when(entitlementRepository.findById("ent_5a1")).thenReturn(Optional.of(existing));
+		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+		when(bookCollectionRepository.findById("col_law2024")).thenReturn(Optional.empty());
+		when(catalogueItemRepository.countByCollectionIds("col_law2024")).thenReturn(0L);
+
+		EntitlementUpdate write = new EntitlementUpdate(5, 30, LocalDate.parse("2026-09-01"),
+				LocalDate.parse("2027-01-31"), 3L);
+
+		EntitlementView updated = service.update("ent_5a1", write);
+
+		assertThat(updated.status()).isEqualTo(EntitlementStatus.ACTIVE);
+	}
+
+	@Test
 	@DisplayName("update with an explicit null copies clears the copy limit to UNLIMITED")
 	void updateWithNullCopiesClearsTheLimit() {
 		// copies staying nullable (no @NotNull) is deliberate: null is UNLIMITED, a real value,
@@ -477,9 +529,14 @@ class EntitlementAdminServiceTest {
 
 	private static Entitlement entitlement(String id, String institutionId, ScopeType scopeType, String scopeId,
 			Integer copies, long version) {
+		return entitlement(id, institutionId, scopeType, scopeId, copies, version, EntitlementStatus.ACTIVE);
+	}
+
+	private static Entitlement entitlement(String id, String institutionId, ScopeType scopeType, String scopeId,
+			Integer copies, long version, EntitlementStatus status) {
 		Instant now = Instant.parse("2026-08-14T00:00:00Z");
 		return new Entitlement(id, institutionId, scopeType, scopeId, copies, 14, LocalDate.parse("2026-08-01"),
-				LocalDate.parse("2026-12-31"), EntitlementStatus.ACTIVE, version, now, now);
+				LocalDate.parse("2026-12-31"), status, version, now, now);
 	}
 
 }

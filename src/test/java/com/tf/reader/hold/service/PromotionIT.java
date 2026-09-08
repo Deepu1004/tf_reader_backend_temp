@@ -55,6 +55,7 @@ class PromotionIT extends HoldContainerTest {
     private static final String SCOPE = "inst_1";
     private static final String ITEM = "item_1";
     private static final String COLLECTION = "col_promotion_it";
+    private static final String PUBLISHER = "pub_promotion_it";
 
     @Autowired
     QueueService queue;
@@ -82,18 +83,24 @@ class PromotionIT extends HoldContainerTest {
         mongo.remove(Query.query(Criteria.where("_id").is(ITEM)), "catalogueItems");
         mongo.remove(Query.query(Criteria.where("institutionId").is(SCOPE)), "entitlements");
         mongo.remove(Query.query(Criteria.where("_id").is(SCOPE)), "institutions");
-        mongo.remove(Query.query(Criteria.where("_id").is("pub_promotion_it")), "publishers");
+        mongo.remove(Query.query(Criteria.where("_id").is(PUBLISHER)), "publishers");
 
-        // join() runs through the real EntitlementQuery, which now also requires a real, ACTIVE
-        // institution and publisher document to exist — not just the item and entitlement.
+        // EntitlementQueryImpl.check() looks the institution up first and reads a suspended one
+        // exactly like an unknown one - so without this row, borrow() would fail NOT_FOUND before
+        // ever reaching the entitlement this test seeds. code must be non-null: it's uniquely
+        // indexed, and a second null would collide with any other seeded institution.
         mongo.save(new Document()
                 .append("_id", SCOPE)
-                .append("code", "hold-it-promotion")
+                .append("code", "PROMOTION_IT")
+                .append("name", "Promotion IT institution")
                 .append("status", "ACTIVE"), "institutions");
 
+        // check() also denies NO_ENTITLEMENT for a book whose publisher isn't ACTIVE, checked
+        // before any grant lookup - so the publisher has to exist and be active too.
         mongo.save(new Document()
-                .append("_id", "pub_promotion_it")
-                .append("code", "HOLD-IT-PROMOTION")
+                .append("_id", PUBLISHER)
+                .append("code", "PROMOTION_IT")
+                .append("name", "Promotion IT publisher")
                 .append("status", "ACTIVE"), "publishers");
 
         mongo.save(new Document()
@@ -101,7 +108,7 @@ class PromotionIT extends HoldContainerTest {
                 .append("status", "PUBLISHED")
                 .append("contentState", "READY")
                 .append("accessTier", "ELITE")
-                .append("publisherId", "pub_promotion_it")
+                .append("publisherId", PUBLISHER)
                 .append("collectionIds", List.of(COLLECTION)), "catalogueItems");
 
         mongo.save(new Document()
@@ -123,7 +130,7 @@ class PromotionIT extends HoldContainerTest {
         mongo.remove(Query.query(Criteria.where("_id").is(ITEM)), "catalogueItems");
         mongo.remove(Query.query(Criteria.where("institutionId").is(SCOPE)), "entitlements");
         mongo.remove(Query.query(Criteria.where("_id").is(SCOPE)), "institutions");
-        mongo.remove(Query.query(Criteria.where("_id").is("pub_promotion_it")), "publishers");
+        mongo.remove(Query.query(Criteria.where("_id").is(PUBLISHER)), "publishers");
     }
 
     private static CurrentUser user(String suffix) {
@@ -204,24 +211,27 @@ class PromotionIT extends HoldContainerTest {
         String colX = "col_two_inst_x";
         String colY = "col_two_inst_y";
 
+        String publisher = "pub_two_inst";
         mongo.remove(Query.query(Criteria.where("_id").is(item)), "catalogueItems");
         mongo.remove(Query.query(Criteria.where("institutionId").in(scopeX, scopeY)), "entitlements");
         mongo.remove(Query.query(Criteria.where("_id").in(scopeX, scopeY)), "institutions");
-        mongo.remove(Query.query(Criteria.where("_id").is("pub_two_inst")), "publishers");
-
-        mongo.save(new Document().append("_id", scopeX).append("code", "hold-it-two-x").append("status", "ACTIVE"), "institutions");
-        mongo.save(new Document().append("_id", scopeY).append("code", "hold-it-two-y").append("status", "ACTIVE"), "institutions");
-        mongo.save(new Document().append("_id", "pub_two_inst").append("code", "HOLD-IT-TWO-INST").append("status", "ACTIVE"), "publishers");
-
+        mongo.remove(Query.query(Criteria.where("_id").is(publisher)), "publishers");
         mongo.save(new Document()
                 .append("_id", item)
                 .append("status", "PUBLISHED")
                 .append("contentState", "READY")
                 .append("accessTier", "ELITE")
-                .append("publisherId", "pub_two_inst")
+                .append("publisherId", publisher)
                 .append("collectionIds", List.of(colX, colY)), "catalogueItems");
         mongo.save(twoInstEntitlement(scopeX, colX), "entitlements");
         mongo.save(twoInstEntitlement(scopeY, colY), "entitlements");
+        // code must be non-null: it's uniquely indexed, and a second null would collide with any
+        // other seeded institution.
+        mongo.save(new Document().append("_id", scopeX).append("code", scopeX).append("name", scopeX).append("status", "ACTIVE"), "institutions");
+        mongo.save(new Document().append("_id", scopeY).append("code", scopeY).append("name", scopeY).append("status", "ACTIVE"), "institutions");
+        // check() also denies NO_ENTITLEMENT for a book whose publisher isn't ACTIVE, checked
+        // before any grant lookup - so the publisher has to exist and be active too.
+        mongo.save(new Document().append("_id", publisher).append("code", publisher).append("name", publisher).append("status", "ACTIVE"), "publishers");
 
         try {
             // usr_two_x0 takes inst_two_x's only copy for real; inst_two_y's own copy is never
@@ -244,7 +254,7 @@ class PromotionIT extends HoldContainerTest {
             mongo.remove(Query.query(Criteria.where("_id").is(item)), "catalogueItems");
             mongo.remove(Query.query(Criteria.where("institutionId").in(scopeX, scopeY)), "entitlements");
             mongo.remove(Query.query(Criteria.where("_id").in(scopeX, scopeY)), "institutions");
-            mongo.remove(Query.query(Criteria.where("_id").is("pub_two_inst")), "publishers");
+            mongo.remove(Query.query(Criteria.where("_id").is(publisher)), "publishers");
         }
     }
 

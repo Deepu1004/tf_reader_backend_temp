@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
@@ -50,8 +51,9 @@ class CatalogueBatchServiceTest {
 
 		when(catalogueItemRepository.findAllById(any()))
 				.thenReturn(List.of(allowed, deniedItem, archived));
-		when(entitlementQuery.check(SUBJECT, "item_allowed")).thenReturn(entitled(2));
-		when(entitlementQuery.check(SUBJECT, "item_denied")).thenReturn(denied(DenyReason.NO_ENTITLEMENT));
+		when(entitlementQuery.checkAll(SUBJECT, List.of("item_allowed", "item_denied"))).thenReturn(Map.of(
+				"item_allowed", entitled(2),
+				"item_denied", denied(DenyReason.NO_ENTITLEMENT)));
 
 		BatchItemsResponse response = service.batch(SUBJECT,
 				new BatchItemsRequest(List.of("item_allowed", "item_denied", "item_archived", "item_missing")));
@@ -72,7 +74,7 @@ class CatalogueBatchServiceTest {
 				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.TOO_MANY_IDS));
 
 		verify(catalogueItemRepository, never()).findAllById(any());
-		verify(entitlementQuery, never()).check(any(), any());
+		verify(entitlementQuery, never()).checkAll(any(), any());
 	}
 
 	@Test
@@ -88,7 +90,7 @@ class CatalogueBatchServiceTest {
 		source.setAssets(List.of(withIndex));
 
 		when(catalogueItemRepository.findAllById(any())).thenReturn(List.of(source));
-		when(entitlementQuery.check(SUBJECT, "item_1")).thenReturn(entitled(2));
+		when(entitlementQuery.checkAll(SUBJECT, List.of("item_1"))).thenReturn(Map.of("item_1", entitled(2)));
 
 		BatchItem result = service.batch(SUBJECT, new BatchItemsRequest(List.of("item_1"))).items().get(0);
 

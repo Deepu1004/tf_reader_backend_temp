@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyIterable;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -70,9 +72,9 @@ class CollectionAdminServiceTest {
 		BookCollection collection = collection("col_law2024", "pub_rtlg");
 		when(bookCollectionRepository.findById("col_law2024")).thenReturn(Optional.of(collection));
 
-		CatalogueItem keep = item("item_1", List.of("col_law2024"));
-		CatalogueItem toAdd = item("item_2", List.of());
-		CatalogueItem toRemove = item("item_3", List.of("col_law2024"));
+		CatalogueItem keep = item("item_1", "pub_rtlg", List.of("col_law2024"));
+		CatalogueItem toAdd = item("item_2", "pub_rtlg", List.of());
+		CatalogueItem toRemove = item("item_3", "pub_rtlg", List.of("col_law2024"));
 
 		when(catalogueItemRepository.findAllById(anyIterable())).thenReturn(List.of(keep, toAdd));
 		when(catalogueItemRepository.findByCollectionIds("col_law2024")).thenReturn(List.of(keep, toRemove));
@@ -97,6 +99,19 @@ class CollectionAdminServiceTest {
 		assertThatThrownBy(() -> service.setItems("col_law2024", new CollectionItemsWrite(List.of("item_missing"))))
 				.isInstanceOf(ApiException.class)
 				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+	}
+
+	@Test
+	void rejectsAnItemFromAnotherPublisher() {
+		when(bookCollectionRepository.findById("col_law2024"))
+				.thenReturn(Optional.of(collection("col_law2024", "pub_rtlg")));
+		CatalogueItem wrongPublisher = item("item_1", "pub_other", List.of());
+		when(catalogueItemRepository.findAllById(anyIterable())).thenReturn(List.of(wrongPublisher));
+
+		assertThatThrownBy(() -> service.setItems("col_law2024", new CollectionItemsWrite(List.of("item_1"))))
+				.isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+		verify(catalogueItemRepository, never()).save(any());
 	}
 
 	@Test
@@ -162,9 +177,10 @@ class CollectionAdminServiceTest {
 		return new BookCollection(id, publisherId, "law2024", "Law 2024", null);
 	}
 
-	private static CatalogueItem item(String id, List<String> collectionIds) {
+	private static CatalogueItem item(String id, String publisherId, List<String> collectionIds) {
 		CatalogueItem item = new CatalogueItem();
 		item.setId(id);
+		item.setPublisherId(publisherId);
 		item.setCollectionIds(collectionIds);
 		return item;
 	}

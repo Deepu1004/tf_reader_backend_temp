@@ -97,7 +97,7 @@
       "country": "UK",
       "city": "London",
       "branding": {
-        "logoUrl": "https://cdn.tf.example/logos/imperial.png",
+        "logoUrl": "https://i.postimg.cc/ZCwrHQrn/imperial-college-london.png",
         "primaryColor": "#003E74"
       },
       "signIn": {
@@ -117,7 +117,7 @@
       "country": "UK",
       "city": "London",
       "branding": {
-        "logoUrl": "https://cdn.tf.example/logos/ucl.png",
+        "logoUrl": "https://i.postimg.cc/8jZh4Yhf/University-College-London.jpg",
         "primaryColor": "#500778"
       },
       "signIn": {
@@ -137,7 +137,7 @@
       "country": "UK",
       "city": "Leeds",
       "branding": {
-        "logoUrl": "https://cdn.tf.example/logos/leeds.png",
+        "logoUrl": "https://i.postimg.cc/mtmQjnQw/university-of-leeds.jpg",
         "primaryColor": "#4A7729"
       },
       "signIn": {
@@ -279,7 +279,7 @@
       "updatedAt": "2026-08-10T09:00:00Z"
     },
     {
-      "_seedWhy": "Real audio, ingested from doctor_dolittle_01_lofting_64kb-ELITE.mp3. ELITE, so encrypted like any other locked asset - audio is not exempt above OPEN_ACCESS. pub_rtlg, so it rides ent_imp2 (PUBLISHER scope, UNLIMITED); no new entitlement needed.",
+      "_seedWhy": "Real audio, ingested from doctor_dolittle_01_lofting_64kb-ELITE.mp3. ELITE, so encrypted like any other locked asset - audio is not exempt above OPEN_ACCESS. Every ELITE item carries a real copy limit, so this one has its own ITEM-scope grant (ent_dev_elite_audio, copies:2) rather than riding pub_rtlg's UNLIMITED publisher grant (ent_imp2), which would otherwise win by scope but leave an ELITE title with no limit and no queue.",
       "_id": "dev-sample-audio-encrypted",
       "publisherId": "pub_rtlg",
       "collectionIds": [],
@@ -506,7 +506,7 @@
       "updatedAt": "2026-08-10T09:00:00Z"
     },
     {
-      "_seedWhy": "PUBLISHER scope, UNLIMITED (copies null). Covers every Routledge book not more narrowly scoped: dev-sample-audio-encrypted, dev-fixture-pdf, item_e9a3c599, item_4062cdea. dev-fixture-epub stays under the narrower COLLECTION grant above - that is scope precedence, testable straight from the seed. validTo is null, open ended, so the seed carries one of each.",
+      "_seedWhy": "PUBLISHER scope, UNLIMITED (copies null). Covers every Routledge book not more narrowly scoped: dev-fixture-pdf, item_e9a3c599, item_4062cdea. dev-fixture-epub stays under the narrower COLLECTION grant above, and dev-sample-audio-encrypted now stays under its own narrower ITEM grant (ent_dev_elite_audio) below - both are scope precedence, testable straight from the seed. validTo is null, open ended, so the seed carries one of each.",
       "_id": "ent_imp2",
       "institutionId": "inst_7f3",
       "scopeType": "PUBLISHER",
@@ -525,6 +525,20 @@
       "institutionId": "inst_7f3",
       "scopeType": "ITEM",
       "scopeId": "dev-sample-pdf",
+      "copies": 2,
+      "loanPeriodDays": 14,
+      "validFrom": "2026-08-01",
+      "validTo": null,
+      "status": "ACTIVE",
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_seedWhy": "ITEM scope, CONCURRENT. dev-sample-audio-encrypted is pub_rtlg, which already has an UNLIMITED PUBLISHER grant (ent_imp2) - but every ELITE item must carry a real copy limit, and inheriting UNLIMITED would leave this one with none. A narrower ITEM grant beats the publisher grant by scope, the same way ent_imp1 beats ent_imp2 for dev-fixture-epub.",
+      "_id": "ent_dev_elite_audio",
+      "institutionId": "inst_7f3",
+      "scopeType": "ITEM",
+      "scopeId": "dev-sample-audio-encrypted",
       "copies": 2,
       "loanPeriodDays": 14,
       "validFrom": "2026-08-01",

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -102,6 +103,14 @@ public class CollectionAdminService {
 			Set<String> missing = new LinkedHashSet<>(requestedIds);
 			missing.removeAll(foundIds);
 			throw new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown catalogue item ids: " + missing);
+		}
+
+		Set<String> wrongPublisher = requestedItems.stream()
+				.filter(item -> !Objects.equals(item.getPublisherId(), collection.getPublisherId()))
+				.map(CatalogueItem::getId).collect(Collectors.toCollection(LinkedHashSet::new));
+		if (!wrongPublisher.isEmpty()) {
+			throw new ApiException(ErrorCode.VALIDATION_FAILED,
+					"Items from another publisher: " + wrongPublisher);
 		}
 
 		List<CatalogueItem> currentMembers = catalogueItemRepository.findByCollectionIds(collectionId);

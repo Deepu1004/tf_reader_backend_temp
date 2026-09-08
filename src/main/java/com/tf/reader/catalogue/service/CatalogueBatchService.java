@@ -53,16 +53,24 @@ public class CatalogueBatchService {
 		List<String> notFound = new ArrayList<>();
 		List<String> denied = new ArrayList<>();
 
+		// An archived (or still-draft) item is treated the same as one that does not exist - the
+		// contract is explicit that notFound covers both - and is filtered out before the
+		// entitlement check, which is one call for the whole batch rather than one per id.
+		List<String> eligibleIds = new ArrayList<>();
 		for (String id : ids) {
 			CatalogueItem item = found.get(id);
-			// An archived (or still-draft) item is treated the same as one that does not exist -
-			// the contract is explicit that notFound covers both.
 			if (item == null || item.getStatus() != ItemStatus.PUBLISHED) {
 				notFound.add(id);
-				continue;
 			}
+			else {
+				eligibleIds.add(id);
+			}
+		}
 
-			EntitlementDecision decision = entitlementQuery.check(subject, id);
+		Map<String, EntitlementDecision> decisions = entitlementQuery.checkAll(subject, eligibleIds);
+		for (String id : eligibleIds) {
+			CatalogueItem item = found.get(id);
+			EntitlementDecision decision = decisions.get(id);
 			if (!decision.entitled()) {
 				denied.add(id);
 				continue;

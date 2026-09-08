@@ -247,11 +247,11 @@ class DemoDataSeederIT {
     }
 
     @Test
-    @DisplayName("all three grants insert cleanly and express two different access models")
+    @DisplayName("all four grants insert cleanly and express two different access models")
     void entitlementsAreSeeded() {
         // Reaching here at all is the assertion about version: a seeded @Version would have failed the
         // first insert with OptimisticLockingFailureException. B declared a plain long, so it is 0.
-        assertThat(entitlements.count()).isEqualTo(3);
+        assertThat(entitlements.count()).isEqualTo(4);
 
         Entitlement concurrent =
                 entitlements
@@ -270,10 +270,10 @@ class DemoDataSeederIT {
         assertThat(unlimited.getCopies()).as("null copies, so UNLIMITED").isNull();
         assertThat(unlimited.getValidTo()).as("open ended").isNull();
 
-        // All three are Imperial's, which is what lets one feed show CONCURRENT and UNLIMITED side by
+        // All four are Imperial's, which is what lets one feed show CONCURRENT and UNLIMITED side by
         // side exactly as the frozen day 1 fixtures do. UCL is the zero-entitlement institution.
         assertThat(entitlements.findByInstitutionIdAndStatus("inst_7f3", EntitlementStatus.ACTIVE))
-                .hasSize(3);
+                .hasSize(4);
         assertThat(entitlements.findByInstitutionIdAndStatus("inst_ucl", EntitlementStatus.ACTIVE))
                 .isEmpty();
     }
@@ -373,7 +373,7 @@ class DemoDataSeederIT {
         assertThat(collections.count()).as("collections").isEqualTo(2);
         assertThat(institutions.count()).as("institutions").isEqualTo(3);
         assertThat(items.count()).as("catalogueItems").isEqualTo(8);
-        assertThat(entitlements.count()).as("entitlements").isEqualTo(3);
+        assertThat(entitlements.count()).as("entitlements").isEqualTo(4);
         assertThat(adminUsers.count()).as("adminUsers").isEqualTo(3);
         assertThat(feedSettings.count()).as("feedSettings").isEqualTo(3);
     }
