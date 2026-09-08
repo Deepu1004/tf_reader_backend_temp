@@ -81,12 +81,12 @@ class DemoDataSeederTest {
         // has gone through the real ingest pipeline - the six original dev-content ids (see
         // DEV_CONTENT_FIXTURE_ITEM_IDS) plus two more added alongside them.
         assertThat(dataset.catalogueItems()).hasSize(8);
-        assertThat(dataset.entitlements()).hasSize(3);
+        assertThat(dataset.entitlements()).hasSize(4);
         assertThat(dataset.adminUsers()).hasSize(3);
         assertThat(dataset.feedSettings()).hasSize(3);
 
         // One number, so an extra row cannot be added without someone updating the plan too.
-        assertThat(dataset.documentCount()).isEqualTo(24);
+        assertThat(dataset.documentCount()).isEqualTo(25);
     }
 
     @Test
@@ -450,11 +450,13 @@ class DemoDataSeederTest {
                 .extracting(SeedDataset.SeedInstitution::type)
                 .allSatisfy(t -> assertThat(t).isEqualTo("ACADEMIC"));
 
-        // Two access models, so the resolver has both to distinguish — ent_dev_elite adds a
-        // second CONCURRENT row (dev-sample-pdf's own ITEM-scope grant), not a third model.
+        // Two access models, so the resolver has both to distinguish — ent_dev_elite and
+        // ent_dev_elite_audio each add a CONCURRENT row (dev-sample-pdf's and
+        // dev-sample-audio-encrypted's own ITEM-scope grants), not a third model. Every ELITE
+        // item carries a real copy limit, so ent_imp2's UNLIMITED publisher grant is the only null.
         assertThat(dataset.entitlements())
                 .extracting(SeedDataset.SeedEntitlement::copies)
-                .containsExactlyInAnyOrder(2, null, 2);
+                .containsExactlyInAnyOrder(2, null, 2, 2);
 
         // Six of the eight have a real uploaded cover (coverKey), two do not - both cases are
         // real data, not a gap. coverUrl itself is null on every item: the bucket is private, so
