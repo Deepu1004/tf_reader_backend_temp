@@ -16,6 +16,9 @@ public interface AvailabilityQuery {
 	 * @param scope     institution or tenant scope
 	 * @param itemId    item identifier
 	 * @param copies    optional copy limit (null when unknown)
+	 * @param userId    the caller, so {@code myPosition} can be filled in when they are
+	 *                  currently queued — never required to be non-null; pass null when the
+	 *                  caller's own position is not relevant to omit it outright.
 	 */
-	AvailabilitySnapshot forItem(String scope, String itemId, Integer copies);
+	AvailabilitySnapshot forItem(String scope, String itemId, Integer copies, String userId);
 }

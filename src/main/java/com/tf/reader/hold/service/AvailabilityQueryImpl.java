@@ -27,7 +27,7 @@ public class AvailabilityQueryImpl implements AvailabilityQuery {
     }
 
     @Override
-    public AvailabilitySnapshot forItem(String scope, String itemId, Integer copies) {
+    public AvailabilitySnapshot forItem(String scope, String itemId, Integer copies, String userId) {
         Instant now = clock.instant();
         try {
             if (copies == null) {
@@ -35,12 +35,24 @@ public class AvailabilityQueryImpl implements AvailabilityQuery {
                 // honest answer is identical either way: omit, don't guess.
                 return AvailabilitySnapshot.unknown(now);
             }
+            String queueKey = QueueKeys.queueKey(scope, itemId);
             int available = lease.available(scope, itemId, copies);
-            Long queueLength = redis.opsForZSet().zCard(QueueKeys.queueKey(scope, itemId));
-            return new AvailabilitySnapshot(available, queueLength == null ? 0 : queueLength.intValue(), null, now);
+            Long queueLength = redis.opsForZSet().zCard(queueKey);
+            Integer myPosition = myPosition(queueKey, userId);
+            return new AvailabilitySnapshot(available, queueLength == null ? 0 : queueLength.intValue(), myPosition, now);
         } catch (RuntimeException e) {
             return AvailabilitySnapshot.unknown(now);
         }
+    }
+
+    // Absent, not zero, when the caller isn't queued — the same rank-based position
+    // QueueService itself reports, so the two never disagree about where somebody stands.
+    private Integer myPosition(String queueKey, String userId) {
+        if (userId == null) {
+            return null;
+        }
+        Long rank = redis.opsForZSet().rank(queueKey, QueueKeys.member(userId));
+        return rank == null ? null : rank.intValue() + 1;
     }
 }
 
