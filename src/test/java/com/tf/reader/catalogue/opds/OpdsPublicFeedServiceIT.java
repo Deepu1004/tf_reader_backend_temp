@@ -51,7 +51,10 @@ class OpdsPublicFeedServiceIT extends ContainerisedInfrastructure {
 		item.setPublisherId(publisherId);
 		item.setCollectionIds(List.of());
 		item.setTitle("Publication Detail Fixture");
-		item.setIsbn("9780367211745");
+		// No isbn: none of this class's tests assert on it, and every test in this class calls
+		// newItem() - a shared literal here collided with the unique isbn index across this
+		// class's own tests (and with OpdsFeedServiceIT's own single, unrelated use of the same
+		// literal) the moment failsafe started actually running the full IT suite.
 		item.setAccessTier(accessTier);
 		item.setStatus(status);
 		item.setContentState(contentState);
