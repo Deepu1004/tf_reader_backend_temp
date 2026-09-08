@@ -32,6 +32,7 @@ class AvailabilityIT extends HoldContainerTest {
     private static final String SCOPE = "inst_1";
     private static final String ITEM = "item_1";
     private static final String COLLECTION = "col_availability_it";
+    private static final String PUBLISHER = "pub_availability_it";
 
     @Autowired
     AvailabilityQuery availability;
@@ -53,13 +54,33 @@ class AvailabilityIT extends HoldContainerTest {
         // own cleanup having actually run.
         mongo.remove(Query.query(Criteria.where("_id").is(ITEM)), "catalogueItems");
         mongo.remove(Query.query(Criteria.where("institutionId").is(SCOPE)), "entitlements");
+        mongo.remove(Query.query(Criteria.where("_id").is(SCOPE)), "institutions");
+        mongo.remove(Query.query(Criteria.where("_id").is(PUBLISHER)), "publishers");
+
+        // EntitlementQueryImpl.check() looks the institution up first and reads a suspended one
+        // exactly like an unknown one - so without this row, every call here would fail NOT_FOUND
+        // before ever reaching the entitlement it's meant to test. code must be non-null: it's
+        // uniquely indexed, and a second null would collide with any other seeded institution.
+        mongo.save(new Document()
+                .append("_id", SCOPE)
+                .append("code", "AVAILABILITY_IT")
+                .append("name", "Availability IT institution")
+                .append("status", "ACTIVE"), "institutions");
+
+        // check() also denies NO_ENTITLEMENT for a book whose publisher isn't ACTIVE, checked
+        // before any grant lookup - so the publisher has to exist and be active too.
+        mongo.save(new Document()
+                .append("_id", PUBLISHER)
+                .append("code", "AVAILABILITY_IT")
+                .append("name", "Availability IT publisher")
+                .append("status", "ACTIVE"), "publishers");
 
         mongo.save(new Document()
                 .append("_id", ITEM)
                 .append("status", "PUBLISHED")
                 .append("contentState", "READY")
                 .append("accessTier", "ELITE")
-                .append("publisherId", "pub_availability_it")
+                .append("publisherId", PUBLISHER)
                 .append("collectionIds", List.of(COLLECTION)), "catalogueItems");
 
         mongo.save(new Document()
@@ -80,6 +101,8 @@ class AvailabilityIT extends HoldContainerTest {
         redisConnectionFactory.getConnection().serverCommands().flushAll();
         mongo.remove(Query.query(Criteria.where("_id").is(ITEM)), "catalogueItems");
         mongo.remove(Query.query(Criteria.where("institutionId").is(SCOPE)), "entitlements");
+        mongo.remove(Query.query(Criteria.where("_id").is(SCOPE)), "institutions");
+        mongo.remove(Query.query(Criteria.where("_id").is(PUBLISHER)), "publishers");
     }
 
     private static CurrentUser user(String suffix) {

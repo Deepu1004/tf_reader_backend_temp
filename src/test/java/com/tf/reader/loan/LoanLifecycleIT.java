@@ -32,9 +32,12 @@ import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.catalogue.entity.ScopeType;
 import com.tf.reader.catalogue.entity.Publisher;
+import com.tf.reader.catalogue.entity.Institution;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
+import com.tf.reader.catalogue.repository.InstitutionRepository;
 import com.tf.reader.catalogue.repository.PublisherRepository;
+import com.tf.reader.common.model.RecordStatus;
 import com.tf.reader.loan.repository.LoanRepository;
 
 /**
@@ -70,6 +73,7 @@ class LoanLifecycleIT {
 	@Autowired private CatalogueItemRepository items;
 	@Autowired private EntitlementRepository entitlements;
 	@Autowired private PublisherRepository publishers;
+	@Autowired private InstitutionRepository institutions;
 
 	private static final String TEST_PUBLISHER = "pub_test";
 
@@ -79,12 +83,25 @@ class LoanLifecycleIT {
 		items.deleteAll();
 		entitlements.deleteAll();
 		publishers.deleteAll();
+		institutions.deleteAll();
 
-		// Publisher must exist before items can be saved (CatalogueItemPersistenceGuard)
+		// EntitlementQueryImpl.check() looks the institution up first and reads a suspended one
+		// exactly like an unknown one - so without this row, every borrow() call here would fail
+		// NOT_FOUND before ever reaching the entitlement this test seeds.
+		Institution institution = new Institution();
+		institution.setId("inst_7f3");
+		institution.setCode("TEST_7F3");
+		institution.setName("Test Institution");
+		institution.setStatus(RecordStatus.ACTIVE);
+		institutions.save(institution);
+
+		// Publisher must exist before items can be saved (CatalogueItemPersistenceGuard), and
+		// check() also denies NO_ENTITLEMENT for a book whose publisher isn't ACTIVE.
 		Publisher pub = new Publisher();
 		pub.setId(TEST_PUBLISHER);
 		pub.setCode("TEST");
 		pub.setName("Test Publisher");
+		pub.setStatus(RecordStatus.ACTIVE);
 		publishers.save(pub);
 
 		// Seed one PUBLISHED+READY item per tier — enough to exercise every borrow path
