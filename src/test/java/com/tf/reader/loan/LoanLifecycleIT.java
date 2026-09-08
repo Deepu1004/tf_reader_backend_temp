@@ -35,10 +35,12 @@ import com.tf.reader.catalogue.entity.Institution;
 import com.tf.reader.catalogue.entity.InstitutionType;
 import com.tf.reader.catalogue.entity.Publisher;
 import com.tf.reader.common.model.RecordStatus;
+import com.tf.reader.catalogue.entity.Institution;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
 import com.tf.reader.catalogue.repository.InstitutionRepository;
 import com.tf.reader.catalogue.repository.PublisherRepository;
+import com.tf.reader.common.model.RecordStatus;
 import com.tf.reader.loan.repository.LoanRepository;
 
 /**
@@ -100,7 +102,7 @@ class LoanLifecycleIT {
 		pub.setId(TEST_PUBLISHER);
 		pub.setCode("TEST");
 		pub.setName("Test Publisher");
-		pub.setStatus(RecordStatus.ACTIVE);   // required since wokay added suspended-publisher check
+		pub.setStatus(RecordStatus.ACTIVE);
 		publishers.save(pub);
 
 		// Seed one PUBLISHED+READY item per tier — enough to exercise every borrow path
