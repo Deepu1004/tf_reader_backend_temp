@@ -58,6 +58,10 @@ class AuthorizationCoverageTest {
 			"POST /api/v1/auth/saml/start",
 			"POST /api/v1/auth/dev-token",
 			"POST /api/v1/auth/oidc/start",
+			// Reader sign-up and login are how an individual reader obtains a token in the
+			// first place.
+			"POST /api/v1/auth/signup",
+			"POST /api/v1/auth/login",
 			// A one-time id, and an opaque refresh token, authenticate these - neither is a
 			// bearer JWT, so there is nothing for this chain to check before the controller runs.
 			"POST /api/v1/auth/oidc/token",
