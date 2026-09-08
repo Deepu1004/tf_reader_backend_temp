@@ -20,7 +20,7 @@ jobs:
           cache: maven
 
       - name: Run the test suite
-        run: ./mvnw -B test
+        run: ./mvnw -B verify
 
       # GitHub already shows a green check or red X on the commit for this workflow with no
       # extra step. An email-on-failure step used to live here - removed until there's a real
