@@ -51,7 +51,9 @@ class DemoDataSeederTest {
                     "dev-sample-audio",
                     "dev-sample-audio-encrypted",
                     "dev-fixture-epub",
-                    "dev-fixture-pdf");
+                    "dev-fixture-pdf",
+                    "dev-sample-epub-open",
+                    "dev-sample-audio-open");
 
     private static ObjectMapper mapper;
     private static SeedDataset dataset;
@@ -78,15 +80,15 @@ class DemoDataSeederTest {
         assertThat(dataset.publishers()).hasSize(2);
         assertThat(dataset.collections()).hasSize(2);
         assertThat(dataset.institutions()).hasSize(3);
-        // Eight week 1 placeholders plus the six real dev-content fixtures (see
-        // DEV_CONTENT_FIXTURE_ITEM_IDS) that ContentAccessGrantImpl routes to real files.
-        assertThat(dataset.catalogueItems()).hasSize(14);
+        // Eight week 1 placeholders plus the eight real dev-content fixtures (see
+        // DEV_CONTENT_FIXTURE_ITEM_IDS) that resolve to real files under static/mock-content/.
+        assertThat(dataset.catalogueItems()).hasSize(16);
         assertThat(dataset.entitlements()).hasSize(3);
         assertThat(dataset.adminUsers()).hasSize(3);
         assertThat(dataset.feedSettings()).hasSize(3);
 
         // One number, so an extra row cannot be added without someone updating the plan too.
-        assertThat(dataset.documentCount()).isEqualTo(30);
+        assertThat(dataset.documentCount()).isEqualTo(32);
     }
 
     @Test
@@ -428,9 +430,9 @@ class DemoDataSeederTest {
     void compositionIsDeliberate() {
         // These assertions are the composition table in the approach document, made executable. They
         // exist so that "tidying" a row that another team's test depends on fails here first.
-        // Six of the original eight (item_q7 is QUEUED, item_f3 is FAILED) plus all six
+        // Six of the original eight (item_q7 is QUEUED, item_f3 is FAILED) plus all eight
         // dev-content fixtures, which are PUBLISHED and READY.
-        assertThat(dataset.catalogueItems()).filteredOn(SeedDataset.SeedItem::isFeedVisible).hasSize(12);
+        assertThat(dataset.catalogueItems()).filteredOn(SeedDataset.SeedItem::isFeedVisible).hasSize(14);
 
         assertThat(dataset.catalogueItems())
                 .extracting(SeedDataset.SeedItem::accessTier)
