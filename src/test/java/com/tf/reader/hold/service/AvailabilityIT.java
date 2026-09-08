@@ -116,16 +116,26 @@ class AvailabilityIT extends HoldContainerTest {
         queue.join(user("a"), ITEM);
         queue.join(user("b"), ITEM);
 
-        var snapshot = availability.forItem(SCOPE, ITEM, 2);
+        var snapshot = availability.forItem(SCOPE, ITEM, 2, "user_a");
 
         assertThat(snapshot.available()).isEqualTo(1);
         assertThat(snapshot.queueLength()).isEqualTo(2);
     }
 
     @Test
+    @DisplayName("myPosition reflects this reader's own real place in the real queue")
+    void myPositionReflectsTheCallersRealPlaceInLine() {
+        queue.join(user("a"), ITEM);
+        queue.join(user("b"), ITEM);
+
+        assertThat(availability.forItem(SCOPE, ITEM, 2, "user_b").myPosition()).isEqualTo(2);
+        assertThat(availability.forItem(SCOPE, ITEM, 2, "user_never_joined").myPosition()).isNull();
+    }
+
+    @Test
     @DisplayName("a title with no copy limit omits available, it never zeroes it")
     void noCopyLimitOmitsAvailable() {
-        var snapshot = availability.forItem(SCOPE, ITEM, null);
+        var snapshot = availability.forItem(SCOPE, ITEM, null, "user_a");
 
         assertThat(snapshot.available()).isNull();
         assertThat(snapshot.queueLength()).isNull();
@@ -135,11 +145,11 @@ class AvailabilityIT extends HoldContainerTest {
     @DisplayName("answers inside the 50ms budget the contract promises")
     void answersInsideTheBudget() {
         lease.claim(SCOPE, ITEM, 5);
-        availability.forItem(SCOPE, ITEM, 5); // warm up
+        availability.forItem(SCOPE, ITEM, 5, "user_a"); // warm up
 
         long start = System.nanoTime();
         for (int i = 0; i < 100; i++) {
-            availability.forItem(SCOPE, ITEM, 5);
+            availability.forItem(SCOPE, ITEM, 5, "user_a");
         }
         long avgMs = (System.nanoTime() - start) / 100 / 1_000_000;
 
