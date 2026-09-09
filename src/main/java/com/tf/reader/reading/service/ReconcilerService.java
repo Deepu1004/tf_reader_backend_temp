@@ -8,9 +8,12 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.tf.reader.hold.api.LiveOfferQuery;
 import com.tf.reader.loan.api.ActiveLoanQuery;
 
@@ -22,7 +25,7 @@ import com.tf.reader.loan.api.ActiveLoanQuery;
  */
 @Service
 public class ReconcilerService {
-
+	private static final Logger log = LoggerFactory.getLogger(ReconcilerService.class);
 	private final ActiveLoanQuery loans;
 	private final LiveOfferQuery offers;
 	private final CopyLeaseImpl lease;
@@ -38,6 +41,18 @@ public class ReconcilerService {
 	/** Full rebuild, every copy-limited item at once — run once the app is ready to serve. */
 	@EventListener(ApplicationReadyEvent.class)
 	public void reconcileAll() {
+
+		// A startup rebuild must never be able to fail application startup. If Redis isn't up
+		// yet (or, in a test context that never provisions it, at all), skip this pass rather
+		// than take the whole app down with it - same reasoning as HoldDevDataSeeder.
+		try {
+			doReconcileAll();
+		}
+		catch (RedisConnectionFailureException e) {
+			log.warn("reconciler: Redis unavailable, skipping startup reconcile ({})", e.getMessage());
+		}
+	}
+	private void doReconcileAll() {
 		Instant now = clock.instant();
 		Map<ItemScope, List<LeaseSeed>> seedsByItem = new HashMap<>();
 
