@@ -23,6 +23,7 @@ import com.tf.reader.catalogue.entity.AccessTier;
 import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.ContentType;
+import com.tf.reader.catalogue.entity.WorkType;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.common.audit.AdminAuditWriter;
 import com.tf.reader.common.error.ApiException;
@@ -46,6 +47,7 @@ class IngestServiceTest {
 		CatalogueItem item = new CatalogueItem();
 		item.setId("item_42");
 		item.setPublisherId("pub_rtlg");
+		item.setWorkType(WorkType.BOOK);
 		item.setAccessTier(tier);
 		item.setContentType(type);
 		item.setContentState(ContentState.NONE);
@@ -60,11 +62,77 @@ class IngestServiceTest {
 		when(items.save(any())).thenAnswer(i -> i.getArgument(0));
 		MockMultipartFile file = new MockMultipartFile("file", "book.pdf", "application/pdf", new byte[10]);
 
-		IngestStatus status = service.accept("item_42", file, AssetFormat.PDF);
+		IngestStatus status = service.accept("item_42", file, AssetFormat.PDF, null, null);
 
 		assertThat(status.contentState()).isEqualTo(ContentState.QUEUED);
+		assertThat(status.partNumber()).isEqualTo(1);
 		assertThat(item.getContentState()).isEqualTo(ContentState.QUEUED);
 		verify(bookStorage).store("items/item_42/upload", file.getBytes(), "application/pdf");
+	}
+
+	@Test
+	void explicitPartNumberAndTitleUpsertTheRightPartWithoutTouchingASibling() throws java.io.IOException {
+		CatalogueItem item = item(AccessTier.OPEN_ACCESS, ContentType.PDF);
+		CatalogueItem.Asset asset = new CatalogueItem.Asset();
+		asset.setFormat(ContentType.PDF);
+		CatalogueItem.Part existingPart1 = new CatalogueItem.Part();
+		existingPart1.setPartNumber(1);
+		existingPart1.setContentState(ContentState.READY);
+		asset.setParts(new java.util.ArrayList<>(java.util.List.of(existingPart1)));
+		item.setAssets(java.util.List.of(asset));
+		when(items.findById("item_42")).thenReturn(Optional.of(item));
+		when(adminScope.canAccessPublisher("pub_rtlg")).thenReturn(true);
+		when(items.save(any())).thenAnswer(i -> i.getArgument(0));
+		MockMultipartFile file = new MockMultipartFile("file", "ch2.pdf", "application/pdf", new byte[10]);
+
+		IngestStatus status = service.accept("item_42", file, AssetFormat.PDF, 2, "Background");
+
+		assertThat(status.partNumber()).isEqualTo(2);
+		assertThat(asset.getParts()).hasSize(2);
+		assertThat(existingPart1.getContentState()).isEqualTo(ContentState.READY);
+		verify(bookStorage).store("items/item_42/part2/upload", file.getBytes(), "application/pdf");
+	}
+
+	@Test
+	void noPartNumberDefaultsToOneMatchingTodaysBehaviourExactly() throws java.io.IOException {
+		CatalogueItem item = item(AccessTier.OPEN_ACCESS, ContentType.PDF);
+		when(items.findById("item_42")).thenReturn(Optional.of(item));
+		when(adminScope.canAccessPublisher("pub_rtlg")).thenReturn(true);
+		when(items.save(any())).thenAnswer(i -> i.getArgument(0));
+		MockMultipartFile file = new MockMultipartFile("file", "book.pdf", "application/pdf", new byte[10]);
+
+		IngestStatus status = service.accept("item_42", file, AssetFormat.PDF, null, null);
+
+		assertThat(status.partNumber()).isEqualTo(1);
+		verify(bookStorage).store("items/item_42/upload", file.getBytes(), "application/pdf");
+	}
+
+	@Test
+	void partNumberBelowOneIsRejected() {
+		CatalogueItem item = item(AccessTier.OPEN_ACCESS, ContentType.PDF);
+		when(items.findById("item_42")).thenReturn(Optional.of(item));
+		when(adminScope.canAccessPublisher("pub_rtlg")).thenReturn(true);
+		MockMultipartFile file = new MockMultipartFile("file", "book.pdf", "application/pdf", new byte[10]);
+
+		assertThatExceptionOfType(ApiException.class)
+				.isThrownBy(() -> service.accept("item_42", file, AssetFormat.PDF, 0, null))
+				.satisfies(e -> assertThat(e.getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+		verify(bookStorage, never()).store(any(), any(), any());
+	}
+
+	@Test
+	void uploadingToAContainerIsRejected() {
+		CatalogueItem journal = new CatalogueItem();
+		journal.setId("item_journal");
+		journal.setPublisherId("pub_rtlg");
+		journal.setWorkType(WorkType.JOURNAL);
+		when(items.findById("item_journal")).thenReturn(Optional.of(journal));
+		when(adminScope.canAccessPublisher("pub_rtlg")).thenReturn(true);
+		MockMultipartFile file = new MockMultipartFile("file", "book.pdf", "application/pdf", new byte[10]);
+
+		assertThatExceptionOfType(ApiException.class)
+				.isThrownBy(() -> service.accept("item_journal", file, AssetFormat.PDF, null, null))
+				.satisfies(e -> assertThat(e.getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
 	}
 
 	@Test
@@ -75,7 +143,7 @@ class IngestServiceTest {
 		MockMultipartFile file = new MockMultipartFile("file", "book.epub", "application/epub+zip", new byte[10]);
 
 		assertThatExceptionOfType(ApiException.class)
-				.isThrownBy(() -> service.accept("item_42", file, AssetFormat.EPUB))
+				.isThrownBy(() -> service.accept("item_42", file, AssetFormat.EPUB, null, null))
 				.satisfies(e -> assertThat(e.getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
 		verify(bookStorage, never()).store(any(), any(), any());
 	}
@@ -88,7 +156,7 @@ class IngestServiceTest {
 		MockMultipartFile empty = new MockMultipartFile("file", "book.pdf", "application/pdf", new byte[0]);
 
 		assertThatExceptionOfType(ApiException.class)
-				.isThrownBy(() -> service.accept("item_42", empty, AssetFormat.PDF))
+				.isThrownBy(() -> service.accept("item_42", empty, AssetFormat.PDF, null, null))
 				.satisfies(e -> assertThat(e.getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
 	}
 
@@ -110,7 +178,7 @@ class IngestServiceTest {
 		};
 
 		assertThatExceptionOfType(PayloadTooLargeException.class)
-				.isThrownBy(() -> service.accept("item_42", oversized, AssetFormat.AUDIO))
+				.isThrownBy(() -> service.accept("item_42", oversized, AssetFormat.AUDIO, null, null))
 				.withMessageContaining("100 MB");
 	}
 
@@ -132,7 +200,7 @@ class IngestServiceTest {
 		};
 
 		assertThatExceptionOfType(PayloadTooLargeException.class)
-				.isThrownBy(() -> service.accept("item_42", oversized, AssetFormat.PDF))
+				.isThrownBy(() -> service.accept("item_42", oversized, AssetFormat.PDF, null, null))
 				.withMessage("A file that will be locked may not exceed 25 MB");
 	}
 
@@ -154,7 +222,7 @@ class IngestServiceTest {
 		};
 
 		assertThatExceptionOfType(PayloadTooLargeException.class)
-				.isThrownBy(() -> service.accept("item_42", oversized, AssetFormat.AUDIO))
+				.isThrownBy(() -> service.accept("item_42", oversized, AssetFormat.AUDIO, null, null))
 				.withMessage("A file that will be locked may not exceed 25 MB");
 	}
 
@@ -166,7 +234,7 @@ class IngestServiceTest {
 		when(items.save(any())).thenAnswer(i -> i.getArgument(0));
 		MockMultipartFile file = new MockMultipartFile("file", "book.mp3", "audio/mpeg", new byte[10]);
 
-		IngestStatus status = service.accept("item_42", file, AssetFormat.AUDIO);
+		IngestStatus status = service.accept("item_42", file, AssetFormat.AUDIO, null, null);
 
 		assertThat(status.contentState()).isEqualTo(ContentState.QUEUED);
 		verify(bookStorage).store("items/item_42/upload", file.getBytes(), "audio/mpeg");
@@ -178,22 +246,30 @@ class IngestServiceTest {
 		MockMultipartFile file = new MockMultipartFile("file", "book.pdf", "application/pdf", new byte[10]);
 
 		assertThatExceptionOfType(ApiException.class)
-				.isThrownBy(() -> service.accept("item_nope", file, AssetFormat.PDF))
+				.isThrownBy(() -> service.accept("item_nope", file, AssetFormat.PDF, null, null))
 				.satisfies(e -> assertThat(e.getCode()).isEqualTo(ErrorCode.NOT_FOUND));
 	}
 
 	@Test
-	void getStatusReflectsTheItemsCurrentState() {
+	void getStatusReflectsThePartsCurrentState() {
 		CatalogueItem item = item(AccessTier.ELITE, ContentType.EPUB);
 		item.setContentState(ContentState.FAILED);
-		item.setContentError("boom");
-		item.setUpdatedAt(NOW);
+		CatalogueItem.Asset asset = new CatalogueItem.Asset();
+		asset.setFormat(ContentType.EPUB);
+		CatalogueItem.Part part = new CatalogueItem.Part();
+		part.setPartNumber(1);
+		part.setContentState(ContentState.FAILED);
+		part.setContentError("boom");
+		part.setUpdatedAt(NOW);
+		asset.setParts(java.util.List.of(part));
+		item.setAssets(java.util.List.of(asset));
 		when(items.findById("item_42")).thenReturn(Optional.of(item));
 		when(adminScope.canAccessPublisher("pub_rtlg")).thenReturn(true);
 
-		IngestStatus status = service.getStatus("item_42");
+		IngestStatus status = service.getStatus("item_42", null);
 
 		assertThat(status.format()).isEqualTo(AssetFormat.EPUB);
+		assertThat(status.partNumber()).isEqualTo(1);
 		assertThat(status.contentState()).isEqualTo(ContentState.FAILED);
 		assertThat(status.contentError()).isEqualTo("boom");
 		assertThat(status.updatedAt()).isEqualTo(NOW);

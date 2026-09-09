@@ -198,12 +198,14 @@ class DemoDataSeederTest {
             assertThat(s.contentType()).as("%s contentType", id).isEqualTo(c.get("contentType").asText());
             assertThat(s.contentState()).as("%s contentState", id).isEqualTo(c.get("contentState").asText());
 
-            // The fixture calls the plaintext length originalLength; the entity calls it sizeBytes.
+            // The fixture calls the plaintext length originalLength; the entity calls it sizeBytes,
+            // now a property of one part rather than the asset as a whole - part 1's, since every
+            // book seeded today is a single, non-chaptered part.
             List<JsonNode> canonicalAssets = new ArrayList<>();
             c.get("assets").forEach(canonicalAssets::add);
             assertThat(s.assets()).as("%s asset count", id).hasSameSizeAs(canonicalAssets);
             for (int a = 0; a < canonicalAssets.size(); a++) {
-                assertThat(s.assets().get(a).sizeBytes())
+                assertThat(s.assets().get(a).parts().get(0).sizeBytes())
                         .as("%s asset %d byte length", id, a)
                         .isEqualTo(canonicalAssets.get(a).get("originalLength").asLong());
                 assertThat(s.assets().get(a).encrypted())
@@ -216,27 +218,30 @@ class DemoDataSeederTest {
     }
 
     @Test
-    @DisplayName("cipherLength is 12 + sizeBytes + 16 wherever the asset is encrypted, and null otherwise")
+    @DisplayName("cipherLength is 12 + sizeBytes + 16 wherever the part is encrypted, and null otherwise")
     void cipherLengthArithmetic() {
         // Handbook revision 7 shipped this wrong once by counting the nonce twice. Compute it, do not
         // eyeball it.
         for (SeedDataset.SeedItem i : dataset.catalogueItems()) {
             for (SeedDataset.SeedAsset a : i.assets()) {
-                if (a.encrypted()) {
-                    assertThat(a.cipherLength())
-                            .as("%s %s cipherLength", i.id(), a.format())
-                            .isEqualTo(12 + a.sizeBytes() + 16);
-                    assertThat(a.keyId()).as("%s %s keyId", i.id(), a.format()).isNotNull();
-                } else {
-                    // Null, not zero. B's entity field is a primitive long and DemoDataSeeder converts
-                    // it, but "there is no ciphertext" and "the ciphertext is empty" are different
-                    // facts and this file states the true one.
-                    assertThat(a.cipherLength())
-                            .as("%s %s is not encrypted so it has no cipherLength", i.id(), a.format())
-                            .isNull();
-                    assertThat(a.keyId())
-                            .as("%s %s is not encrypted so it has no keyId", i.id(), a.format())
-                            .isNull();
+                for (SeedDataset.SeedPart p : a.parts()) {
+                    if (a.encrypted()) {
+                        assertThat(p.cipherLength())
+                                .as("%s %s part %d cipherLength", i.id(), a.format(), p.partNumber())
+                                .isEqualTo(12 + p.sizeBytes() + 16);
+                        assertThat(a.keyId()).as("%s %s keyId", i.id(), a.format()).isNotNull();
+                    } else {
+                        // Null, not zero. The entity field is a primitive long and DemoDataSeeder
+                        // converts it, but "there is no ciphertext" and "the ciphertext is empty"
+                        // are different facts and this file states the true one.
+                        assertThat(p.cipherLength())
+                                .as("%s %s part %d is not encrypted so it has no cipherLength", i.id(), a.format(),
+                                        p.partNumber())
+                                .isNull();
+                        assertThat(a.keyId())
+                                .as("%s %s is not encrypted so it has no keyId", i.id(), a.format())
+                                .isNull();
+                    }
                 }
             }
         }
@@ -255,38 +260,29 @@ class DemoDataSeederTest {
                 .forEach(
                         a -> {
                             assertThat(a.encrypted()).as("audio asset encrypted").isFalse();
-                            assertThat(a.hasSearchIndex()).as("audio asset indexed").isFalse();
+                            a.parts().forEach(p -> assertThat(p.hasSearchIndex()).as("audio part indexed").isFalse());
                         });
     }
 
     @Test
-    @DisplayName("the three server-only keys sit on the item, and only where an object could exist")
-    void serverOnlyKeysAreOnTheItem() {
-        // B moved storageKey, indexKey and wrappedBek off the asset and onto CatalogueItem, so the
-        // dataset follows. A copy left on an asset would be a second source of truth for one fact, and
-        // Jackson would drop it without a word because B's Asset has nine fields and none of them is
-        // called storageKey.
+    @DisplayName("the two server-only keys sit on the part, and only where an object could exist")
+    void serverOnlyKeysAreOnThePart() {
+        // storageKey and indexKey live on Part now, one level below where they used to sit on
+        // Asset (and, before that, on the item) - each is a property of one chapter's own file,
+        // not the asset or the item as a whole. A copy left anywhere else would be a second
+        // source of truth for one fact.
         for (JsonNode item : raw.get("catalogueItems")) {
             String id = item.get("_id").asText();
-            boolean hasAssets = item.get("assets").size() > 0;
 
             for (JsonNode asset : item.get("assets")) {
-                assertThat(asset.has("storageKey")).as("%s asset storageKey", id).isFalse();
-                assertThat(asset.has("indexKey")).as("%s asset indexKey", id).isFalse();
-                assertThat(asset.has("wrappedBek")).as("%s asset wrappedBek", id).isFalse();
-            }
-
-            if (hasAssets) {
-                // Every item today is a real book that went through the real ingest pipeline,
-                // so every storageKey is a real "items/<id>/content" object in the bucket - no
-                // "seed/" or "static/mock-content/" placeholder is left in this file.
-                assertThat(item.get("storageKey").asText())
-                        .as("%s storageKey is a real ingested object", id)
-                        .startsWith("items/" + id + "/");
-            } else {
-                // A key pointing at nothing is worse than no key: it looks like content exists.
-                for (String field : List.of("storageKey", "indexKey", "wrappedBek")) {
-                    assertThat(item.get(field).isNull()).as("%s %s with no assets", id, field).isTrue();
+                assertThat(asset.has("masterWrappedBek")).as("%s asset masterWrappedBek", id).isTrue();
+                for (JsonNode part : asset.get("parts")) {
+                    // Every item today is a real book that went through the real ingest pipeline,
+                    // so every part's storageKey is a real "items/<id>[/partN]/content" object in
+                    // the bucket - no "seed/" or "static/mock-content/" placeholder is left here.
+                    assertThat(part.get("storageKey").asText())
+                            .as("%s part storageKey is a real ingested object", id)
+                            .startsWith("items/" + id);
                 }
             }
         }

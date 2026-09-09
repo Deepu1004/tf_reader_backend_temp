@@ -80,13 +80,14 @@ public class CatalogueItemAdminController {
 	@PostMapping(value = "/{itemId}/content", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 	@ResponseStatus(HttpStatus.ACCEPTED)
 	public IngestStatus uploadContent(@PathVariable String itemId, @RequestParam("file") MultipartFile file,
-			@RequestParam("format") AssetFormat format) {
-		return ingestItems.accept(itemId, file, format);
+			@RequestParam("format") AssetFormat format, @RequestParam(required = false) Integer partNumber,
+			@RequestParam(required = false) String partTitle) {
+		return ingestItems.accept(itemId, file, format, partNumber, partTitle);
 	}
 
 	@GetMapping("/{itemId}/ingest-status")
-	public IngestStatus ingestStatus(@PathVariable String itemId) {
-		return ingestItems.getStatus(itemId);
+	public IngestStatus ingestStatus(@PathVariable String itemId, @RequestParam(required = false) Integer partNumber) {
+		return ingestItems.getStatus(itemId, partNumber);
 	}
 
 	@PostMapping(value = "/{itemId}/cover", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

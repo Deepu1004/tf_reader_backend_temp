@@ -83,8 +83,10 @@ public class CatalogueBatchService {
 	}
 
 	private BatchItem toBatchItem(CatalogueItem item, EntitlementDecision decision) {
-		boolean hasSearchIndex = item.getAssets() != null
-				&& item.getAssets().stream().anyMatch(CatalogueItem.Asset::isHasSearchIndex);
+		boolean hasSearchIndex = item.getAssets() != null && item.getAssets().stream()
+				.filter(asset -> asset.getParts() != null)
+				.flatMap(asset -> asset.getParts().stream())
+				.anyMatch(CatalogueItem.Part::isHasSearchIndex);
 
 		return new BatchItem(item.getId(), item.getTitle(), item.getAuthors(), coverUrlResolver.resolve(item),
 				item.getIsbn(), item.getContentType(), item.getAccessTier(), decision.copies(), hasSearchIndex);

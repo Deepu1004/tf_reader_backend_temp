@@ -32,7 +32,6 @@
     "QUEUED, item_f3 was FAILED; all eight real books are READY). Whoever picks either scenario back",
     "up should say so rather than assume it is still covered."
   ],
-
   "_notes": {
     "cipherLength": "12 (nonce) + sizeBytes + 16 (GCM tag). Null here means the asset is not encrypted, so the number does not exist. B's Asset.cipherLength is a primitive long and cannot hold null, so DemoDataSeeder maps null to 0. The null is kept in this file because 'not applicable' and 'zero bytes of ciphertext' are different facts and the validator checks the first one.",
     "indexTerms": "Same treatment. Null means there is no search index at all; B's field is a primitive int, so the mapping writes 0.",
@@ -47,7 +46,6 @@
     "feedSettings": "Seeded, one per institution, because B's FeedSettings landed and week 2's shelf feeds need it. B's FeedSettingsPersistenceGuard rejects anything that is not exactly three shelves, so every row here has three, and an empty itemIds means a hidden shelf rather than an absent one.",
     "auditLogs": "Deliberately NOT seeded, although AuditLog and AuditLogRepository exist. An audit log records what actually happened; inventing entries would put fiction into the one collection whose value is that it is true. It also carries a 90-day TTL on 'at', so seeded rows would vanish and look like data loss. The admin console fills it as soon as anyone edits anything."
   },
-
   "publishers": [
     {
       "_id": "pub_rtlg",
@@ -70,7 +68,6 @@
       "updatedAt": "2026-08-10T09:00:00Z"
     }
   ],
-
   "collections": [
     {
       "_id": "col_law2024",
@@ -87,7 +84,6 @@
       "description": "CRC Press environment, policy and open science titles for 2024."
     }
   ],
-
   "institutions": [
     {
       "_id": "inst_7f3",
@@ -150,22 +146,31 @@
       "updatedAt": "2026-08-10T09:00:00Z"
     }
   ],
-
   "catalogueItems": [
     {
       "_seedWhy": "Real EPUB, ingested from Law and Ecology_26_08_26_14_47_52.epub. OPEN_ACCESS, so no entitlement is needed and it reaches every institution including UCL (zero grants) and Leeds (suspended, never shown anyway). Unencrypted per the OPEN_ACCESS rule. In col_env2024 for a themed shelf, though membership grants nothing on its own.",
       "_id": "dev-sample-epub",
       "publisherId": "pub_crc",
-      "collectionIds": ["col_env2024"],
+      "collectionIds": [
+        "col_env2024"
+      ],
+      "workType": null,
+      "parentId": null,
+      "sequence": null,
       "title": "Law and Ecology",
       "subtitle": "New Environmental Foundations",
-      "authors": ["Andreas Philippopoulos-Mihalopoulos"],
+      "authors": [
+        "Andreas Philippopoulos-Mihalopoulos"
+      ],
       "editors": [],
       "narrators": [],
       "isbn": null,
       "language": "en",
       "description": "Real EPUB fixture (First Edition), ingested from a real file.",
-      "subjects": ["Law", "Environment"],
+      "subjects": [
+        "Law",
+        "Environment"
+      ],
       "publishedAt": "2022-05-14",
       "coverUrl": null,
       "coverKey": "items/dev-sample-epub/cover",
@@ -175,39 +180,56 @@
       "status": "PUBLISHED",
       "contentState": "READY",
       "contentError": null,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z",
       "assets": [
         {
           "format": "EPUB",
           "mimeType": "application/epub+zip",
-          "sizeBytes": 4430885,
-          "cipherLength": null,
           "encrypted": false,
-          "hasSearchIndex": true,
-          "indexTerms": 10666,
-          "indexSkipReason": null,
-          "keyId": null
+          "keyId": null,
+          "masterWrappedBek": null,
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 4430885,
+              "cipherLength": null,
+              "hasSearchIndex": true,
+              "indexTerms": 10666,
+              "indexSkipReason": null,
+              "storageKey": "items/dev-sample-epub/content",
+              "indexKey": "items/dev-sample-epub/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
         }
-      ],
-      "storageKey": "items/dev-sample-epub/content",
-      "indexKey": "items/dev-sample-epub/index",
-      "wrappedBek": null,
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      ]
     },
     {
       "_seedWhy": "Real PDF, ingested from Professional Competence And Higher Education_26_08_26_15_22_02-ELITE.pdf. ELITE, so it needs its own grant: pub_crc has no publisher/collection-level entitlement to inst_7f3, so ent_dev_elite (ITEM scope, copies:2) exists specifically for this book.",
       "_id": "dev-sample-pdf",
       "publisherId": "pub_crc",
       "collectionIds": [],
+      "workType": null,
+      "parentId": null,
+      "sequence": null,
       "title": "Professional Competence And Higher Education",
       "subtitle": null,
-      "authors": ["Richard Winter", "Maire Maisch"],
+      "authors": [
+        "Richard Winter",
+        "Maire Maisch"
+      ],
       "editors": [],
       "narrators": [],
       "isbn": null,
       "language": "en",
       "description": "Real PDF fixture, ingested from a real file.",
-      "subjects": ["Education"],
+      "subjects": [
+        "Education"
+      ],
       "publishedAt": null,
       "coverUrl": null,
       "coverKey": "items/dev-sample-pdf/cover",
@@ -217,39 +239,55 @@
       "status": "PUBLISHED",
       "contentState": "READY",
       "contentError": null,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z",
       "assets": [
         {
           "format": "PDF",
           "mimeType": "application/pdf",
-          "sizeBytes": 1624063,
-          "cipherLength": 1624091,
           "encrypted": true,
-          "hasSearchIndex": true,
-          "indexTerms": 6636,
-          "indexSkipReason": null,
-          "keyId": "master-v1"
+          "keyId": "master-v1",
+          "masterWrappedBek": "rY/mQdwO1ZmkbZCwpa3oyZ7reK853+92HPmPevuRw1q1vf3Htx+5wg==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 1624063,
+              "cipherLength": 1624091,
+              "hasSearchIndex": true,
+              "indexTerms": 6636,
+              "indexSkipReason": null,
+              "storageKey": "items/dev-sample-pdf/content",
+              "indexKey": "items/dev-sample-pdf/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
         }
-      ],
-      "storageKey": "items/dev-sample-pdf/content",
-      "indexKey": "items/dev-sample-pdf/index",
-      "wrappedBek": "rY/mQdwO1ZmkbZCwpa3oyZ7reK853+92HPmPevuRw1q1vf3Htx+5wg==",
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      ]
     },
     {
       "_seedWhy": "Real audio, ingested from doctor_dolittle_02_lofting_64kb-OPEN_ACCESS.mp3 (public-domain Hugh Lofting). OPEN_ACCESS, so no entitlement needed. Unencrypted, per both the OPEN_ACCESS rule and the audio-is-never-encrypted rule agreeing for once.",
       "_id": "dev-sample-audio",
       "publisherId": "pub_crc",
       "collectionIds": [],
+      "workType": null,
+      "parentId": null,
+      "sequence": null,
       "title": "Doctor Dolittle - Chapter 2: Animal Language",
       "subtitle": null,
       "authors": [],
       "editors": [],
-      "narrators": ["Hugh Lofting"],
+      "narrators": [
+        "Hugh Lofting"
+      ],
       "isbn": null,
       "language": "en",
       "description": "Real audio fixture, ingested from a real file.",
-      "subjects": ["Fiction"],
+      "subjects": [
+        "Fiction"
+      ],
       "publishedAt": null,
       "coverUrl": null,
       "coverKey": null,
@@ -259,39 +297,55 @@
       "status": "PUBLISHED",
       "contentState": "READY",
       "contentError": null,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z",
       "assets": [
         {
           "format": "AUDIO",
           "mimeType": "audio/mpeg",
-          "sizeBytes": 6312497,
-          "cipherLength": null,
           "encrypted": false,
-          "hasSearchIndex": false,
-          "indexTerms": null,
-          "indexSkipReason": "AudioNotIndexable",
-          "keyId": null
+          "keyId": null,
+          "masterWrappedBek": null,
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 6312497,
+              "cipherLength": null,
+              "hasSearchIndex": false,
+              "indexTerms": null,
+              "indexSkipReason": "AudioNotIndexable",
+              "storageKey": "items/dev-sample-audio/content",
+              "indexKey": null,
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
         }
-      ],
-      "storageKey": "items/dev-sample-audio/content",
-      "indexKey": null,
-      "wrappedBek": null,
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      ]
     },
     {
       "_seedWhy": "Real audio, ingested from doctor_dolittle_01_lofting_64kb-ELITE.mp3. ELITE, so encrypted like any other locked asset - audio is not exempt above OPEN_ACCESS. Every ELITE item carries a real copy limit, so this one has its own ITEM-scope grant (ent_dev_elite_audio, copies:2) rather than riding pub_rtlg's UNLIMITED publisher grant (ent_imp2), which would otherwise win by scope but leave an ELITE title with no limit and no queue.",
       "_id": "dev-sample-audio-encrypted",
       "publisherId": "pub_rtlg",
       "collectionIds": [],
+      "workType": null,
+      "parentId": null,
+      "sequence": null,
       "title": "Doctor Dolittle - Chapter 1: Puddleby",
       "subtitle": null,
       "authors": [],
       "editors": [],
-      "narrators": ["Hugh Lofting"],
+      "narrators": [
+        "Hugh Lofting"
+      ],
       "isbn": null,
       "language": "en",
       "description": "Real audio fixture, ingested from a real file.",
-      "subjects": ["Fiction"],
+      "subjects": [
+        "Fiction"
+      ],
       "publishedAt": null,
       "coverUrl": null,
       "coverKey": null,
@@ -301,39 +355,57 @@
       "status": "PUBLISHED",
       "contentState": "READY",
       "contentError": null,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z",
       "assets": [
         {
           "format": "AUDIO",
           "mimeType": "audio/mpeg",
-          "sizeBytes": 2966528,
-          "cipherLength": 2966556,
           "encrypted": true,
-          "hasSearchIndex": false,
-          "indexTerms": null,
-          "indexSkipReason": "AudioNotIndexable",
-          "keyId": "master-v1"
+          "keyId": "master-v1",
+          "masterWrappedBek": "c+dPIopYlY8Ej/bljbhs3gH/j93DLo3ppOMn1YBS7sCbsJCRAdDw0g==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 2966528,
+              "cipherLength": 2966556,
+              "hasSearchIndex": false,
+              "indexTerms": null,
+              "indexSkipReason": "AudioNotIndexable",
+              "storageKey": "items/dev-sample-audio-encrypted/content",
+              "indexKey": null,
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
         }
-      ],
-      "storageKey": "items/dev-sample-audio-encrypted/content",
-      "indexKey": null,
-      "wrappedBek": "c+dPIopYlY8Ej/bljbhs3gH/j93DLo3ppOMn1YBS7sCbsJCRAdDw0g==",
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      ]
     },
     {
       "_seedWhy": "Real EPUB, ingested from The Politics of Coalition in Korea_26_08_26_15_21_48-ELITE.epub. ELITE, and deliberately placed in col_law2024 so the COLLECTION grant (ent_imp1, copies:2) beats the PUBLISHER grant (ent_imp2, UNLIMITED) on the same book - the same scope-precedence demonstration item_42 used to carry.",
       "_id": "dev-fixture-epub",
       "publisherId": "pub_rtlg",
-      "collectionIds": ["col_law2024"],
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": null,
+      "parentId": null,
+      "sequence": null,
       "title": "The Politics of Coalition in Korea",
       "subtitle": "Between institutions and culture",
-      "authors": ["Youngmi Kim"],
+      "authors": [
+        "Youngmi Kim"
+      ],
       "editors": [],
       "narrators": [],
       "isbn": null,
       "language": "en",
       "description": "Real EPUB fixture (ELITE), ingested from a real file.",
-      "subjects": ["Political Science"],
+      "subjects": [
+        "Political Science"
+      ],
       "publishedAt": "2023-07-03",
       "coverUrl": null,
       "coverKey": "items/dev-fixture-epub/cover",
@@ -343,30 +415,42 @@
       "status": "PUBLISHED",
       "contentState": "READY",
       "contentError": null,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z",
       "assets": [
         {
           "format": "EPUB",
           "mimeType": "application/epub+zip",
-          "sizeBytes": 1124678,
-          "cipherLength": 1124706,
           "encrypted": true,
-          "hasSearchIndex": true,
-          "indexTerms": 6644,
-          "indexSkipReason": null,
-          "keyId": "master-v1"
+          "keyId": "master-v1",
+          "masterWrappedBek": "TZqxxKUDnFXker050QYweDjoySxFk0+lfrLhwN/CuOJl2HNHyw5ppg==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 1124678,
+              "cipherLength": 1124706,
+              "hasSearchIndex": true,
+              "indexTerms": 6644,
+              "indexSkipReason": null,
+              "storageKey": "items/dev-fixture-epub/content",
+              "indexKey": "items/dev-fixture-epub/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
         }
-      ],
-      "storageKey": "items/dev-fixture-epub/content",
-      "indexKey": "items/dev-fixture-epub/index",
-      "wrappedBek": "TZqxxKUDnFXker050QYweDjoySxFk0+lfrLhwN/CuOJl2HNHyw5ppg==",
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      ]
     },
     {
       "_seedWhy": "Real PDF, ingested from Playful Identities_26_08_26_14_47_56.pdf. SUBSCRIPTION, pub_rtlg, so it rides ent_imp2 (PUBLISHER scope, UNLIMITED); no new entitlement needed. In no collection, so it is reached through the PUBLISHER grant, not a narrower one.",
       "_id": "dev-fixture-pdf",
       "publisherId": "pub_rtlg",
       "collectionIds": [],
+      "workType": null,
+      "parentId": null,
+      "sequence": null,
       "title": "Playful Identities",
       "subtitle": null,
       "authors": [],
@@ -375,7 +459,9 @@
       "isbn": null,
       "language": "en",
       "description": "Real PDF fixture, ingested from a real file.",
-      "subjects": ["Media Studies"],
+      "subjects": [
+        "Media Studies"
+      ],
       "publishedAt": null,
       "coverUrl": null,
       "coverKey": "items/dev-fixture-pdf/cover",
@@ -385,39 +471,56 @@
       "status": "PUBLISHED",
       "contentState": "READY",
       "contentError": null,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z",
       "assets": [
         {
           "format": "PDF",
           "mimeType": "application/pdf",
-          "sizeBytes": 14460017,
-          "cipherLength": 14460045,
           "encrypted": true,
-          "hasSearchIndex": true,
-          "indexTerms": 13515,
-          "indexSkipReason": null,
-          "keyId": "master-v1"
+          "keyId": "master-v1",
+          "masterWrappedBek": "lqNI+xpU8w41CXiZ4aMyLH2yZwmx8lYXgbuiQhr0EsJRTYjKxnbH4Q==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 14460017,
+              "cipherLength": 14460045,
+              "hasSearchIndex": true,
+              "indexTerms": 13515,
+              "indexSkipReason": null,
+              "storageKey": "items/dev-fixture-pdf/content",
+              "indexKey": "items/dev-fixture-pdf/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
         }
-      ],
-      "storageKey": "items/dev-fixture-pdf/content",
-      "indexKey": "items/dev-fixture-pdf/index",
-      "wrappedBek": "lqNI+xpU8w41CXiZ4aMyLH2yZwmx8lYXgbuiQhr0EsJRTYjKxnbH4Q==",
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      ]
     },
     {
       "_seedWhy": "Real EPUB, ingested from Contract Law in the Construction Industry Context_26_08_26_14_48_19.epub. Added alongside the six kept dev fixtures rather than replacing one - SUBSCRIPTION, pub_rtlg, rides ent_imp2 (PUBLISHER scope, UNLIMITED). Its subject fits the Imperial 'Law essentials' shelf.",
       "_id": "item_e9a3c599",
       "publisherId": "pub_rtlg",
       "collectionIds": [],
+      "workType": null,
+      "parentId": null,
+      "sequence": null,
       "title": "Contract Law in the Construction Industry Context",
       "subtitle": null,
-      "authors": ["Carl J. Circo"],
+      "authors": [
+        "Carl J. Circo"
+      ],
       "editors": [],
       "narrators": [],
       "isbn": null,
       "language": "en",
       "description": "Real EPUB fixture, ingested from a real file.",
-      "subjects": ["Law", "Construction"],
+      "subjects": [
+        "Law",
+        "Construction"
+      ],
       "publishedAt": "2023-02-17",
       "coverUrl": null,
       "coverKey": "items/item_e9a3c599/cover",
@@ -427,39 +530,57 @@
       "status": "PUBLISHED",
       "contentState": "READY",
       "contentError": null,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z",
       "assets": [
         {
           "format": "EPUB",
           "mimeType": "application/epub+zip",
-          "sizeBytes": 583205,
-          "cipherLength": 583233,
           "encrypted": true,
-          "hasSearchIndex": true,
-          "indexTerms": 6787,
-          "indexSkipReason": null,
-          "keyId": "master-v1"
+          "keyId": "master-v1",
+          "masterWrappedBek": "qsxVxQjcNRePRARtB80dSCk9iUTYx9WXwEqonHzA4peb6H5dJpaU/Q==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 583205,
+              "cipherLength": 583233,
+              "hasSearchIndex": true,
+              "indexTerms": 6787,
+              "indexSkipReason": null,
+              "storageKey": "items/item_e9a3c599/content",
+              "indexKey": "items/item_e9a3c599/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
         }
-      ],
-      "storageKey": "items/item_e9a3c599/content",
-      "indexKey": "items/item_e9a3c599/index",
-      "wrappedBek": "qsxVxQjcNRePRARtB80dSCk9iUTYx9WXwEqonHzA4peb6H5dJpaU/Q==",
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      ]
     },
     {
       "_seedWhy": "Real EPUB, ingested from Humanitarianism and Challenges of Cooperation_26_08_26_14_48_25.epub. Added alongside the six kept dev fixtures. SUBSCRIPTION, pub_rtlg, rides ent_imp2 (PUBLISHER scope, UNLIMITED). Its own upload originally failed on a ZipInputStream/data-descriptor bug in EpubArchive; kept as the id that proves the fix (see EpubArchive.unzip).",
       "_id": "item_4062cdea",
       "publisherId": "pub_rtlg",
       "collectionIds": [],
+      "workType": null,
+      "parentId": null,
+      "sequence": null,
       "title": "Humanitarianism and Challenges of Cooperation",
       "subtitle": "First Edition",
-      "authors": ["Volker M. Heins", "Kai Koddenbrock", "Christine Unrau"],
+      "authors": [
+        "Volker M. Heins",
+        "Kai Koddenbrock",
+        "Christine Unrau"
+      ],
       "editors": [],
       "narrators": [],
       "isbn": null,
       "language": "en",
       "description": "Real EPUB fixture, ingested from a real file. Published 2025; exact day not in the file's metadata.",
-      "subjects": ["Political Science"],
+      "subjects": [
+        "Political Science"
+      ],
       "publishedAt": null,
       "coverUrl": null,
       "coverKey": "items/item_4062cdea/cover",
@@ -469,27 +590,35 @@
       "status": "PUBLISHED",
       "contentState": "READY",
       "contentError": null,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z",
       "assets": [
         {
           "format": "EPUB",
           "mimeType": "application/epub+zip",
-          "sizeBytes": 1672697,
-          "cipherLength": 1672725,
           "encrypted": true,
-          "hasSearchIndex": true,
-          "indexTerms": 11460,
-          "indexSkipReason": null,
-          "keyId": "master-v1"
+          "keyId": "master-v1",
+          "masterWrappedBek": "0W8Ld3asvlGnVoAhqFGGNVeeTZ5PnZOkHYTx8OiyP796k6YmpH+ILQ==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 1672697,
+              "cipherLength": 1672725,
+              "hasSearchIndex": true,
+              "indexTerms": 11460,
+              "indexSkipReason": null,
+              "storageKey": "items/item_4062cdea/content",
+              "indexKey": "items/item_4062cdea/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
         }
-      ],
-      "storageKey": "items/item_4062cdea/content",
-      "indexKey": "items/item_4062cdea/index",
-      "wrappedBek": "0W8Ld3asvlGnVoAhqFGGNVeeTZ5PnZOkHYTx8OiyP796k6YmpH+ILQ==",
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      ]
     }
   ],
-
   "entitlements": [
     {
       "_seedWhy": "COLLECTION scope, CONCURRENT. Covers dev-fixture-epub, the only book in col_law2024. The narrower scope, so it must beat the publisher grant below on that same book - the scope-precedence demonstration item_42/ent_imp1 originally carried.",
@@ -548,7 +677,6 @@
       "updatedAt": "2026-08-10T09:00:00Z"
     }
   ],
-
   "adminUsers": [
     {
       "_seedWhy": "The account everyone logs into the console with.",
@@ -587,7 +715,6 @@
       "lastLoginAt": null
     }
   ],
-
   "feedSettings": [
     {
       "_seedWhy": "The fully curated case. Three shelves, all populated, and every listed book is one Imperial can actually reach: dev-fixture-epub through the collection grant, dev-fixture-pdf and item_e9a3c599 through the publisher grant, dev-sample-epub and dev-sample-audio because open access needs no grant. itemIds order is display order and the feed must preserve it exactly.",
@@ -601,19 +728,28 @@
           "id": "shelf_1",
           "title": "New this month",
           "order": 1,
-          "itemIds": ["dev-fixture-epub", "dev-fixture-pdf", "item_e9a3c599"]
+          "itemIds": [
+            "dev-fixture-epub",
+            "dev-fixture-pdf",
+            "item_e9a3c599"
+          ]
         },
         {
           "id": "shelf_2",
           "title": "Law essentials",
           "order": 2,
-          "itemIds": ["item_e9a3c599"]
+          "itemIds": [
+            "item_e9a3c599"
+          ]
         },
         {
           "id": "shelf_3",
           "title": "Open access picks",
           "order": 3,
-          "itemIds": ["dev-sample-epub", "dev-sample-audio"]
+          "itemIds": [
+            "dev-sample-epub",
+            "dev-sample-audio"
+          ]
         }
       ],
       "updatedAt": "2026-08-10T09:00:00Z"
@@ -630,7 +766,10 @@
           "id": "shelf_1",
           "title": "New this month",
           "order": 1,
-          "itemIds": ["dev-sample-epub", "dev-sample-audio"]
+          "itemIds": [
+            "dev-sample-epub",
+            "dev-sample-audio"
+          ]
         },
         {
           "id": "shelf_2",

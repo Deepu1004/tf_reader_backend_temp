@@ -20,7 +20,9 @@ import lombok.Setter;
 @CompoundIndexes({
 		@CompoundIndex(name = "publisher_status", def = "{'publisherId': 1, 'status': 1}"),
 		@CompoundIndex(name = "collections_status_contentstate", def = "{'collectionIds': 1, 'status': 1, 'contentState': 1}"),
-		@CompoundIndex(name = "accesstier_status", def = "{'accessTier': 1, 'status': 1}")
+		@CompoundIndex(name = "accesstier_status", def = "{'accessTier': 1, 'status': 1}"),
+		// Backs a container's children lookup (Journal -> its Volumes, Volume -> its Issues, ...).
+		@CompoundIndex(name = "parent_worktype", def = "{'parentId': 1, 'workType': 1}")
 })
 @Getter
 @Setter
@@ -33,6 +35,22 @@ public class CatalogueItem {
 
 	private String publisherId;
 	private List<String> collectionIds;
+
+	// Defaults to BOOK when absent, so every item that existed before this field was added is a
+	// standalone book, unaffected without a migration. Only BOOK and ARTICLE are leaves - they
+	// carry contentType/accessTier/assets/isbn and go through ingest. JOURNAL/VOLUME/ISSUE are
+	// pure containers with no content of their own.
+	private WorkType workType;
+
+	// The parent's id, or null for a standalone BOOK/JOURNAL. A container carries no childIds
+	// array back - the child points up via parentId, the same rule already used for
+	// BookCollection: membership lives on the item, so the relationship exists once and cannot
+	// disagree with itself.
+	private String parentId;
+
+	// Ordering among the children of one parent (Volume 12 before Volume 13, Issue 3 before Issue
+	// 4). Optional; absent items sort last.
+	private Integer sequence;
 
 	@TextIndexed
 	private String title;
@@ -77,14 +95,13 @@ public class CatalogueItem {
 	private ContentType contentType;
 	private AccessTier accessTier;
 	private ItemStatus status;
+
+	// For a leaf (BOOK/ARTICLE) this is the aggregate of every part of every asset - see
+	// IngestProcessor's recompute rule. Always NONE for a container (JOURNAL/VOLUME/ISSUE), which
+	// never goes through ingest.
 	private ContentState contentState;
 	private String contentError;
 	private List<Asset> assets;
-
-	// Never leave the server; excluded from any future DTO.
-	private String storageKey;
-	private String indexKey;
-	private String masterWrappedBek;
 
 	private Instant createdAt;
 	private Instant updatedAt;
@@ -97,13 +114,42 @@ public class CatalogueItem {
 
 		private ContentType format;
 		private String mimeType;
+		private boolean encrypted;
+		private String keyId;
+
+		// Wrapped once, on the first part of this asset ever locked, then shared unchanged by
+		// every later part - one BEK per asset, not per part. Never leaves the server.
+		private String masterWrappedBek;
+
+		private List<Part> parts;
+
+	}
+
+	/** One chapter's own file: its own storage, its own index, its own ingest state. */
+	@Getter
+	@Setter
+	@NoArgsConstructor
+	@AllArgsConstructor
+	public static class Part {
+
+		// 1-based, unique within an Asset - not an array index, so re-ingesting part 2 alone
+		// never shifts what "part 3" means.
+		private int partNumber;
+		private String title;
+
 		private long sizeBytes;
 		private long cipherLength;
-		private boolean encrypted;
 		private boolean hasSearchIndex;
 		private int indexTerms;
 		private String indexSkipReason;
-		private String keyId;
+
+		// Never leave the server; excluded from any future DTO.
+		private String storageKey;
+		private String indexKey;
+
+		private ContentState contentState;
+		private String contentError;
+		private Instant updatedAt;
 
 	}
 
