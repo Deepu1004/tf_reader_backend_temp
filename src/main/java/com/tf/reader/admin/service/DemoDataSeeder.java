@@ -60,7 +60,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Task 8: seeds an empty local MongoDB with a fixed set of 23 dev records  so every developer works off the same data instead of five
+ * Task 8: seeds an empty local MongoDB with a fixed set of 100 dev records so every developer works off the same data instead of five
  * different hand-typed databases. Audit logs are left out since they're meant to record
  * real events. Only inserts missing docs (never overwrites), only deletes docs on reset
  * (never drops collections/indexes), respects write/delete order for entity

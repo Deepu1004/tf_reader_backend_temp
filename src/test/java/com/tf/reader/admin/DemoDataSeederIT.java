@@ -143,7 +143,7 @@ class DemoDataSeederIT {
         // deleted publishers first and re-inserted in the same order, this would still pass; if either
         // order were reversed, the run would throw IllegalArgumentException instead.
         seederWithReset().run(null);
-        assertThat(items.count()).isEqualTo(8);
+        assertThat(items.count()).isEqualTo(83);
         assertThat(items.findById("dev-fixture-epub").orElseThrow().getPublisherId()).isEqualTo("pub_rtlg");
     }
 
@@ -376,7 +376,7 @@ class DemoDataSeederIT {
         assertThat(publishers.count()).as("publishers").isEqualTo(2);
         assertThat(collections.count()).as("collections").isEqualTo(2);
         assertThat(institutions.count()).as("institutions").isEqualTo(3);
-        assertThat(items.count()).as("catalogueItems").isEqualTo(8);
+        assertThat(items.count()).as("catalogueItems").isEqualTo(83);
         assertThat(entitlements.count()).as("entitlements").isEqualTo(4);
         assertThat(adminUsers.count()).as("adminUsers").isEqualTo(3);
         assertThat(feedSettings.count()).as("feedSettings").isEqualTo(3);

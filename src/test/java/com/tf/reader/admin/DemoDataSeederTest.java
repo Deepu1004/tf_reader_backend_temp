@@ -77,16 +77,18 @@ class DemoDataSeederTest {
         assertThat(dataset.publishers()).hasSize(2);
         assertThat(dataset.collections()).hasSize(2);
         assertThat(dataset.institutions()).hasSize(3);
-        // The eight week 1 placeholders are retired. Every remaining item is a real book that
-        // has gone through the real ingest pipeline - the six original dev-content ids (see
-        // DEV_CONTENT_FIXTURE_ITEM_IDS) plus two more added alongside them.
-        assertThat(dataset.catalogueItems()).hasSize(8);
+        // The eight week 1 placeholders are retired. The eight week-4 items are real books that
+        // went through the real ingest pipeline - the six original dev-content ids (see
+        // DEV_CONTENT_FIXTURE_ITEM_IDS) plus two more added alongside them. Week 5 added 75 more,
+        // real too, ingested the same way: 3 standalone books plus a Journal/Volume/Issue/Article
+        // hierarchy three journals deep (3 journals, 8 volumes, 11 issues, 50 articles).
+        assertThat(dataset.catalogueItems()).hasSize(83);
         assertThat(dataset.entitlements()).hasSize(4);
         assertThat(dataset.adminUsers()).hasSize(3);
         assertThat(dataset.feedSettings()).hasSize(3);
 
         // One number, so an extra row cannot be added without someone updating the plan too.
-        assertThat(dataset.documentCount()).isEqualTo(25);
+        assertThat(dataset.documentCount()).isEqualTo(100);
     }
 
     @Test
@@ -131,6 +133,12 @@ class DemoDataSeederTest {
             assertThat(publisherIds).as("item %s publisherId", i.id()).contains(i.publisherId());
             assertThat(collectionIds).as("item %s collectionIds", i.id()).containsAll(i.collectionIds());
 
+            // parentId is the Journal/Volume/Issue/Article chain's only link - a dangling one
+            // would be a silent 404 the moment something tries to browse into it.
+            if (i.parentId() != null) {
+                assertThat(itemIds).as("item %s parentId", i.id()).contains(i.parentId());
+            }
+
             // A book may only sit in a collection owned by its own publisher.
             for (String cid : i.collectionIds()) {
                 String owner =
@@ -172,6 +180,62 @@ class DemoDataSeederTest {
                 assertThat(itemIds).as("%s %s itemIds", f.id(), s.id()).containsAll(s.itemIds());
             }
         }
+    }
+
+    @Test
+    @DisplayName("the Journal/Volume/Issue/Article chain nests exactly as the admin service requires")
+    void hierarchyChainIsWellFormed() {
+        // Mirrors CatalogueItemAdminService.requireValidParentChain - checked here too because a
+        // dataset that violated it would never be caught by a repository-level test: Mongo has no
+        // foreign keys and would happily store the bad chain.
+        Map<String, SeedDataset.SeedItem> byId = dataset.catalogueItems().stream()
+                .collect(Collectors.toMap(SeedDataset.SeedItem::id, i -> i));
+
+        int journals = 0, volumes = 0, issues = 0, articles = 0, books = 0;
+        for (SeedDataset.SeedItem i : dataset.catalogueItems()) {
+            String workType = i.workType() == null ? "BOOK" : i.workType();
+            switch (workType) {
+                case "JOURNAL" -> {
+                    journals++;
+                    assertThat(i.parentId()).as("%s (JOURNAL) has no parent", i.id()).isNull();
+                }
+                case "VOLUME" -> {
+                    volumes++;
+                    assertParentWorkType(byId, i, "JOURNAL");
+                }
+                case "ISSUE" -> {
+                    issues++;
+                    assertParentWorkType(byId, i, "VOLUME");
+                }
+                case "ARTICLE" -> {
+                    articles++;
+                    if (i.parentId() != null) {
+                        assertParentWorkType(byId, i, "ISSUE");
+                    }
+                }
+                case "BOOK" -> {
+                    books++;
+                    assertThat(i.parentId()).as("%s (BOOK) has no parent", i.id()).isNull();
+                }
+                default -> throw new AssertionError("unknown workType " + workType + " on " + i.id());
+            }
+        }
+        // 8 week-4 books (workType absent, defaults to BOOK) + 3 week-5 books = 11 standalone
+        // books; 3 journals, 8 volumes, 11 issues, 50 articles from week 5's real hierarchy.
+        assertThat(books).isEqualTo(11);
+        assertThat(journals).isEqualTo(3);
+        assertThat(volumes).isEqualTo(8);
+        assertThat(issues).isEqualTo(11);
+        assertThat(articles).isEqualTo(50);
+    }
+
+    private static void assertParentWorkType(Map<String, SeedDataset.SeedItem> byId, SeedDataset.SeedItem child,
+            String expectedParentWorkType) {
+        assertThat(child.parentId()).as("%s has a parentId", child.id()).isNotNull();
+        SeedDataset.SeedItem parent = byId.get(child.parentId());
+        assertThat(parent).as("%s's parent %s exists", child.id(), child.parentId()).isNotNull();
+        assertThat(parent.workType()).as("%s's parent %s is a %s", child.id(), parent.id(), expectedParentWorkType)
+                .isEqualTo(expectedParentWorkType);
     }
 
     @Test
@@ -218,7 +282,7 @@ class DemoDataSeederTest {
     }
 
     @Test
-    @DisplayName("cipherLength is 12 + sizeBytes + 16 wherever the part is encrypted, and null otherwise")
+    @DisplayName("cipherLength is 12 + sizeBytes + 16 wherever the part is encrypted, and sizeBytes (or null) otherwise")
     void cipherLengthArithmetic() {
         // Handbook revision 7 shipped this wrong once by counting the nonce twice. Compute it, do not
         // eyeball it.
@@ -231,13 +295,17 @@ class DemoDataSeederTest {
                                 .isEqualTo(12 + p.sizeBytes() + 16);
                         assertThat(a.keyId()).as("%s %s keyId", i.id(), a.format()).isNotNull();
                     } else {
-                        // Null, not zero. The entity field is a primitive long and DemoDataSeeder
-                        // converts it, but "there is no ciphertext" and "the ciphertext is empty"
-                        // are different facts and this file states the true one.
+                        // A genuinely unencrypted live ingest (IngestProcessor.storeUnlocked)
+                        // always sets cipherLength = sizeBytes - there is no separate ciphertext,
+                        // so the two lengths really are the same number, not "not applicable".
+                        // Null survives here only for the week-1/4 fixtures hand-authored before
+                        // that was verified, where null was chosen to mean "not applicable"
+                        // instead - both are accepted, but a live-ingested item is never zero.
                         assertThat(p.cipherLength())
-                                .as("%s %s part %d is not encrypted so it has no cipherLength", i.id(), a.format(),
-                                        p.partNumber())
-                                .isNull();
+                                .as("%s %s part %d is not encrypted so cipherLength is either sizeBytes or null",
+                                        i.id(), a.format(), p.partNumber())
+                                .satisfiesAnyOf(cl -> assertThat(cl).isNull(),
+                                        cl -> assertThat(cl).isEqualTo(p.sizeBytes()));
                         assertThat(a.keyId())
                                 .as("%s %s is not encrypted so it has no keyId", i.id(), a.format())
                                 .isNull();
@@ -420,10 +488,13 @@ class DemoDataSeederTest {
     void compositionIsDeliberate() {
         // These assertions are the composition table in the approach document, made executable. They
         // exist so that "tidying" a row that another team's test depends on fails here first.
-        // All eight are real, ingested books, so all eight are PUBLISHED and READY. The QUEUED/
-        // FAILED, "must never appear in a feed" case (item_q7/item_f3 used to carry it) has no
-        // seed-data coverage right now - see the _readme note in demo-dataset.json.
-        assertThat(dataset.catalogueItems()).filteredOn(SeedDataset.SeedItem::isFeedVisible).hasSize(8);
+        // 61 leaves are real, ingested books/articles, PUBLISHED and READY: the original 8 plus
+        // 3 standalone books and 50 articles from week 5's hierarchy. The QUEUED/FAILED, "must
+        // never appear in a feed" case (item_q7/item_f3 used to carry it) has no seed-data
+        // coverage right now - see the _readme note in demo-dataset.json. The 22 containers
+        // (JOURNAL/VOLUME/ISSUE) are PUBLISHED but never READY - they carry no content, so
+        // contentState stays NONE, and isFeedVisible is correctly false for every one of them.
+        assertThat(dataset.catalogueItems()).filteredOn(SeedDataset.SeedItem::isFeedVisible).hasSize(61);
 
         assertThat(dataset.catalogueItems())
                 .extracting(SeedDataset.SeedItem::accessTier)
@@ -431,9 +502,11 @@ class DemoDataSeederTest {
         assertThat(dataset.catalogueItems())
                 .extracting(SeedDataset.SeedItem::contentType)
                 .contains("PDF", "EPUB", "AUDIO");
+        // READY for every leaf, NONE for every container - not containsOnly("READY") any more,
+        // since a JOURNAL/VOLUME/ISSUE has no content to ever become READY.
         assertThat(dataset.catalogueItems())
                 .extracting(SeedDataset.SeedItem::contentState)
-                .containsOnly("READY");
+                .containsOnly("READY", "NONE");
 
         // One institution suspended, so "an inactive institution does not appear in the public list"
         // has something to prove. There is no INACTIVE: RecordStatus is ACTIVE, SUSPENDED, RETIRED.
@@ -448,21 +521,27 @@ class DemoDataSeederTest {
 
         // Two access models, so the resolver has both to distinguish — ent_dev_elite and
         // ent_dev_elite_audio each add a CONCURRENT row (dev-sample-pdf's and
-        // dev-sample-audio-encrypted's own ITEM-scope grants), not a third model. Every ELITE
-        // item carries a real copy limit, so ent_imp2's UNLIMITED publisher grant is the only null.
+        // dev-sample-audio-encrypted's own ITEM-scope grants), not a third model. Every one of
+        // these four rows still carries a real copy limit except ent_imp2 (PUBLISHER, UNLIMITED)
+        // - the week 5 items don't add a fifth row, they're covered by the existing ent_imp1
+        // COLLECTION grant (copies 2) since they all carry col_law2024, same scope-precedence
+        // rule dev-fixture-epub already demonstrated.
         assertThat(dataset.entitlements())
                 .extracting(SeedDataset.SeedEntitlement::copies)
                 .containsExactlyInAnyOrder(2, null, 2, 2);
 
-        // Six of the eight have a real uploaded cover (coverKey), two do not - both cases are
-        // real data, not a gap. coverUrl itself is null on every item: the bucket is private, so
-        // there is never a durable literal to seed, only a coverKey CoverUrlResolver presigns
-        // fresh on every read. The multi-format-per-item case (item_dual used to carry it, one
-        // PDF asset plus one EPUB asset) has no seed-data coverage right now - see the _readme
-        // note in demo-dataset.json.
+        // 14 have a real uploaded cover (coverKey): the original 6 books, the two Doctor
+        // Dolittle audio chapters (dev-sample-audio/-encrypted, covered afterwards), 3 more
+        // week-5 books and 3 week-5 journals. Volumes, issues and articles carry no cover of
+        // their own - a reader sees a journal's or a book's cover, never a chapter's or an
+        // issue's. coverUrl itself is null on every item: the bucket is private, so there is
+        // never a durable literal to seed, only a coverKey CoverUrlResolver presigns fresh on
+        // every read. The multi-format-per-item case (item_dual used to carry it, one PDF asset
+        // plus one EPUB asset) has no seed-data coverage right now - see the _readme note in
+        // demo-dataset.json.
         assertThat(dataset.catalogueItems()).allSatisfy(i -> assertThat(i.coverUrl()).isNull());
-        assertThat(dataset.catalogueItems()).filteredOn(i -> i.coverKey() != null).hasSize(6);
-        assertThat(dataset.catalogueItems()).filteredOn(i -> i.coverKey() == null).hasSize(2);
+        assertThat(dataset.catalogueItems()).filteredOn(i -> i.coverKey() != null).hasSize(14);
+        assertThat(dataset.catalogueItems()).filteredOn(i -> i.coverKey() == null).hasSize(69);
 
         // One empty shelf, so the hidden-shelf case is real data, and one shelf with several books so
         // display order can be tested.
