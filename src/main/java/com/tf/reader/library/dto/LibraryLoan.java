@@ -12,9 +12,10 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * what every countdown on the screen is measured against.
  *
  * <p><b>{@code licenceModel} and {@code status} are strings here on purpose.</b> The loan module has
- * real enums now, but importing another lane's {@code entity} package is the coupling an
- * {@code api} package exists to prevent — and {@code loan.api.ActiveLoanView}, the sanctioned type,
- * is still an empty stub. The assembler maps enum to string in one place when that port lands.
+ * real enums, but importing another lane's {@code entity} package is the coupling an {@code api}
+ * package exists to prevent. The sanctioned seam type {@code loan.api.ActiveLoanView} already
+ * publishes both as strings — it carries {@code status} and {@code borrowedAt} since D-026 — so the
+ * assembler forwards them straight through without ever touching loan's enums.
  *
  * @param dueAt      absent for open access, which never expires
  * @param canPersist what the download button reads. Never the tier: {@code ELITE} is false, and the
