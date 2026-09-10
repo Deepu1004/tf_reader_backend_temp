@@ -36,7 +36,9 @@ spring:
             assertingparty:
               entity-id: saml-mock
               singlesignon:
-                url: ${SAML_URL}
+                # acs_url is NOT included here — UserSecurityConfig appends it dynamically
+                # from the actual request so it works on localhost and Render alike.
+                url: "https://samlmock.dev/idp?aud=tf-reader-sp"
                 binding: redirect
                 sign-request: false
               verification:
@@ -45,6 +47,9 @@ spring:
 
 server:
   port: ${SERVER_PORT}
+  # Trust X-Forwarded-Proto/Host from Render's reverse proxy so {baseUrl} in SAML
+  # ACS location resolves to https:// instead of http://.
+  forward-headers-strategy: native
 
 tf:
   catalogue:
