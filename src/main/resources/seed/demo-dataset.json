@@ -613,7 +613,7 @@
       "updatedAt": "2026-08-10T09:00:00Z"
     },
     {
-      "_seedWhy": "Dev fixture — big EPUB, encrypted with MOCK_BEK. SUBSCRIPTION (persists, reopenable offline) — matches what this fixture is actually used for (a big encrypted download, not an open-access one). Covered by ent_imp2 (PUBLISHER scope pub_rtlg, UNLIMITED), already granted to inst_7f3. Matches the app's dev-fixture-epub bookId. The content grant routes by itemId to sample.epub.enc.",
+      "_seedWhy": "Dev fixture — big EPUB, encrypted with MOCK_BEK. SUBSCRIPTION (persists, reopenable offline) — matches what this fixture is actually used for (a big encrypted download, not an open-access one). Covered by ent_imp2 (PUBLISHER scope pub_rtlg, UNLIMITED), already granted to inst_7f3. Matches the app's dev-fixture-epub bookId. The content grant routes by itemId to sample.epub.enc. Its search index is pre-built (real SearchIndexService output over the actual fixture, not a stub) and pre-encrypted under MOCK_BEK the same way the content itself is, so it needs no reachable object storage at seed time — same pattern as the sample-small fixtures' own .index.enc.",
       "_id": "dev-fixture-epub",
       "publisherId": "pub_rtlg",
       "collectionIds": [],
@@ -640,20 +640,20 @@
           "sizeBytes": 20951889,
           "cipherLength": 20951917,
           "encrypted": true,
-          "hasSearchIndex": false,
-          "indexTerms": null,
-          "indexSkipReason": "DevFixture",
+          "hasSearchIndex": true,
+          "indexTerms": 8929,
+          "indexSkipReason": null,
           "keyId": "master-v1"
         }
       ],
       "storageKey": "static/mock-content/sample.epub.enc",
-      "indexKey": null,
+      "indexKey": "static/mock-content/sample.epub.index.enc",
       "wrappedBek": "seed-placeholder-not-a-real-key",
       "createdAt": "2026-08-10T09:00:00Z",
       "updatedAt": "2026-08-10T09:00:00Z"
     },
     {
-      "_seedWhy": "Dev fixture — big PDF, encrypted with MOCK_BEK. SUBSCRIPTION (persists, reopenable offline) — matches what this fixture is actually used for (a big encrypted download, not an open-access one). Covered by ent_imp2 (PUBLISHER scope pub_rtlg, UNLIMITED), already granted to inst_7f3. Matches the app's dev-fixture-pdf bookId. The content grant routes by itemId to sample.pdf.enc.",
+      "_seedWhy": "Dev fixture — big PDF, encrypted with MOCK_BEK. SUBSCRIPTION (persists, reopenable offline) — matches what this fixture is actually used for (a big encrypted download, not an open-access one). Covered by ent_imp2 (PUBLISHER scope pub_rtlg, UNLIMITED), already granted to inst_7f3. Matches the app's dev-fixture-pdf bookId. The content grant routes by itemId to sample.pdf.enc. Its search index is pre-built (real SearchIndexService output over the actual fixture, not a stub) and pre-encrypted under MOCK_BEK the same way the content itself is, so it needs no reachable object storage at seed time — same pattern as the sample-small fixtures' own .index.enc.",
       "_id": "dev-fixture-pdf",
       "publisherId": "pub_rtlg",
       "collectionIds": [],
@@ -680,14 +680,14 @@
           "sizeBytes": 15368312,
           "cipherLength": 15368340,
           "encrypted": true,
-          "hasSearchIndex": false,
-          "indexTerms": null,
-          "indexSkipReason": "DevFixture",
+          "hasSearchIndex": true,
+          "indexTerms": 6817,
+          "indexSkipReason": null,
           "keyId": "master-v1"
         }
       ],
       "storageKey": "static/mock-content/sample.pdf.enc",
-      "indexKey": null,
+      "indexKey": "static/mock-content/sample.pdf.index.enc",
       "wrappedBek": "seed-placeholder-not-a-real-key",
       "createdAt": "2026-08-10T09:00:00Z",
       "updatedAt": "2026-08-10T09:00:00Z"
