@@ -6,6 +6,8 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.UUID;
 
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.stereotype.Service;
 
 import com.tf.reader.catalogue.api.AccessLevel;
@@ -35,6 +37,7 @@ import com.tf.reader.reading.dto.ReadingSessionResponse;
  *
  * <p>Executes all 9 steps of the read and download flow, stopping at the first refusal.
  */
+@Slf4j
 @Service
 public class ReadBrokerService {
 
@@ -75,12 +78,19 @@ public class ReadBrokerService {
 	}
 
 	public ReadingSessionResponse open(SubjectRef subject, ReadingSessionRequest request) {
+		String userId = subject != null ? subject.userId() : null;
+		String institutionId = subject != null ? subject.institutionId() : null;
+		log.info("read-broker: open itemId={} userId={} institutionId={} intent={} format={}",
+				request.itemId(), userId, institutionId, request.intent(), request.format());
 
 		// ── Step 1: Validate device key format ──
 		byte[] deviceKey = decodeDeviceKey(request.devicePublicKey());
 
 		// ── Step 2: Entitlement check ──
 		EntitlementDecision decision = entitlements.check(subject, request.itemId());
+		log.info("read-broker: entitlement itemId={} userId={} entitled={} accessLevel={} reason={} copies={}",
+				request.itemId(), userId, decision.entitled(), decision.accessLevel(), decision.reason(),
+				decision.copies());
 		if (!decision.entitled()) {
 			// For downloadable tiers, the change log is the only channel that reaches a device
 			// which already has the title on disk. Write ENTITLEMENT_REVOKED before refusing,
@@ -99,15 +109,20 @@ public class ReadBrokerService {
 				// the (userId, itemId, reason) triple to act, not the loanId. Track as task-29b
 				// to wire in the loanId once Shashank publishes a read-only query.
 			}
+			log.info("read-broker: denied itemId={} userId={} reason={}", request.itemId(), userId,
+					decision.reason());
 			throw new ApiException(mapDenyReason(decision.reason()), "You do not have access to this title.");
 		}
 
 		// ── Step 3: Device cap check (ELITE only) ──
 		// Open access and subscription access are not copy/device limited. Only an Elite
 		// entitlement consumes a concurrent-reading device slot.
-		if (decision.accessLevel() == AccessLevel.ENTITLED_CONCURRENT
-				&& subject != null && subject.userId() != null && !devices.admit(subject.userId(), deviceKey)) {
-			throw new ApiException(ErrorCode.DEVICE_LIMIT_REACHED, "This account is already reading on the maximum number of devices.");
+		if (decision.accessLevel() == AccessLevel.ENTITLED_CONCURRENT && subject != null && subject.userId() != null) {
+			boolean admitted = devices.admit(subject.userId(), deviceKey);
+			log.info("read-broker: device cap itemId={} userId={} admitted={}", request.itemId(), userId, admitted);
+			if (!admitted) {
+				throw new ApiException(ErrorCode.DEVICE_LIMIT_REACHED, "This account is already reading on the maximum number of devices.");
+			}
 		}
 
 		// ── Step 4: Rights check ──
@@ -121,12 +136,17 @@ public class ReadBrokerService {
 			String scope = subject != null ? subject.institutionId() : null;
 			var claimed = lease.claim(scope, request.itemId(), decision.copies());
 			if (claimed.isEmpty()) {
+				log.info("read-broker: no copy free itemId={} userId={} institutionId={}, joining queue",
+						request.itemId(), userId, institutionId);
 				// No free copy — join the wait queue in this same call instead of making
 				// the client turn around and call POST /api/v1/holds itself. No licence,
 				// no content grant: the reader has nothing to read yet, only a place in line.
 				return queuedResponse(subject, request.itemId());
 			}
 			held = claimed.get();
+			// Never the lease token itself in a log line — it is a bearer handle for this copy
+			// slot, the same category of thing as the tokens STYLE forbids logging.
+			log.info("read-broker: claimed copy itemId={} userId={}", request.itemId(), userId);
 		}
 
 		try {
@@ -138,6 +158,8 @@ public class ReadBrokerService {
 					decision.loanPeriodDays(),
 					held == null ? null : held.token()
 			);
+			log.info("read-broker: licence created licenceId={} itemId={} userId={} accessLevel={} canPersist={}",
+					licence.licenceId(), request.itemId(), userId, decision.accessLevel(), licence.canPersist());
 
 			// ── Step 7: Fetch content grant ──
 			ContentGrant grant = content.grant(new ContentGrantRequest(
@@ -149,6 +171,10 @@ public class ReadBrokerService {
 					new LoanProof(licence.licenceId(), licence.expiresAt()),
 					request.wantSearchIndex()
 			));
+			// Never the grant's own payload — it carries signed URLs and encryption info, the
+			// same bearer-capability category as the tokens STYLE forbids logging.
+			log.info("read-broker: content grant issued licenceId={} itemId={} userId={} format={} intent={}",
+					licence.licenceId(), request.itemId(), userId, request.format(), request.intent());
 
 			// ── Step 8: Extend claim to THIS READING SESSION's own lifetime, not the loan's due
 			// date. A copy lease means "actively reading right now" — the loan's dueAt is null
@@ -159,6 +185,7 @@ public class ReadBrokerService {
 			Instant now = clock.instant();
 			Instant sessionExpiresAt = now.plus(SESSION_TTL);
 			if (copyLimited && !lease.extend(held, sessionExpiresAt)) {
+				log.warn("read-broker: extend failed itemId={} userId={}, reconciling", request.itemId(), userId);
 				reconciler.reconcile(request.itemId());
 				// ACCEPTED GAP: the response is returned even if reconcile() does not restore
 				// the lease. Design intent is "recover, never rollback" — the reader has the
@@ -169,8 +196,11 @@ public class ReadBrokerService {
 			}
 
 			// ── Step 9: Forward payload unchanged ──
+			String sessionId = "sess_" + UUID.randomUUID().toString().substring(0, 8);
+			log.info("read-broker: session opened sessionId={} licenceId={} itemId={} userId={} accessLevel={} expiresAt={}",
+					sessionId, licence.licenceId(), request.itemId(), userId, decision.accessLevel(), sessionExpiresAt);
 			return new ReadingSessionResponse(
-					"sess_" + UUID.randomUUID().toString().substring(0, 8),
+					sessionId,
 					licence.licenceId(),
 					request.itemId(),
 					decision.accessLevel().name(),
@@ -187,6 +217,8 @@ public class ReadBrokerService {
 
 		} catch (RuntimeException failure) {
 			if (held != null) {
+				log.warn("read-broker: session failed after claiming a copy itemId={} userId={}, releasing it",
+						request.itemId(), userId, failure);
 				lease.release(held);
 			}
 			throw failure;
@@ -203,6 +235,8 @@ public class ReadBrokerService {
 	private ReadingSessionResponse queuedResponse(SubjectRef subject, String itemId) {
 		QueueJoin.JoinResult joined = queue.join(subject.userId(), subject.institutionId(), itemId);
 		HoldView hold = joined.hold();
+		log.info("read-broker: queued holdId={} itemId={} userId={} created={}", hold.holdId(), itemId,
+				subject.userId(), joined.created());
 
 		return new ReadingSessionResponse(
 				"sess_" + UUID.randomUUID().toString().substring(0, 8),

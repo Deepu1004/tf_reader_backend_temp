@@ -7,6 +7,7 @@ import com.tf.reader.catalogue.api.SubjectRef;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.auth.model.CurrentUser;
+import com.tf.reader.hold.api.HoldQueueExit;
 import com.tf.reader.hold.api.HoldView;
 import com.tf.reader.hold.api.OfferView;
 import com.tf.reader.hold.api.QueueJoin;
@@ -20,6 +21,7 @@ import com.tf.reader.library.api.ChangeReason;
 import com.tf.reader.library.api.ChangeRecord;
 import com.tf.reader.loan.api.LicenceCommand;
 import com.tf.reader.loan.api.LicenceView;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -32,8 +34,9 @@ import java.util.Optional;
 // Maintains the ordered wait queue for a title — join, leave, accept and
 // holdsFor. Position and queueLength are always computed here, on read,
 // from Redis — never stored.
+@Slf4j
 @Service
-public class QueueService implements QueueJoin {
+public class QueueService implements QueueJoin, HoldQueueExit {
 
     private final HoldRepository holds;
     private final HoldWrites writes;
@@ -74,6 +77,7 @@ public class QueueService implements QueueJoin {
         String scope = QueueKeys.requireScope(rawScope);
         EntitlementDecision decision = entitlements.check(new SubjectRef(userId, scope), itemId);
         if (!decision.entitled()) {
+            log.info("hold: join denied itemId={} userId={} reason={}", itemId, userId, decision.reason());
             // The deny reason, unchanged — "your subscription lapsed" and
             // "your library never had this" are different sentences.
             throw new ApiException(mapDenyReason(decision), decision.reason() == null
@@ -90,6 +94,8 @@ public class QueueService implements QueueJoin {
         if (existing.isPresent()) {
             // Already queued: same position. Re-joining must never move
             // somebody to the back of a line they were already in.
+            log.info("hold: already queued holdId={} itemId={} userId={}", existing.get().getHoldId(), itemId,
+                    userId);
             return new JoinResult(viewOf(existing.get(), decision), false);
         }
 
@@ -103,11 +109,15 @@ public class QueueService implements QueueJoin {
             // The index throwing on a double tap is the design working —
             // a clean success with the winner's row, never a 500.
             saved = holds.findByScopeAndItemIdAndUserId(scope, itemId, userId).orElseThrow(() -> e);
+            log.info("hold: lost a race to join, using the winner's row holdId={} itemId={} userId={}",
+                    saved.getHoldId(), itemId, userId);
             return new JoinResult(viewOf(saved, decision), false);
         }
 
         redis.opsForZSet().add(QueueKeys.queueKey(scope, itemId), QueueKeys.member(userId), ticket);
         changeLog.record(ChangeRecord.forHold(userId, ChangeReason.HOLD_PLACED, itemId, saved.getHoldId(), clock.instant()));
+        log.info("hold: joined holdId={} itemId={} userId={} scope={} ticket={}", saved.getHoldId(), itemId, userId,
+                scope, ticket);
         return new JoinResult(viewOf(saved, decision), true);
     }
 
@@ -115,9 +125,29 @@ public class QueueService implements QueueJoin {
         // Cancelling an already-cancelled hold, or a holdId that was never
         // yours, both touch nothing here — the reader asked for it to be
         // gone and it is, so this is always a no-op success, never a 404.
-        writes.deleteOwn(holdId, me.userId()).ifPresent(hold -> {
+        cancel(holdId, me.userId());
+    }
+
+    /**
+     * Published via {@link HoldQueueExit} for {@code auth}: called on logout, since an ELITE
+     * hold-queue position is tied to the session that placed it, not to a durable account an
+     * institutional SAML reader doesn't have. A reader with nothing queued is a no-op.
+     */
+    @Override
+    public void leaveAll(String userId) {
+        List<Hold> live = holds.findByUserId(userId);
+        if (!live.isEmpty()) {
+            log.info("hold: leaving {} live hold(s) userId={}", live.size(), userId);
+        }
+        live.forEach(hold -> cancel(hold.getHoldId(), userId));
+    }
+
+    private void cancel(String holdId, String userId) {
+        writes.deleteOwn(holdId, userId).ifPresent(hold -> {
             redis.opsForZSet().remove(QueueKeys.queueKey(hold.getScope(), hold.getItemId()),
                     QueueKeys.member(hold.getUserId()));
+            log.info("hold: cancelled holdId={} itemId={} userId={} wasOffered={}", holdId, hold.getItemId(),
+                    userId, hold.getStatus() == HoldStatus.OFFERED);
             if (hold.getStatus() == HoldStatus.OFFERED) {
                 // Reassign, not release-then-acquire — the copy must never
                 // look free for even an instant, or a passing reader could
@@ -134,12 +164,17 @@ public class QueueService implements QueueJoin {
         // offer all collapse into the same honest refusal: there is no live
         // offer for you to accept right now.
         Hold hold = writes.claimIfLive(holdId, me.userId(), clock.instant())
-                .orElseThrow(() -> new ApiException(ErrorCode.OFFER_EXPIRED, "This offer is no longer live"));
+                .orElseThrow(() -> {
+                    log.info("hold: accept refused, offer not live holdId={} userId={}", holdId, me.userId());
+                    return new ApiException(ErrorCode.OFFER_EXPIRED, "This offer is no longer live");
+                });
 
         SubjectRef subject = new SubjectRef(me.userId(), hold.getScope());
         EntitlementDecision decision = entitlements.check(subject, hold.getItemId());
         LicenceView licence = loans.create(subject, hold.getItemId(),
                 AccessLevel.ENTITLED_CONCURRENT, decision.loanPeriodDays(), hold.getOffer().getLeaseToken());
+        log.info("hold: offer accepted holdId={} licenceId={} itemId={} userId={}", holdId, licence.licenceId(),
+                hold.getItemId(), me.userId());
 
         Instant now = clock.instant();
         // LOAN_CREATED is recorded by BorrowService.create() itself now (D-029) — create() is

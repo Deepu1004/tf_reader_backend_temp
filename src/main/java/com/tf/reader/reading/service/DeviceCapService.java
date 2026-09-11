@@ -7,6 +7,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
 
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -30,6 +32,7 @@ import com.tf.reader.reading.entity.DeviceFingerprint;
  * <p><b>Enforced at read, not at borrow</b>, because the device key only arrives with a reading
  * session request. There is nothing to cap on any earlier.
  */
+@Slf4j
 @Service
 public class DeviceCapService {
 
@@ -85,6 +88,7 @@ public class DeviceCapService {
 		// Reading modifiedCount here treated an already-known device as unseen, sent it down
 		// the upsert-as-new path below, and that failed on the unique index on userId.
 		if (touched.getMatchedCount() > 0) {
+			log.info("device-cap: known device admitted userId={} fingerprint={}", userId, fingerprint);
 			return true;
 		}
 
@@ -108,7 +112,10 @@ public class DeviceCapService {
 							.set(UPDATED_AT, now),
 					DeviceFingerprint.class);
 
-			return appended.getModifiedCount() > 0 || appended.getUpsertedId() != null;
+			boolean admitted = appended.getModifiedCount() > 0 || appended.getUpsertedId() != null;
+			log.info("device-cap: new device {} userId={} fingerprint={}",
+					admitted ? "admitted" : "refused, cap full", userId, fingerprint);
+			return admitted;
 
 		}
 		catch (DuplicateKeyException fullOrRaced) {
@@ -125,7 +132,10 @@ public class DeviceCapService {
 					Query.query(Criteria.where(USER_ID).is(userId).and(FINGERPRINT).is(fingerprint)),
 					new Update().set("devices.$.lastSeenAt", now).set(UPDATED_AT, now),
 					DeviceFingerprint.class);
-			return recheck.getMatchedCount() > 0;
+			boolean admittedOnRecheck = recheck.getMatchedCount() > 0;
+			log.info("device-cap: race on cap-full userId={} fingerprint={} admittedOnRecheck={}",
+					userId, fingerprint, admittedOnRecheck);
+			return admittedOnRecheck;
 		}
 	}
 
@@ -139,11 +149,12 @@ public class DeviceCapService {
 	@Scheduled(cron = "${tnf.devices.prune-cron:0 0 3 * * *}")
 	public void pruneStale() {
 		Instant cutoff = clock.instant().minus(staleAfter);
-		mongo.updateMulti(
+		UpdateResult pruned = mongo.updateMulti(
 				new Query(),
 				new Update().pull(DEVICES,
 						Query.query(Criteria.where("lastSeenAt").lt(cutoff))),
 				DeviceFingerprint.class);
+		log.info("device-cap: pruneStale readersAffected={}", pruned.getModifiedCount());
 	}
 
 	/** SHA-256 of the raw bytes. Stable for the same device, and discloses nothing about the key. */

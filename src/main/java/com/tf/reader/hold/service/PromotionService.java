@@ -74,10 +74,13 @@ public class PromotionService {
 
         Boolean gotLock = redis.opsForValue().setIfAbsent(lockKey, token, props.getPromoteLockTtl());
         if (gotLock == null || !gotLock) {
+            log.info("promotion: already in progress scope={} itemId={}", scope, itemId);
             return false; // somebody else is promoting this title right now
         }
         try {
-            return promoteUnderLock(scope, itemId, fromToken);
+            boolean promoted = promoteUnderLock(scope, itemId, fromToken);
+            log.info("promotion: attempt finished scope={} itemId={} promoted={}", scope, itemId, promoted);
+            return promoted;
         } catch (RuntimeException e) {
             // Never let this escape into loan's return path — if it throws,
             // returning a book fails with a 500 and someone debugs their
@@ -95,6 +98,7 @@ public class PromotionService {
         if (head == null || head.isEmpty()) {
             // Nobody waiting — the copy is genuinely free. If somebody was
             // holding it, hand the slot back rather than leaking it.
+            log.info("promotion: queue empty scope={} itemId={}, releasing slot", scope, itemId);
             if (fromToken != null) {
                 lease.release(fromToken);
             }
@@ -108,10 +112,14 @@ public class PromotionService {
         if (maybeHold.isEmpty()) {
             // Redis and Mongo disagree — the reconciler's job, not this
             // call's. Drop the stale row so the next call doesn't loop on it.
+            log.warn("promotion: Redis/Mongo disagree scope={} itemId={} userId={}, dropping stale queue row",
+                    scope, itemId, nextUserId);
             redis.opsForZSet().remove(queueKey, member);
             return false;
         }
         Hold hold = maybeHold.get();
+        log.info("promotion: promoting holdId={} scope={} itemId={} userId={}", hold.getHoldId(), scope, itemId,
+                nextUserId);
 
         Instant now = clock.instant();
         Instant until = now.plus(props.getOfferWindow()).plus(props.getLeaseSlack());
@@ -125,6 +133,7 @@ public class PromotionService {
             }
             Optional<LeaseHandle> claimed = lease.claim(scope, itemId, total);
             if (claimed.isEmpty()) {
+                log.info("promotion: fresh claim failed scope={} itemId={} userId={}", scope, itemId, nextUserId);
                 return false; // couldn't actually get the copy this time
             }
             newToken = claimed.get().token();
@@ -140,11 +149,15 @@ public class PromotionService {
                 now.plus(props.getOfferWindow()), newToken);
         Optional<Hold> offered = writes.offerIfQueued(hold.getHoldId(), offer);
         if (offered.isEmpty()) {
+            log.info("promotion: lost race with a cancel holdId={} scope={} itemId={}", hold.getHoldId(), scope,
+                    itemId);
             return false; // lost a race with a cancel — a later call reconciles
         }
 
         redis.opsForZSet().remove(queueKey, member); // not waiting any more — they're holding
         changeLog.record(ChangeRecord.forHold(nextUserId, ChangeReason.HOLD_PROMOTED, itemId, hold.getHoldId(), now));
+        log.info("promotion: offered holdId={} scope={} itemId={} userId={} offerExpiresAt={}", hold.getHoldId(),
+                scope, itemId, nextUserId, offer.getExpiresAt());
         return true;
     }
 }

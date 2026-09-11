@@ -9,6 +9,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations.TypedTuple;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
@@ -27,6 +29,7 @@ import com.tf.reader.reading.api.LeaseHandle;
  * hand back — so a companion reverse-index key maps token to item key, written in the
  * same script as the claim it belongs to.
  */
+@Slf4j
 @Service
 public class CopyLeaseImpl implements CopyLease {
 
@@ -105,8 +108,10 @@ public class CopyLeaseImpl implements CopyLease {
 				itemKey);
 
 		if (claimed == null || claimed == 0) {
+			log.info("copy-lease: claim refused, no copy free scope={} itemId={} copies={}", scope, itemId, copies);
 			return Optional.empty();
 		}
+		log.info("copy-lease: claimed scope={} itemId={} copies={} expiresAt={}", scope, itemId, copies, expiresAt);
 		return Optional.of(new LeaseHandle(token, scope, itemId, expiresAt));
 	}
 
@@ -130,12 +135,16 @@ public class CopyLeaseImpl implements CopyLease {
 		String tokenKey = LeaseKeys.tokenKey(handle.token());
 		Long extended = redis.execute(EXTEND, List.of(itemKey, tokenKey),
 				String.valueOf(until.toEpochMilli()), handle.token());
-		return extended != null && extended == 1;
+		boolean succeeded = extended != null && extended == 1;
+		log.info("copy-lease: extend scope={} itemId={} until={} succeeded={}", handle.scope(), handle.itemId(),
+				until, succeeded);
+		return succeeded;
 	}
 
 	@Override
 	public void release(LeaseHandle handle) {
 		if (handle != null) {
+			log.info("copy-lease: release scope={} itemId={}", handle.scope(), handle.itemId());
 			release(handle.token());
 		}
 	}
@@ -145,11 +154,16 @@ public class CopyLeaseImpl implements CopyLease {
 		if (leaseId == null) {
 			return;
 		}
-		redis.execute(RELEASE, List.of(LeaseKeys.tokenKey(leaseId)), leaseId);
+		// Never the token itself in the log line — see the class javadoc on why this overload
+		// never has an itemId to report either: the caller (loan return, expiry sweep, borrow
+		// rollback) genuinely doesn't have one, only the bearer token being released.
+		Long released = redis.execute(RELEASE, List.of(LeaseKeys.tokenKey(leaseId)), leaseId);
+		log.info("copy-lease: release by token, found={}", released != null && released == 1);
 	}
 
 	@Override
 	public void reassign(String scope, String itemId, String fromToken, String newToken, Instant until) {
+		log.info("copy-lease: reassign scope={} itemId={} until={}", scope, itemId, until);
 		String itemKey = LeaseKeys.itemKey(scope, itemId);
 		String oldTokenKey = LeaseKeys.tokenKey(fromToken);
 		String newTokenKey = LeaseKeys.tokenKey(newToken);
@@ -214,6 +228,7 @@ public class CopyLeaseImpl implements CopyLease {
 			return;
 		}
 		Instant orphanCutoff = now.plus(CLAIM_TTL);
+		int removed = 0;
 		for (TypedTuple<String> member : current) {
 			String token = member.getValue();
 			Double score = member.getScore();
@@ -223,7 +238,11 @@ public class CopyLeaseImpl implements CopyLease {
 			if (Instant.ofEpochMilli(score.longValue()).isAfter(orphanCutoff)) {
 				redis.opsForZSet().remove(itemKey, token);
 				redis.delete(LeaseKeys.tokenKey(token));
+				removed++;
 			}
+		}
+		if (removed > 0) {
+			log.info("copy-lease: rebuild removed {} orphaned lease(s) for itemKey={}", removed, itemKey);
 		}
 	}
 

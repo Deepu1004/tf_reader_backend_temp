@@ -66,6 +66,10 @@ public enum ErrorCode {
 	// 403, not 409. It reads like a conflict and is not one; the API Reference example is
 	// explicit, and a 409 here would have every client branching on the wrong status.
 	DEVICE_LIMIT_REACHED(HttpStatus.FORBIDDEN),
+	// Added by Deepak, for the institute-only SAML redesign — a new device signing in to an
+	// institution that already has every concurrent seat live. Flag with Haripriya (common/error
+	// owner) rather than treating as settled.
+	SEAT_LIMIT_REACHED(HttpStatus.FORBIDDEN),
 	NO_ACTIVE_LOAN(HttpStatus.CONFLICT),
 	// The repeat-return code, and the whole replay guard for the offline return outbox: the
 	// client treats this 409 as success, so renaming it silently breaks that retry path.
