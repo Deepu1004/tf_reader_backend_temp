@@ -192,8 +192,8 @@ public class UserSecurityConfig {
 					}
 					String encodedAcs = URLEncoder.encode(
 							reg.getAssertionConsumerServiceLocation(), StandardCharsets.UTF_8);
-					String idpUrl = reg.getAssertingPartyMetadata().getSingleSignOnServiceLocation()
-							+ "&acs_url=" + encodedAcs;
+					String ssoUrl = reg.getAssertingPartyMetadata().getSingleSignOnServiceLocation();
+					String idpUrl = ssoUrl + (ssoUrl.contains("?") ? "&" : "?") + "acs_url=" + encodedAcs;
 					return reg.mutate()
 							.assertingPartyMetadata(p -> p.singleSignOnServiceLocation(idpUrl))
 							.build();

@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -25,9 +24,7 @@ import org.springframework.security.saml2.provider.service.authentication.Saml2A
 import org.springframework.security.saml2.provider.service.authentication.Saml2ResponseAssertionAccessor;
 
 import com.tf.reader.TestcontainersConfiguration;
-import com.tf.reader.auth.AuthTestUsers;
 import com.tf.reader.auth.dto.TokenResponse;
-import com.tf.reader.auth.repository.ReaderUserRepository;
 import com.tf.reader.auth.token.AuthorizationCodeStore;
 import com.tf.reader.auth.transaction.AuthTransactionStore;
 import com.tf.reader.catalogue.api.InstitutionLookup;
@@ -36,7 +33,8 @@ import com.tf.reader.catalogue.api.InstitutionRef;
 /**
  * What the ACS leaves behind, and where it sends the browser - both matter as much as what it
  * mints. The browser is mid-redirect from the IdP here, so success and refusal both end at a
- * deep link, never at a JSON body.
+ * deep link, never at a JSON body. No demo users to seed any more: a completed sign-in mints its
+ * own device id rather than resolving one from a directory.
  */
 @SpringBootTest(properties = { "tf.security.jwt.secret=" + SamlAuthenticationSuccessHandlerTest.SECRET })
 @Import({ TestcontainersConfiguration.class, SamlAuthenticationSuccessHandlerTest.FixedTestConfig.class })
@@ -55,14 +53,6 @@ class SamlAuthenticationSuccessHandlerTest {
 
 	@Autowired
 	private AuthorizationCodeStore authorizationCodes;
-
-	@Autowired
-	private ReaderUserRepository readerUsers;
-
-	@BeforeEach
-	void seedDemoUsers() {
-		AuthTestUsers.seed(readerUsers);
-	}
 
 	@TestConfiguration
 	static class FixedTestConfig {

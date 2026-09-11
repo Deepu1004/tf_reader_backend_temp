@@ -155,6 +155,22 @@ class AuthTransactionStoreTest {
 	}
 
 	@Test
+	void openingWithNoDeviceIdLeavesItNull() {
+		// The default path: a device signing in for the first time has none to present.
+		AuthTransaction transaction = store.open("inst_7f3", null, null);
+
+		assertThat(transaction.deviceId()).isNull();
+	}
+
+	@Test
+	void openingWithADeviceIdRecordsIt() {
+		AuthTransaction transaction = store.open("inst_7f3", null, "dev_abc123");
+
+		assertThat(transaction.deviceId()).isEqualTo("dev_abc123");
+		assertThat(transaction.institutionId()).isEqualTo("inst_7f3");
+	}
+
+	@Test
 	void peekingReadsTheHintWithoutSpendingTheTransaction() {
 		// The mock IdP has to read this before the ACS runs consume() for real. If peek spent the
 		// transaction, the sign-in it belongs to could never complete.

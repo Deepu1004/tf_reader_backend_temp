@@ -147,6 +147,32 @@ class QueueServiceTest {
     }
 
     @Test
+    void leaveAllCancelsEveryLiveHoldOwnedByThatReader() {
+        Hold queued = Hold.queued("user_a", "inst_1", "item_1", 1, Instant.now());
+        Offer offer = new Offer("offer_1", Instant.now(), Instant.now().plusSeconds(900), "lease_1");
+        Hold offered = Hold.queued("user_a", "inst_1", "item_2", 1, Instant.now());
+        offered.setStatus(HoldStatus.OFFERED);
+        offered.setOffer(offer);
+        when(holds.findByUserId("user_a")).thenReturn(List.of(queued, offered));
+        when(writes.deleteOwn(queued.getHoldId(), "user_a")).thenReturn(Optional.of(queued));
+        when(writes.deleteOwn(offered.getHoldId(), "user_a")).thenReturn(Optional.of(offered));
+
+        queue.leaveAll("user_a");
+
+        verify(zsetOps, org.mockito.Mockito.times(2)).remove(anyString(), eq(QueueKeys.member("user_a")));
+        verify(promotion).promoteNext("inst_1", "item_2", "lease_1");
+    }
+
+    @Test
+    void leaveAllIsANoOpForAReaderWithNothingQueued() {
+        when(holds.findByUserId("user_a")).thenReturn(List.of());
+
+        queue.leaveAll("user_a");
+
+        verifyNoInteractions(writes, promotion);
+    }
+
+    @Test
     void acceptCreatesTheLoanFromTheOffersLeaseToken() {
         CurrentUser me = new CurrentUser("user_a", UserType.INSTITUTION, "inst_1", List.of(), List.of());
         Offer offer = new Offer("offer_1", Instant.now(), Instant.now().plusSeconds(900), "lease_1");

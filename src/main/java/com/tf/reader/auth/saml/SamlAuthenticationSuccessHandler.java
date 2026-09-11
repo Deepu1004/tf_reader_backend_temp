@@ -60,7 +60,7 @@ public class SamlAuthenticationSuccessHandler implements AuthenticationSuccessHa
 			IssuedRefreshToken refreshToken = readerSessions.createSession(result.user());
 			long expiresIn = Duration.between(clock.instant(), result.expiresAt()).getSeconds();
 			String code = authorizationCodes.issue(
-					new TokenResponse(result.token(), refreshToken.value(), expiresIn));
+					new TokenResponse(result.token(), refreshToken.value(), expiresIn, result.user().userId()));
 
 			response.sendRedirect(AuthorizationCodeStore.DEEP_LINK_CALLBACK + "?code=" + code);
 		}

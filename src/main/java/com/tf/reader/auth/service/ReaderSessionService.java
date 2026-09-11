@@ -96,9 +96,13 @@ public class ReaderSessionService {
 	 * <p>Idempotent by design. A token that is unknown, already revoked or expired means the
 	 * caller is not signed in through it either way, so this never distinguishes those cases -
 	 * {@code AuthController.logout} always answers the same regardless of which one happened.
+	 *
+	 * @return the session that was revoked, if the token was live - so a caller can clean up
+	 *         anything else keyed on that identity, e.g. {@code AuthController.logout} dropping
+	 *         the reader out of any hold queue they were waiting in
 	 */
-	public void revoke(String presentedTokenValue) {
-		this.readerSessionRepository.revokeForExchange(fingerprint(presentedTokenValue),
+	public Optional<ReaderSession> revoke(String presentedTokenValue) {
+		return this.readerSessionRepository.revokeForExchange(fingerprint(presentedTokenValue),
 				REASON_LOGGED_OUT, this.clock.instant());
 	}
 

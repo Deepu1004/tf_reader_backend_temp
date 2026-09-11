@@ -2,6 +2,8 @@ package com.tf.reader.auth.saml;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -20,11 +22,9 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.saml2.provider.service.authentication.Saml2AssertionAuthentication;
 import org.springframework.security.saml2.provider.service.authentication.Saml2ResponseAssertionAccessor;
 
-import com.tf.reader.auth.ReaderUserRepositoryFixtures;
-import com.tf.reader.auth.repository.ReaderUserDirectory;
+import com.tf.reader.auth.repository.ReaderSessionRepository;
 import com.tf.reader.auth.security.TnfJwtValidator;
 import com.tf.reader.auth.saml.SamlAuthenticationService.SamlLoginResult;
-import com.tf.reader.auth.token.JwtProperties;
 import com.tf.reader.auth.token.JwtTokenService;
 import com.tf.reader.auth.transaction.AuthTransaction;
 import com.tf.reader.auth.transaction.AuthTransactionStore;
@@ -33,7 +33,9 @@ import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 
 /**
- * The join between a validated SAML identity and the institution our backend chose.
+ * The join between "Spring Security validated a SAML assertion" and "which institution our
+ * backend chose for this sign-in" - and nothing about who the assertion says signed in, which
+ * this service never reads.
  *
  * <p>No servlet, no network, no samlmock.dev - the service deliberately knows nothing about
  * HTTP, which is what makes this testable at this level.
@@ -42,6 +44,7 @@ class SamlAuthenticationServiceTest {
 
 	private static final Instant NOW = Instant.parse("2026-08-13T09:00:00Z");
 	private static final String SECRET = "a-test-only-signing-secret-of-sufficient-length-0123456789";
+	private static final int MAX_SEATS = 50;
 
 	private final AuthTransactionStore transactions =
 			new AuthTransactionStore(Clock.fixed(NOW, ZoneOffset.UTC));
@@ -50,9 +53,11 @@ class SamlAuthenticationServiceTest {
 			"inst_7f3", new InstitutionRef("inst_7f3", "Imperial College London"),
 			"inst_ucl", new InstitutionRef("inst_ucl", "University College London"));
 
+	private final ReaderSessionRepository readerSessions = mock(ReaderSessionRepository.class);
+
 	private final SamlAuthenticationService service = new SamlAuthenticationService(transactions,
 			institutionId -> Optional.ofNullable(INSTITUTIONS.get(institutionId)),
-			new SamlUserMapper(new ReaderUserDirectory(ReaderUserRepositoryFixtures.demoUsers())),
+			new SamlUserMapper(readerSessions, Clock.fixed(NOW, ZoneOffset.UTC), MAX_SEATS),
 			JwtTokenService.forTest(SECRET, java.time.Duration.ofHours(1),
 					Clock.fixed(NOW, ZoneOffset.UTC)),
 			Clock.fixed(NOW, ZoneOffset.UTC));
@@ -61,37 +66,50 @@ class SamlAuthenticationServiceTest {
 	void completesASignInForTheInstitutionTheTransactionWasOpenedFor() {
 		AuthTransaction transaction = transactions.open("inst_7f3");
 
-		SamlLoginResult result = service.complete(samlAuthentication("john.doe@example.com"),
-				transaction.id());
+		SamlLoginResult result = service.complete(samlAuthentication(), transaction.id());
 
 		assertThat(result.institution().institutionId()).isEqualTo("inst_7f3");
 		assertThat(result.institution().name()).isEqualTo("Imperial College London");
-		assertThat(result.samlSubject()).isEqualTo("john.doe@example.com");
-		assertThat(result.user().userId()).isEqualTo("usr_6712ab");
+		assertThat(result.user().userId()).startsWith("dev_");
+		assertThat(result.user().institutionId()).isEqualTo("inst_7f3");
 		assertThat(result.serverTime()).isEqualTo(NOW);
 	}
 
 	@Test
-	void theSameIdentityCompletesAsADifferentUserAtAnotherInstitution() {
-		// Same IdP, same assertion, different transaction - the acceptance criterion for
-		// "one SAML integration, many business institutions".
-		Authentication sameIdentity = samlAuthentication("john.doe@example.com");
+	void twoDevicesSigningInGetIndependentIdentitiesEvenAtTheSameInstitution() {
+		// No directory, no email, no username - two sign-ins with no deviceId of their own are
+		// simply two different devices.
+		SamlLoginResult first = service.complete(samlAuthentication(), transactions.open("inst_7f3").id());
+		SamlLoginResult second = service.complete(samlAuthentication(), transactions.open("inst_7f3").id());
 
-		SamlLoginResult imperial =
-				service.complete(sameIdentity, transactions.open("inst_7f3").id());
-		SamlLoginResult dsu = service.complete(sameIdentity, transactions.open("inst_ucl").id());
+		assertThat(first.user().userId()).isNotEqualTo(second.user().userId());
+		assertThat(first.user().institutionId()).isEqualTo(second.user().institutionId());
+	}
 
-		assertThat(imperial.user().userId()).isEqualTo("usr_6712ab");
-		assertThat(imperial.user().institutionId()).isEqualTo("inst_7f3");
-		assertThat(dsu.user().userId()).isEqualTo("usr_8c14de");
-		assertThat(dsu.user().institutionId()).isEqualTo("inst_ucl");
-		assertThat(imperial.samlSubject()).isEqualTo(dsu.samlSubject());
+	@Test
+	void aDevicePresentingItsOwnIdKeepsItAtCompletion() throws Exception {
+		AuthTransaction transaction = transactions.open("inst_7f3", null, "dev_returning");
+
+		SamlLoginResult result = service.complete(samlAuthentication(), transaction.id());
+
+		assertThat(result.user().userId()).isEqualTo("dev_returning");
+	}
+
+	@Test
+	void refusesANewDeviceWhenTheInstitutionHasNoSeatFree() {
+		when(readerSessions.countByInstitutionIdAndRevokedAtIsNullAndExpiresAtAfter("inst_7f3", NOW))
+				.thenReturn((long) MAX_SEATS);
+		AuthTransaction transaction = transactions.open("inst_7f3");
+
+		assertThatThrownBy(() -> service.complete(samlAuthentication(), transaction.id()))
+				.isInstanceOf(ApiException.class)
+				.extracting(thrown -> ((ApiException) thrown).getCode())
+				.isEqualTo(ErrorCode.SEAT_LIMIT_REACHED);
 	}
 
 	@Test
 	void refusesARelayStateWeNeverIssued() {
-		assertThatThrownBy(() -> service.complete(samlAuthentication("john.doe@example.com"),
-				"authTxn_invented"))
+		assertThatThrownBy(() -> service.complete(samlAuthentication(), "authTxn_invented"))
 				.isInstanceOf(ApiException.class)
 				.extracting(thrown -> ((ApiException) thrown).getCode())
 				.isEqualTo(ErrorCode.SAML_AUTHENTICATION_FAILED);
@@ -101,7 +119,7 @@ class SamlAuthenticationServiceTest {
 	void refusesAMissingRelayState() {
 		// Without a transaction there is no institution, and guessing one would mean signing
 		// somebody in to an institution nobody selected.
-		Authentication authentication = samlAuthentication("john.doe@example.com");
+		Authentication authentication = samlAuthentication();
 
 		assertThatThrownBy(() -> service.complete(authentication, null))
 				.isInstanceOf(ApiException.class)
@@ -112,7 +130,7 @@ class SamlAuthenticationServiceTest {
 	@Test
 	void refusesAReplayedRelayState() {
 		AuthTransaction transaction = transactions.open("inst_7f3");
-		Authentication authentication = samlAuthentication("john.doe@example.com");
+		Authentication authentication = samlAuthentication();
 		service.complete(authentication, transaction.id());
 
 		assertThatThrownBy(() -> service.complete(authentication, transaction.id()))
@@ -133,22 +151,10 @@ class SamlAuthenticationServiceTest {
 	}
 
 	@Test
-	void refusesAnIdentityWithNoMembershipAtTheSelectedInstitution() {
-		Authentication jane = samlAuthentication("jane.roe@example.com");
-		String dsu = transactions.open("inst_ucl").id();
-
-		assertThatThrownBy(() -> service.complete(jane, dsu))
-				.isInstanceOf(ApiException.class)
-				.extracting(thrown -> ((ApiException) thrown).getCode())
-				.isEqualTo(ErrorCode.USER_NOT_PROVISIONED);
-	}
-
-	@Test
 	void carriesATokenMintedFromTheMappedUser() {
 		// The token is issued from the mapped user, after mapping succeeded - so a refused
 		// mapping can never produce one, and the token can never disagree with the user beside it.
-		SamlLoginResult result = service.complete(samlAuthentication("john.doe@example.com"),
-				transactions.open("inst_ucl").id());
+		SamlLoginResult result = service.complete(samlAuthentication(), transactions.open("inst_ucl").id());
 
 		Jwt jwt = decoderAtTheTestsClock().decode(result.token());
 
@@ -177,13 +183,12 @@ class SamlAuthenticationServiceTest {
 		return decoder;
 	}
 
-	private Authentication samlAuthentication(String email) {
-		Saml2ResponseAssertionAccessor assertion = new StubAssertion(email,
-				Map.of(SamlUserMapper.EMAIL_CLAIM, List.of(email)));
+	private Authentication samlAuthentication() {
+		Saml2ResponseAssertionAccessor assertion = new StubAssertion("irrelevant-subject", Map.of());
 		return new Saml2AssertionAuthentication(assertion, List.of(), "tf-reader");
 	}
 
-	/** Stands in for an assertion Spring Security has already validated. */
+	/** Stands in for an assertion Spring Security has already validated - its content is never read. */
 	private record StubAssertion(String nameId, Map<String, List<Object>> attributes)
 			implements Saml2ResponseAssertionAccessor {
 
