@@ -25,6 +25,9 @@ import com.tf.reader.catalogue.repository.InstitutionRepository;
 import com.tf.reader.catalogue.repository.PublisherRepository;
 import com.tf.reader.common.model.RecordStatus;
 import com.tf.reader.crypto.api.BookEncryptionKeys;
+import com.tf.reader.crypto.api.FileCipher;
+import com.tf.reader.ingest.api.BookStorage;
+import com.tf.reader.ingest.index.SearchIndexService;
 
 import com.mongodb.client.MongoClient;
 
@@ -78,6 +81,9 @@ class DemoDataSeederIT {
     @Autowired MongoClient mongoClient;
     @Autowired MongoDatabaseFactory mongoDatabaseFactory;
     @Autowired BookEncryptionKeys bookEncryptionKeys;
+    @Autowired BookStorage bookStorage;
+    @Autowired SearchIndexService searchIndexService;
+    @Autowired FileCipher fileCipher;
 
     // ------------------------------------------------------------------------------- the basics
 
@@ -378,6 +384,9 @@ class DemoDataSeederIT {
                 adminUsers,
                 feedSettings,
                 bookEncryptionKeys,
+                bookStorage,
+                searchIndexService,
+                fileCipher,
                 tools.jackson.databind.json.JsonMapper.builder().build(),
                 mongoClient,
                 mongoDatabaseFactory,

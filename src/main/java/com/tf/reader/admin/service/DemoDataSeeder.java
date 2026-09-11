@@ -35,6 +35,11 @@ import com.tf.reader.catalogue.repository.InstitutionRepository;
 import com.tf.reader.catalogue.repository.PublisherRepository;
 import com.tf.reader.common.model.RecordStatus;
 import com.tf.reader.crypto.api.BookEncryptionKeys;
+import com.tf.reader.crypto.api.FileCipher;
+import com.tf.reader.ingest.api.BookStorage;
+import com.tf.reader.ingest.index.BuiltSearchIndex;
+import com.tf.reader.ingest.index.SearchIndexService;
+import com.tf.reader.ingest.storage.StorageKeys;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,6 +52,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Component;
 
+import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 import java.io.InputStream;
@@ -90,6 +96,9 @@ public class DemoDataSeeder implements ApplicationRunner {
     private final AdminUserRepository adminUsers;
     private final FeedSettingsRepository feedSettings;
     private final BookEncryptionKeys bookEncryptionKeys;
+    private final BookStorage bookStorage;
+    private final SearchIndexService searchIndexService;
+    private final FileCipher fileCipher;
 
     private final ObjectMapper mapper;
 
@@ -108,6 +117,9 @@ public class DemoDataSeeder implements ApplicationRunner {
             AdminUserRepository adminUsers,
             FeedSettingsRepository feedSettings,
             BookEncryptionKeys bookEncryptionKeys,
+            BookStorage bookStorage,
+            SearchIndexService searchIndexService,
+            FileCipher fileCipher,
             ObjectMapper mapper,
             MongoClient mongoClient,
             MongoDatabaseFactory mongoDatabaseFactory,
@@ -122,6 +134,9 @@ public class DemoDataSeeder implements ApplicationRunner {
         this.adminUsers = adminUsers;
         this.feedSettings = feedSettings;
         this.bookEncryptionKeys = bookEncryptionKeys;
+        this.bookStorage = bookStorage;
+        this.searchIndexService = searchIndexService;
+        this.fileCipher = fileCipher;
         this.mapper = mapper;
         this.mongoClient = mongoClient;
         this.mongoDatabaseFactory = mongoDatabaseFactory;
@@ -388,6 +403,23 @@ public class DemoDataSeeder implements ApplicationRunner {
 
     private CatalogueItem toItem(SeedDataset.SeedItem s) {
         List<CatalogueItem.Asset> assets = s.assets().stream().map(this::toAsset).toList();
+
+        // dev-fixture-epub/-pdf are hand-seeded straight to READY (indexKey null, "DevFixture"
+        // skip reason), bypassing IngestProcessor/SearchIndexBuilder entirely, so they otherwise
+        // NEVER get a real search index. Best-effort build+upload here, so grant() has a real,
+        // separate index object to presign instead of permanently returning none for these two.
+        String indexKey = s.indexKey();
+        DevFixtureIndex builtIndex = buildDevFixtureIndexIfNeeded(s);
+        if (builtIndex != null) {
+            indexKey = builtIndex.indexKey();
+            // Today's ingest pipeline (and this seed dataset) writes exactly one asset per item -
+            // see ContentAccessGrantImpl's assetFor() for the same assumption made explicit.
+            CatalogueItem.Asset asset = assets.get(0);
+            asset.setHasSearchIndex(true);
+            asset.setIndexTerms(builtIndex.termCount());
+            asset.setIndexSkipReason(null);
+        }
+
         return new CatalogueItem(
                 s.id(),
                 s.publisherId(),
@@ -413,10 +445,53 @@ public class DemoDataSeeder implements ApplicationRunner {
                 assets,
                 // These three sit on the item, not on each asset. B's shape, not the handbook's.
                 s.storageKey(),
-                s.indexKey(),
+                indexKey,
                 resolveMasterWrappedBek(s),
                 s.createdAt(),
                 s.updatedAt());
+    }
+
+    private record DevFixtureIndex(String indexKey, int termCount) {
+    }
+
+    /**
+     * Mirrors {@link #resolveMasterWrappedBek}'s reasoning, one step further: the dev fixtures
+     * under {@code static/mock-content/} are real content, so they can genuinely be indexed, not
+     * just re-wrapped. Best-effort, not required - it needs {@link #bookStorage} reachable (a
+     * real local dev run against real object storage). An environment where it is not reachable
+     * (a CI/IT run with no storage endpoint behind it) must not take the whole seed run down over
+     * two dev-only fixtures; it just leaves them exactly as the dataset already says: unindexed.
+     */
+    private DevFixtureIndex buildDevFixtureIndexIfNeeded(SeedDataset.SeedItem s) {
+        if (s.indexKey() != null
+                || s.storageKey() == null
+                || !s.storageKey().startsWith(DEV_FIXTURE_STORAGE_PREFIX)) {
+            return null;
+        }
+        ContentType contentType = ContentType.valueOf(s.contentType());
+        if (contentType == ContentType.AUDIO) {
+            // No text layer to index - same rule SearchIndexBuilder applies on the real path.
+            return null;
+        }
+        if (s.assets().stream().noneMatch(SeedDataset.SeedAsset::encrypted)) {
+            // Unencrypted dev fixtures (e.g. the *-open ones) are not this item's concern here.
+            return null;
+        }
+        try {
+            SecretKey mockBek = new SecretKeySpec(Base64.getDecoder().decode(MOCK_BEK_BASE64), "AES");
+            byte[] plaintext = fileCipher.decrypt(mockBek, bookStorage.load(s.storageKey()));
+            BuiltSearchIndex built = contentType == ContentType.PDF
+                    ? searchIndexService.buildPdfIndex(s.id(), plaintext)
+                    : searchIndexService.buildEpubIndex(s.id(), plaintext);
+            String indexKey = StorageKeys.index(s.id());
+            bookStorage.store(indexKey, fileCipher.encrypt(mockBek, built.json()), "application/json");
+            return new DevFixtureIndex(indexKey, built.termCount());
+        }
+        catch (RuntimeException e) {
+            log.warn("seed: could not build a real search index for dev fixture {} (is object"
+                    + " storage reachable?) - leaving it unindexed", s.id(), e);
+            return null;
+        }
     }
 
     /**
