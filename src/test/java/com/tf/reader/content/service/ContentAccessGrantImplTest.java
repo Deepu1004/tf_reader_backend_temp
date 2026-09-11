@@ -73,32 +73,42 @@ class ContentAccessGrantImplTest {
 		item.setContentType(contentType);
 		item.setAccessTier(tier);
 		item.setContentState(ContentState.READY);
-		item.setStorageKey("items/item_42/content");
-		item.setIndexKey(indexKey);
+		CatalogueItem.Part part = asset.getParts().get(0);
+		part.setStorageKey("items/item_42/content");
+		part.setIndexKey(indexKey);
 		item.setAssets(List.of(asset));
 		return item;
 	}
 
 	private static CatalogueItem.Asset unlockedAsset() {
+		CatalogueItem.Part part = new CatalogueItem.Part();
+		part.setPartNumber(1);
+		part.setSizeBytes(1000L);
+		part.setCipherLength(1000L);
+		part.setContentState(ContentState.READY);
 		CatalogueItem.Asset asset = new CatalogueItem.Asset();
 		asset.setFormat(ContentType.PDF);
 		asset.setMimeType("application/pdf");
-		asset.setSizeBytes(1000L);
-		asset.setCipherLength(1000L);
 		asset.setEncrypted(false);
+		asset.setParts(List.of(part));
 		return asset;
 	}
 
 	private static CatalogueItem.Asset lockedAsset() {
+		CatalogueItem.Part part = new CatalogueItem.Part();
+		part.setPartNumber(1);
+		part.setSizeBytes(1000L);
+		part.setCipherLength(1028L);
+		part.setHasSearchIndex(true);
+		part.setIndexTerms(42);
+		part.setContentState(ContentState.READY);
 		CatalogueItem.Asset asset = new CatalogueItem.Asset();
 		asset.setFormat(ContentType.PDF);
 		asset.setMimeType("application/pdf");
-		asset.setSizeBytes(1000L);
-		asset.setCipherLength(1028L);
 		asset.setEncrypted(true);
-		asset.setHasSearchIndex(true);
-		asset.setIndexTerms(42);
 		asset.setKeyId("master-v1");
+		asset.setMasterWrappedBek("master-wrapped-bek");
+		asset.setParts(List.of(part));
 		return asset;
 	}
 
@@ -111,6 +121,75 @@ class ContentAccessGrantImplTest {
 		return new ContentGrantRequest(itemId, format, Intent.STREAM, devicePublicKey,
 				new SubjectRef("u_88", "inst_7f3"), new LoanProof("loan_88", Instant.parse("2099-01-01T00:00:00Z")),
 				wantSearchIndex);
+	}
+
+	private static ContentGrantRequest requestForPart(int partNumber) {
+		return new ContentGrantRequest("item_42", Format.PDF, Intent.STREAM, "device-key".getBytes(),
+				new SubjectRef("u_88", "inst_7f3"), new LoanProof("loan_88", Instant.parse("2099-01-01T00:00:00Z")),
+				false, partNumber);
+	}
+
+	@Test
+	void aRequestForPartTwoPresignsThatPartAndRewrapsTheSharedBek() {
+		CatalogueItem.Part part1 = new CatalogueItem.Part();
+		part1.setPartNumber(1);
+		part1.setContentState(ContentState.READY);
+		part1.setStorageKey("items/item_42/content");
+		CatalogueItem.Part part2 = new CatalogueItem.Part();
+		part2.setPartNumber(2);
+		part2.setContentState(ContentState.READY);
+		part2.setStorageKey("items/item_42/part2/content");
+		part2.setSizeBytes(2000L);
+		part2.setCipherLength(2028L);
+		CatalogueItem.Asset asset = new CatalogueItem.Asset();
+		asset.setFormat(ContentType.PDF);
+		asset.setMimeType("application/pdf");
+		asset.setEncrypted(true);
+		asset.setKeyId("master-v1");
+		asset.setMasterWrappedBek("shared-wrapped-bek");
+		asset.setParts(List.of(part1, part2));
+		CatalogueItem item = new CatalogueItem();
+		item.setId("item_42");
+		item.setContentType(ContentType.PDF);
+		item.setAccessTier(AccessTier.ELITE);
+		item.setContentState(ContentState.READY);
+		item.setAssets(List.of(asset));
+		when(items.findById("item_42")).thenReturn(Optional.of(item));
+		when(bookStorage.presign("items/item_42/part2/content", Duration.ofMinutes(15)))
+				.thenReturn(new PresignedObject("https://b2.example/part2?sig=1", EXPIRES));
+		when(bookEncryptionKeys.rewrapForDevice(eq("shared-wrapped-bek"), any())).thenReturn("wrapped-for-device");
+
+		ContentGrant result = grant.grant(requestForPart(2));
+
+		assertThat(result.content().url()).isEqualTo("https://b2.example/part2?sig=1");
+		assertThat(result.content().cipherLength()).isEqualTo(2028L);
+		assertThat(result.encryption().wrappedBek()).isEqualTo("wrapped-for-device");
+	}
+
+	@Test
+	void aPartThatIsNotItselfReadyIsContentNotReadyEvenWhenTheItemAggregateIsReady() {
+		CatalogueItem.Part part1 = new CatalogueItem.Part();
+		part1.setPartNumber(1);
+		part1.setContentState(ContentState.READY);
+		part1.setStorageKey("items/item_42/content");
+		CatalogueItem.Part part2 = new CatalogueItem.Part();
+		part2.setPartNumber(2);
+		part2.setContentState(ContentState.PROCESSING);
+		CatalogueItem.Asset asset = new CatalogueItem.Asset();
+		asset.setFormat(ContentType.PDF);
+		asset.setEncrypted(false);
+		asset.setParts(List.of(part1, part2));
+		CatalogueItem item = new CatalogueItem();
+		item.setId("item_42");
+		item.setContentType(ContentType.PDF);
+		item.setAccessTier(AccessTier.OPEN_ACCESS);
+		// The item's own aggregate is already READY - part 1 finished, part 2 hasn't yet.
+		item.setContentState(ContentState.READY);
+		item.setAssets(List.of(asset));
+		when(items.findById("item_42")).thenReturn(Optional.of(item));
+
+		assertThatExceptionOfType(ApiException.class).isThrownBy(() -> grant.grant(requestForPart(2)))
+				.satisfies(e -> assertThat(e.getCode()).isEqualTo(ErrorCode.CONTENT_NOT_READY));
 	}
 
 	@Test
@@ -140,7 +219,7 @@ class ContentAccessGrantImplTest {
 				.thenReturn(new PresignedObject("https://b2.example/content?sig=1", EXPIRES));
 		when(bookStorage.presign("items/item_42/index", Duration.ofMinutes(15)))
 				.thenReturn(new PresignedObject("https://b2.example/index?sig=2", EXPIRES));
-		when(bookEncryptionKeys.rewrapForDevice(eq(item.getMasterWrappedBek()), eq(devicePublicKey)))
+		when(bookEncryptionKeys.rewrapForDevice(eq(item.getAssets().get(0).getMasterWrappedBek()), eq(devicePublicKey)))
 				.thenReturn("wrapped-bek-for-device");
 
 		ContentGrant result = grant.grant(request(Format.PDF, true, devicePublicKey));

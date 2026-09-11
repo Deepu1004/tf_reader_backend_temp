@@ -80,7 +80,10 @@ tf:
 
 tnf:
   seed:
-    enabled: true
+    # False by default: DemoDataSeeder is also gated on @Profile("local") and its own
+    # refuseIfNotLocal() host check, but this was the one property that, on its own, defaulted to
+    # "on" regardless of profile - fixed here instead of relying on the other two rails alone.
+    enabled: false
   # TempDevAuthController's /dev-token mints a token for anyone with no check at all. Off unless a
   # developer's own application-local.yml turns it on, same as mock-oidc.enabled below.
   dev-auth:

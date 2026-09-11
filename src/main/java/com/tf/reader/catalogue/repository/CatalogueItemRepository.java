@@ -12,6 +12,7 @@ import com.tf.reader.catalogue.entity.AccessTier;
 import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.ItemStatus;
+import com.tf.reader.catalogue.entity.WorkType;
 
 public interface CatalogueItemRepository extends MongoRepository<CatalogueItem, String> {
 
@@ -45,5 +46,14 @@ public interface CatalogueItemRepository extends MongoRepository<CatalogueItem, 
 
 	// Backs the ingest watchdog: anything left in one of these states past the timeout.
 	List<CatalogueItem> findByContentStateInAndUpdatedAtBefore(List<ContentState> contentStates, Instant updatedAt);
+
+	// Backs a container's children lookup: a Journal's Volumes, a Volume's Issues, an Issue's
+	// Articles. Java re-sorts by sequence afterwards - Mongo makes no ordering guarantee here.
+	List<CatalogueItem> findByParentId(String parentId);
+
+	List<CatalogueItem> findByParentIdAndWorkType(String parentId, WorkType workType);
+
+	// Backs the root feed's top-level Journal signposts.
+	List<CatalogueItem> findByWorkTypeAndStatus(WorkType workType, ItemStatus status);
 
 }
