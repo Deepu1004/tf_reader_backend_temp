@@ -1,5 +1,8 @@
 package com.tf.reader.auth.security;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -8,7 +11,9 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.saml2.provider.service.registration.RelyingPartyRegistration;
 import org.springframework.security.saml2.provider.service.registration.RelyingPartyRegistrationRepository;
+import org.springframework.security.saml2.provider.service.web.DefaultRelyingPartyRegistrationResolver;
 import org.springframework.security.saml2.provider.service.web.authentication.OpenSaml5AuthenticationRequestResolver;
 import org.springframework.security.saml2.provider.service.web.authentication.Saml2AuthenticationRequestResolver;
 import org.springframework.security.web.SecurityFilterChain;
@@ -161,17 +166,38 @@ public class UserSecurityConfig {
 	}
 
 	/**
-	 * Puts our transaction id into RelayState.
+	 * Puts our transaction id into RelayState and appends the real ACS URL to the IdP
+	 * redirect so samlmock.dev POSTs back to the correct host.
 	 *
 	 * <p>Spring Security's default resolver invents a random UUID for RelayState. We replace it
 	 * with the id issued by {@code /auth/saml/start}, which is what carries the chosen
 	 * institution across the redirect without trusting the client for it.
+	 *
+	 * <p>The {@code acs_url} query parameter pre-fills samlmock.dev's form with where to POST
+	 * the SAMLResponse. It is built from the resolved registration's ACS location, which
+	 * already has {@code {baseUrl}} expanded from the current request — so it is
+	 * {@code https://…onrender.com/…} in production and {@code http://localhost:8080/…} locally
+	 * without any per-environment configuration.
 	 */
 	@Bean
 	Saml2AuthenticationRequestResolver authenticationRequestResolver(
 			RelyingPartyRegistrationRepository registrations) {
+		DefaultRelyingPartyRegistrationResolver base =
+				new DefaultRelyingPartyRegistrationResolver(registrations);
 		OpenSaml5AuthenticationRequestResolver resolver =
-				new OpenSaml5AuthenticationRequestResolver(registrations);
+				new OpenSaml5AuthenticationRequestResolver((request, registrationId) -> {
+					RelyingPartyRegistration reg = base.resolve(request, registrationId);
+					if (reg == null) {
+						return null;
+					}
+					String encodedAcs = URLEncoder.encode(
+							reg.getAssertionConsumerServiceLocation(), StandardCharsets.UTF_8);
+					String idpUrl = reg.getAssertingPartyMetadata().getSingleSignOnServiceLocation()
+							+ "&acs_url=" + encodedAcs;
+					return reg.mutate()
+							.assertingPartyMetadata(p -> p.singleSignOnServiceLocation(idpUrl))
+							.build();
+				});
 		resolver.setRelayStateResolver(request -> request.getParameter(AUTH_TRANSACTION_PARAM));
 		return resolver;
 	}
