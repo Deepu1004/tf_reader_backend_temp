@@ -31,6 +31,7 @@ import com.tf.reader.auth.saml.SamlStartResponse;
 import com.tf.reader.auth.model.CurrentUser;
 import com.tf.reader.auth.model.Institution;
 import com.tf.reader.auth.model.TnfUser;
+import com.tf.reader.auth.model.UserType;
 import com.tf.reader.auth.security.CurrentUserAuthenticationToken;
 import com.tf.reader.auth.security.UserSecurityConfig;
 import com.tf.reader.auth.service.ReaderAuthService;
@@ -45,6 +46,7 @@ import com.tf.reader.auth.transaction.AuthTransaction;
 import com.tf.reader.auth.transaction.AuthTransactionStore;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
+import com.tf.reader.hold.api.HoldQueueExit;
 
 /**
  * The auth group: starting institutional sign-in, reporting who is signed in, and exchanging a
@@ -64,17 +66,20 @@ public class AuthController {
 	private final ReaderSessionService readerSessions;
 	private final AuthorizationCodeStore authorizationCodes;
 	private final ReaderAuthService readerAuth;
+	private final HoldQueueExit holdQueueExit;
 	private final Clock clock;
 
 	public AuthController(AuthTransactionStore transactions, InstitutionLookup institutions,
 			TokenService tokenService, ReaderSessionService readerSessions,
-			AuthorizationCodeStore authorizationCodes, ReaderAuthService readerAuth, Clock clock) {
+			AuthorizationCodeStore authorizationCodes, ReaderAuthService readerAuth,
+			HoldQueueExit holdQueueExit, Clock clock) {
 		this.transactions = transactions;
 		this.institutions = institutions;
 		this.tokenService = tokenService;
 		this.readerSessions = readerSessions;
 		this.authorizationCodes = authorizationCodes;
 		this.readerAuth = readerAuth;
+		this.holdQueueExit = holdQueueExit;
 		this.clock = clock;
 	}
 
@@ -151,12 +156,18 @@ public class AuthController {
 	 * has an effect when {@code saml-mock.enabled=true}: the local mock IdP has no login page of
 	 * its own, so this is how a caller picks which seeded user it should assert instead of its
 	 * configured default. See {@link AuthTransaction#usernameHint()}.
+	 *
+	 * <p>{@code deviceId} is the one thing that carries real meaning forward: a device signing in
+	 * for the first time omits it and is minted a fresh one, a returning device presents the one
+	 * it was given last time to reclaim the same loans and shelf instead of spending a new
+	 * concurrent seat. See {@link AuthTransaction} and {@code SamlUserMapper}.
 	 */
 	@PostMapping("/saml/start")
 	public SamlStartResponse samlStart(
 			@RequestParam(required = false) String institutionId,
 			@RequestParam(required = false) String idpHint,
-			@RequestParam(required = false) String username) {
+			@RequestParam(required = false) String username,
+			@RequestParam(required = false) String deviceId) {
 		log.info("saml/start: institutionId={}", institutionId);
 
 		if (institutionId == null || institutionId.isBlank()) {
@@ -168,7 +179,7 @@ public class AuthController {
 						"No institution is registered with id '" + institutionId + "'."));
 		Institution institution = new Institution(institutionRef.institutionId(), institutionRef.name());
 
-		AuthTransaction transaction = transactions.open(institution.institutionId(), username);
+		AuthTransaction transaction = transactions.open(institution.institutionId(), username, deviceId);
 		log.info("saml/start: opened authTxnId={} for institutionId={}", transaction.id(), institutionId);
 
 		return new SamlStartResponse(
@@ -210,11 +221,15 @@ public class AuthController {
 		IssuedToken accessToken = tokenService.issue(user);
 		IssuedRefreshToken refreshToken = readerSessions.createSession(user);
 
+		// Institutional only: an individual's userId is a real, persistent account id, not a
+		// device id there is any point echoing back on a future SAML start.
+		String deviceId = user.type() == UserType.INSTITUTION ? user.userId() : null;
+
 		// From issuedAt, not clock.instant(): the token's own issuedAt is already truncated to
 		// whole seconds, so subtracting the current instant (which carries sub-second precision)
 		// would round the reported lifetime down by up to a second for no reason.
 		return new TokenResponse(accessToken.token(), refreshToken.value(),
-				Duration.between(accessToken.issuedAt(), accessToken.expiresAt()).getSeconds());
+				Duration.between(accessToken.issuedAt(), accessToken.expiresAt()).getSeconds(), deviceId);
 	}
 
 	/**
@@ -223,11 +238,22 @@ public class AuthController {
 	 *
 	 * <p>Idempotent: whether the token was live, already rotated, or never issued, the caller is
 	 * signed out either way, so this never distinguishes those cases in its response.
+	 *
+	 * <p>Also drops the reader out of every hold queue they were waiting in - an ELITE queue
+	 * position is tied to the session, not to an account this reader can come back to later. This
+	 * is best-effort: a failure there must never turn a sign-out into a 500.
 	 */
 	@PostMapping("/logout")
 	public ResponseEntity<Void> logout(@Valid @RequestBody RefreshRequest request) {
 		log.info("logout: revoking a session");
-		readerSessions.revoke(request.refreshToken());
+		readerSessions.revoke(request.refreshToken()).ifPresent(session -> {
+			try {
+				holdQueueExit.leaveAll(session.getUserId());
+			}
+			catch (RuntimeException bestEffort) {
+				log.warn("logout: failed to drop hold-queue membership for a revoked session", bestEffort);
+			}
+		});
 		return ResponseEntity.noContent().build();
 	}
 

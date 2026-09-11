@@ -140,8 +140,17 @@ info:
     `ENTITLEMENT_EXPIRED`, `ENTITLEMENT_SUSPENDED`, `INSTITUTION_INACTIVE`,
     `CONTENT_NOT_READY`, `NOT_FOUND`.
 
-    Four are new with this file and need ratifying: `NO_COPIES_AVAILABLE`,
-    `LOAN_NOT_ACTIVE`, `DEVICE_LIMIT_REACHED`, `OFFER_EXPIRED`.
+    Five are new with this file and need ratifying: `NO_COPIES_AVAILABLE`,
+    `LOAN_NOT_ACTIVE`, `DEVICE_LIMIT_REACHED`, `OFFER_EXPIRED`, `SEAT_LIMIT_REACHED`.
+
+    `SEAT_LIMIT_REACHED` is raised when a device signing in to an institution for the
+    first time finds every concurrent seat already spent — see `/auth/saml/start`
+    below. Like `SAML_AUTHENTICATION_FAILED` and the now-retired `USER_NOT_PROVISIONED`,
+    it is delivered at the browser-redirect ACS (`?error=SEAT_LIMIT_REACHED` on the
+    deep-link callback), never as a JSON response from any endpoint in this file — which
+    is also why those two aren't in the `ErrorCode` enum below. Listed anyway, because
+    unlike them it is genuinely new and a client needs to recognise it to show the right
+    message ("this institution is full right now") rather than a generic sign-in failure.
 
     `DOWNLOAD_NOT_PERMITTED` is settled at **403** in code (`common/error/ErrorCode`) —
     the earlier disagreement with a 422 reference is resolved, not open.
@@ -279,6 +288,20 @@ paths:
         `idpHint` is accepted because the contract defines it, and is deliberately unused:
         we run one SAML integration for every institution, so nothing about the request
         selects an identity provider.
+
+        **Institutional sign-in resolves no per-student account any more.** A validly signed
+        assertion is proof of membership at the chosen institution and nothing else — there
+        is no directory lookup, no username, no email, no id a reader ever sees. Identity is
+        the *device*: a device signing in for the first time is minted an opaque `deviceId`
+        (returned later, from `TokenResponse`, never from this call); a returning device
+        presents the one it already holds so it reclaims the same loans and shelf instead of
+        becoming someone new. This is also where concurrency is enforced — an institution has
+        a fixed number of concurrent seats, and only a *new* device is checked against it; a
+        returning one is never refused on this account.
+
+        `deviceId` is additive and optional, so it does not change the FROZEN shape for a
+        caller that omits it — every prior integration keeps working exactly as it did, just
+        always minting a new device rather than ever reclaiming one.
       x-stability: FROZEN
       x-called-by: [team1]
       security: []
@@ -292,6 +315,15 @@ paths:
           in: query
           required: false
           schema: { type: string }
+        - name: deviceId
+          in: query
+          required: false
+          schema: { type: string }
+          description: >-
+            The device's own id, if it already holds one from a previous sign-in to this
+            institution — omit for a device signing in for the first time. Never a username
+            or email; there is no such thing behind this id. See `TokenResponse.deviceId`.
+          example: dev_9f3a1c7b
       responses:
         "200":
           description: The URL to open, and the transaction that carries the institution
@@ -1778,6 +1810,7 @@ components:
         - LOAN_NOT_ACTIVE
         - OFFER_EXPIRED
         - EMAIL_TAKEN
+        - SEAT_LIMIT_REACHED
 
     LicenceModel:
       type: string
@@ -1935,6 +1968,16 @@ components:
         expiresIn:
           type: integer
           description: Seconds until `accessToken` expires, not an absolute instant.
+        deviceId:
+          type: string
+          description: >-
+            **Omitted, not null, outside institutional SAML sign-in.** Present only from
+            `/auth/token` and `/auth/refresh` when the identity behind the token is an
+            institutional SAML device. The client persists it locally and echoes it back as
+            `deviceId` on the next `/auth/saml/start`, which is what lets the same device
+            reclaim its seat and its loans/shelf instead of minting a new, disconnected one.
+            Never a username or email.
+          example: dev_9f3a1c7b
 
     # ── loans ───────────────────────────────────────────────────
 

@@ -53,7 +53,7 @@ public class AuthTransactionStore {
 
 	/** Opens a transaction for an institution and returns it. */
 	public AuthTransaction open(String institutionId) {
-		return open(institutionId, null);
+		return open(institutionId, null, null);
 	}
 
 	/**
@@ -65,6 +65,18 @@ public class AuthTransactionStore {
 	 *                     login page - see {@link AuthTransaction}'s own javadoc
 	 */
 	public AuthTransaction open(String institutionId, String usernameHint) {
+		return open(institutionId, usernameHint, null);
+	}
+
+	/**
+	 * Opens a transaction for an institution, carrying an optional username hint for the local
+	 * mock IdP and an optional device id.
+	 *
+	 * @param deviceId the device's own id, if it already holds one from a previous sign-in to
+	 *                  this institution - null for a device signing in for the first time. See
+	 *                  {@link AuthTransaction}'s own javadoc.
+	 */
+	public AuthTransaction open(String institutionId, String usernameHint, String deviceId) {
 		// POST /auth/saml/start is public and unauthenticated, so anyone can reach this line.
 		// Without a sweep, every call would leave a map entry behind for good and an anonymous
 		// caller could grow the heap until the process died. Nothing else evicts: there is no
@@ -75,7 +87,7 @@ public class AuthTransactionStore {
 		}
 		Instant now = clock.instant();
 		AuthTransaction transaction =
-				new AuthTransaction(newId(), institutionId, usernameHint, now, now.plus(LIFETIME));
+				new AuthTransaction(newId(), institutionId, usernameHint, deviceId, now, now.plus(LIFETIME));
 		transactions.put(transaction.id(), transaction);
 		return transaction;
 	}

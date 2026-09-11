@@ -24,8 +24,10 @@ import com.tf.reader.loan.entity.LoanStatus;
 import com.tf.reader.loan.repository.LoanRepository;
 import com.tf.reader.reading.api.CopyLease;
 import com.tf.reader.reading.api.LeaseHandle;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 public class BorrowService implements LicenceCommand {
 
@@ -57,8 +59,11 @@ public class BorrowService implements LicenceCommand {
 	 * lease if the save fails. Coexists with the read broker's create; idempotency keeps them apart.
 	 */
 	public BorrowResult borrow(SubjectRef subject, String itemId) {
+		log.info("borrow: request itemId={} userId={} institutionId={}", itemId, subject.userId(),
+				subject.institutionId());
 		EntitlementDecision decision = entitlement.check(subject, itemId);
 		if (!decision.entitled()) {
+			log.info("borrow: denied itemId={} userId={} reason={}", itemId, subject.userId(), decision.reason());
 			throw new ApiException(mapDeny(decision.reason()), "You cannot borrow this title.");
 		}
 
@@ -66,6 +71,8 @@ public class BorrowService implements LicenceCommand {
 		Optional<Loan> existing =
 				loanRepository.findByUserIdAndItemIdAndStatus(subject.userId(), itemId, LoanStatus.ACTIVE);
 		if (existing.isPresent()) {
+			log.info("borrow: already held loanId={} itemId={} userId={}", existing.get().getLoanId(), itemId,
+					subject.userId());
 			return new BorrowResult(toBody(existing.get(), subject), false);
 		}
 
@@ -73,16 +80,22 @@ public class BorrowService implements LicenceCommand {
 		if (decision.accessLevel() == AccessLevel.ENTITLED_CONCURRENT) {
 			int copies = decision.copies() != null ? decision.copies() : 1;
 			held = copyLease.claim(subject.institutionId(), itemId, copies)
-					.orElseThrow(() -> new ApiException(ErrorCode.NO_COPIES_AVAILABLE,
-							"No copies available right now."));
+					.orElseThrow(() -> {
+						log.info("borrow: no copies available itemId={} userId={}", itemId, subject.userId());
+						return new ApiException(ErrorCode.NO_COPIES_AVAILABLE, "No copies available right now.");
+					});
 		}
 
 		try {
 			LicenceView view = create(subject, itemId, decision.accessLevel(), decision.loanPeriodDays(),
 					held == null ? null : held.token());
+			log.info("borrow: granted loanId={} itemId={} userId={} accessLevel={}", view.licenceId(), itemId,
+					subject.userId(), decision.accessLevel());
 			return new BorrowResult(toBody(view, decision.accessLevel(), subject), true);
 		} catch (RuntimeException e) {
 			if (held != null) {
+				log.warn("borrow: failed after claiming a copy itemId={} userId={}, releasing it", itemId,
+						subject.userId(), e);
 				copyLease.release(held.token());   // never strand a slot
 			}
 			throw e;
@@ -204,6 +217,8 @@ public class BorrowService implements LicenceCommand {
 			changeLog.record(ChangeRecord.forLoan(userId, ChangeReason.LOAN_CREATED, itemId,
 					loan.getLoanId(), now));
 		}
+		log.info("loan: created loanId={} itemId={} userId={} accessLevel={} dueAt={}", loan.getLoanId(), itemId,
+				userId, accessLevel, dueAt);
 
 		return new LicenceView(
 				loan.getLoanId(),

@@ -40,6 +40,7 @@ import com.tf.reader.auth.transaction.AuthTransactionStore;
 import com.tf.reader.catalogue.api.InstitutionLookup;
 import com.tf.reader.catalogue.api.InstitutionRef;
 import com.tf.reader.common.error.GlobalExceptionHandler;
+import com.tf.reader.hold.api.HoldQueueExit;
 
 /**
  * Slice test of the endpoint that starts SAML. Spring Security's SAML filters are not in this
@@ -73,6 +74,10 @@ class AuthControllerTest {
 	// bean only needs to exist for the controller to be constructed.
 	@MockitoBean
 	private ReaderAuthService readerAuth;
+
+	// logout's best-effort hold-queue cleanup calls this; only exercised by the logout tests.
+	@MockitoBean
+	private HoldQueueExit holdQueueExit;
 
 	@TestConfiguration
 	static class FixedClockConfig {
@@ -247,6 +252,20 @@ class AuthControllerTest {
 				.andExpect(jsonPath("$.code").doesNotExist());
 
 		verify(readerSessions).revoke("some-refresh");
+	}
+
+	@Test
+	void logoutDropsTheRevokedSessionOutOfEveryHoldQueueItWasWaitingIn() throws Exception {
+		ReaderSession revoked = new ReaderSession();
+		revoked.setUserId("dev_abc123");
+		when(readerSessions.revoke("some-refresh")).thenReturn(Optional.of(revoked));
+
+		mockMvc.perform(post("/api/v1/auth/logout")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{ \"refreshToken\": \"some-refresh\" }"))
+				.andExpect(status().isNoContent());
+
+		verify(holdQueueExit).leaveAll("dev_abc123");
 	}
 
 	@Test
