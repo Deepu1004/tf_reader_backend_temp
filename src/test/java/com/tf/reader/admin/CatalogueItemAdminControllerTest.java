@@ -75,16 +75,18 @@ class CatalogueItemAdminControllerTest {
 	private static final Instant CREATED = Instant.parse("2026-08-10T09:00:00Z");
 
 	private static CatalogueItemView summaryView() {
-		return new CatalogueItemView("item_42", "pub_rtlg", null, List.of("col_law2024"), "Rights for Robots", null,
-				List.of("Joshua C. Gellers"), List.of(), List.of(), "9780367211745", ContentType.PDF,
-				AccessTier.ELITE, List.of("Law"), "en", null, null, null, null, null, ItemStatus.PUBLISHED,
-				ContentState.QUEUED, null, List.of(), CREATED, CREATED, null);
+		return new CatalogueItemView("item_42", "pub_rtlg", null, List.of("col_law2024"), null, null, null,
+				"Rights for Robots", null, List.of("Joshua C. Gellers"), List.of(), List.of(), "9780367211745",
+				ContentType.PDF, AccessTier.ELITE, List.of("Law"), "en", null, null, null, null, null,
+				ItemStatus.PUBLISHED, ContentState.QUEUED, null, List.of(), CREATED, CREATED, null);
 	}
 
 	private static CatalogueItemView fullView() {
-		CatalogueItemView.Asset asset = new CatalogueItemView.Asset(ContentType.PDF, "application/pdf", 1024L, null,
-				true, true, null, 500);
-		return new CatalogueItemView("item_42", "pub_rtlg", "Routledge", List.of("col_law2024"),
+		CatalogueItemView.Part part = new CatalogueItemView.Part(1, null, 1024L, null, true, null, 500,
+				ContentState.READY, null, CREATED);
+		CatalogueItemView.Asset asset = new CatalogueItemView.Asset(ContentType.PDF, "application/pdf", true,
+				List.of(part));
+		return new CatalogueItemView("item_42", "pub_rtlg", "Routledge", List.of("col_law2024"), null, null, null,
 				"Rights for Robots", null, List.of("Joshua C. Gellers"), List.of(), List.of(), "9780367211745",
 				ContentType.PDF, AccessTier.ELITE, List.of("Law"), "en", null, null, null, null, null,
 				ItemStatus.PUBLISHED, ContentState.QUEUED, null, List.of(asset), CREATED, CREATED, null);
@@ -186,8 +188,8 @@ class CatalogueItemAdminControllerTest {
 
 	@Test
 	void uploadContentReturns202WithIngestStatusBody() throws Exception {
-		when(ingestService.accept(eq("item_42"), any(), eq(AssetFormat.PDF))).thenReturn(
-				new IngestStatus("item_42", AssetFormat.PDF, ContentState.QUEUED, null, CREATED));
+		when(ingestService.accept(eq("item_42"), any(), eq(AssetFormat.PDF), any(), any())).thenReturn(
+				new IngestStatus("item_42", AssetFormat.PDF, 1, ContentState.QUEUED, null, CREATED));
 		MockMultipartFile file = new MockMultipartFile("file", "book.pdf", "application/pdf", new byte[10]);
 
 		mvc.perform(multipart("/api/admin/v1/catalogue-items/item_42/content").file(file).param("format", "PDF"))
@@ -197,7 +199,7 @@ class CatalogueItemAdminControllerTest {
 
 	@Test
 	void uploadContentOnUnknownItemIs404() throws Exception {
-		when(ingestService.accept(eq("item_nope"), any(), any()))
+		when(ingestService.accept(eq("item_nope"), any(), any(), any(), any()))
 				.thenThrow(new ApiException(ErrorCode.NOT_FOUND, "No such catalogue item"));
 		MockMultipartFile file = new MockMultipartFile("file", "book.pdf", "application/pdf", new byte[10]);
 
@@ -207,8 +209,8 @@ class CatalogueItemAdminControllerTest {
 
 	@Test
 	void ingestStatusReflectsTheCurrentState() throws Exception {
-		when(ingestService.getStatus("item_42")).thenReturn(
-				new IngestStatus("item_42", AssetFormat.PDF, ContentState.FAILED, "boom", CREATED));
+		when(ingestService.getStatus("item_42", null)).thenReturn(
+				new IngestStatus("item_42", AssetFormat.PDF, 1, ContentState.FAILED, "boom", CREATED));
 
 		mvc.perform(get("/api/admin/v1/catalogue-items/item_42/ingest-status")).andExpect(status().isOk())
 				.andExpect(jsonPath("$.contentState").value("FAILED")).andExpect(jsonPath("$.contentError").value("boom"));
@@ -216,7 +218,7 @@ class CatalogueItemAdminControllerTest {
 
 	@Test
 	void ingestStatusOnUnknownItemIs404() throws Exception {
-		when(ingestService.getStatus("item_nope"))
+		when(ingestService.getStatus("item_nope", null))
 				.thenThrow(new ApiException(ErrorCode.NOT_FOUND, "No such catalogue item"));
 
 		mvc.perform(get("/api/admin/v1/catalogue-items/item_nope/ingest-status")).andExpect(status().isNotFound())

@@ -1,5 +1,6 @@
 package com.tf.reader.catalogue.opds.service;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +20,7 @@ import com.tf.reader.catalogue.entity.FeedSettings;
 import com.tf.reader.catalogue.entity.Institution;
 import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.catalogue.entity.Shelf;
+import com.tf.reader.catalogue.entity.WorkType;
 import com.tf.reader.catalogue.opds.dto.OpdsFeedMetadata;
 import com.tf.reader.catalogue.opds.dto.OpdsGroup;
 import com.tf.reader.catalogue.opds.dto.OpdsGroupMetadata;
@@ -89,9 +91,18 @@ public class OpdsFeedService {
         List<OpdsLink> links = List.of(
                 new OpdsLink("self", catalogueUrlBuilder.catalogueUrlFor(institutionId), OPDS_MEDIA_TYPE),
                 searchLink(institutionId));
-        List<OpdsLink> navigation = List.of(
-                new OpdsLink("subsection", catalogueUrlBuilder.groupUrlFor(institutionId, OpdsCatalogueQuery.ALL_GROUP_ID),
-                        OPDS_MEDIA_TYPE, "All titles"));
+
+        List<OpdsLink> navigation = new ArrayList<>();
+        navigation.add(new OpdsLink("subsection",
+                catalogueUrlBuilder.groupUrlFor(institutionId, OpdsCatalogueQuery.ALL_GROUP_ID), OPDS_MEDIA_TYPE,
+                "All titles"));
+        // Additive signpost: a top-level Journal alongside the curated shelves. No schema
+        // change - one more OpdsLink in the same navigation array a client already iterates.
+        catalogueItemRepository.findByWorkTypeAndStatus(WorkType.JOURNAL, ItemStatus.PUBLISHED).stream()
+                .sorted(Comparator.comparing(CatalogueItem::getSequence, Comparator.nullsLast(Integer::compareTo)))
+                .forEach(journal -> navigation.add(new OpdsLink("subsection",
+                        catalogueUrlBuilder.workUrlFor(institutionId, journal.getId()), OPDS_MEDIA_TYPE,
+                        journal.getTitle())));
 
         String title = settings.map(FeedSettings::getFeedTitle).filter(t -> !t.isBlank())
                 .orElse(institution.getName());
@@ -176,6 +187,58 @@ public class OpdsFeedService {
         OpdsPublication publication = entitlementFilter.mapIfEntitled(item, institution.getId(), subject)
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "No such publication"));
         return new OpdsPublicationDocument(publication.metadata(), publication.links(), publication.images());
+    }
+
+    /**
+     * A JOURNAL or VOLUME returns navigation (one link per child, pointing at that child's own
+     * {@code works/{id}}); an ISSUE returns a publication feed of its ARTICLE children, the same
+     * shape a shelf already returns. Additive, {@code DRAFT}: nothing here touches the FROZEN
+     * {@code groups/{groupId}} contract. 404 for anything not a JOURNAL/VOLUME/ISSUE, or not
+     * PUBLISHED - same indistinguishable-404 rule the rest of OPDS already uses.
+     */
+    public Object workFeed(Institution institution, String workId, SubjectRef subject) {
+        CatalogueItem work = catalogueItemRepository.findById(workId)
+                .filter(item -> item.getStatus() == ItemStatus.PUBLISHED)
+                .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "No such work"));
+        WorkType workType = work.getWorkType();
+        String institutionId = institution.getId();
+
+        if (workType == WorkType.JOURNAL || workType == WorkType.VOLUME) {
+            List<CatalogueItem> children = catalogueItemRepository.findByParentId(workId).stream()
+                    .filter(child -> child.getStatus() == ItemStatus.PUBLISHED)
+                    .sorted(Comparator.comparing(CatalogueItem::getSequence, Comparator.nullsLast(Integer::compareTo)))
+                    .toList();
+            List<OpdsLink> navigation = children.stream()
+                    .map(child -> new OpdsLink("subsection", catalogueUrlBuilder.workUrlFor(institutionId, child.getId()),
+                            OPDS_MEDIA_TYPE, child.getTitle()))
+                    .toList();
+            OpdsLink self = new OpdsLink("self", catalogueUrlBuilder.workUrlFor(institutionId, workId), OPDS_MEDIA_TYPE);
+            OpdsFeedMetadata metadata = new OpdsFeedMetadata(work.getTitle(), navigation.size(), null, null,
+                    work.getUpdatedAt());
+            return new OpdsNavigationFeed(metadata, List.of(self), navigation, null);
+        }
+
+        if (workType == WorkType.ISSUE) {
+            List<CatalogueItem> articles = catalogueItemRepository.findByParentId(workId).stream()
+                    .filter(child -> child.getStatus() == ItemStatus.PUBLISHED
+                            && child.getContentState() == ContentState.READY)
+                    .sorted(Comparator.comparing(CatalogueItem::getSequence, Comparator.nullsLast(Integer::compareTo)))
+                    .toList();
+            List<OpdsPublication> publications = entitlementFilter.mapEntitled(articles, institutionId, subject);
+            OpdsLink self = new OpdsLink("self", catalogueUrlBuilder.workUrlFor(institutionId, workId), OPDS_MEDIA_TYPE);
+            OpdsFeedMetadata metadata = new OpdsFeedMetadata(work.getTitle(), publications.size(), null, null,
+                    work.getUpdatedAt());
+            if (publications.isEmpty()) {
+                // The OPDS schema forbids an empty publications array - a link back, same rule a
+                // curated shelf already follows.
+                List<OpdsLink> navigation = List.of(new OpdsLink("up",
+                        catalogueUrlBuilder.catalogueUrlFor(institutionId), OPDS_MEDIA_TYPE));
+                return new OpdsPublicationFeed(metadata, List.of(self), null, navigation);
+            }
+            return new OpdsPublicationFeed(metadata, List.of(self), publications, null);
+        }
+
+        throw new ApiException(ErrorCode.NOT_FOUND, "No such work");
     }
 
     private OpdsLink searchLink(String institutionId) {

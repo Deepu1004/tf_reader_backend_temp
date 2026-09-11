@@ -101,13 +101,13 @@ class CatalogueItemAdminServiceTest {
 	}
 
 	private static CatalogueItemWrite pdfWrite(String publisherId) {
-		return new CatalogueItemWrite(publisherId, List.of(), "Rights for Robots", null, List.of("Joshua Gellers"),
+		return new CatalogueItemWrite(publisherId, List.of(), null, null, null, "Rights for Robots", null, List.of("Joshua Gellers"),
 				List.of(), List.of(), null, ContentType.PDF, AccessTier.ELITE, List.of("Law"), "en", null, null, null,
 				null, null);
 	}
 
 	private static CatalogueItemWrite audioWrite(String publisherId, Integer duration) {
-		return new CatalogueItemWrite(publisherId, List.of(), "Robots, Read Aloud", null, List.of(), List.of(),
+		return new CatalogueItemWrite(publisherId, List.of(), null, null, null, "Robots, Read Aloud", null, List.of(), List.of(),
 				List.of("A Narrator"), null, ContentType.AUDIO, AccessTier.SUBSCRIPTION, List.of(), "en", null, null,
 				duration, null, null);
 	}
@@ -137,7 +137,7 @@ class CatalogueItemAdminServiceTest {
 	@Test
 	@DisplayName("create PDF with a duration throws VALIDATION_FAILED")
 	void createNonAudioWithDurationThrows() {
-		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of(), "Title", null, List.of(), List.of(),
+		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of(), null, null, null, "Title", null, List.of(), List.of(),
 				List.of(), null, ContentType.PDF, AccessTier.ELITE, List.of(), "en", null, null, 100, null, null);
 
 		assertThatThrownBy(() -> service.create(write)).isInstanceOf(ApiException.class)
@@ -158,7 +158,7 @@ class CatalogueItemAdminServiceTest {
 	@DisplayName("create with status PUBLISHED bumps the catalogue version")
 	void createPublishedBumpsVersion() {
 		when(catalogueItemRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of(), "Title", null, List.of(), List.of(),
+		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of(), null, null, null, "Title", null, List.of(), List.of(),
 				List.of(), null, ContentType.PDF, AccessTier.ELITE, List.of(), "en", null, null, null, null,
 				ItemStatus.PUBLISHED);
 
@@ -184,7 +184,7 @@ class CatalogueItemAdminServiceTest {
 	void createRejectsACollectionFromAnotherPublisher() {
 		when(bookCollectionRepository.findAllById(List.of("col_1")))
 				.thenReturn(List.of(collection("col_1", "pub_other")));
-		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of("col_1"), "Title", null, List.of(),
+		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of("col_1"), null, null, null, "Title", null, List.of(),
 				List.of(), List.of(), null, ContentType.PDF, AccessTier.ELITE, List.of(), "en", null, null, null,
 				null, null);
 
@@ -197,7 +197,7 @@ class CatalogueItemAdminServiceTest {
 	@DisplayName("create with an unknown collection id throws VALIDATION_FAILED")
 	void createRejectsAnUnknownCollectionId() {
 		when(bookCollectionRepository.findAllById(List.of("col_missing"))).thenReturn(List.of());
-		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of("col_missing"), "Title", null,
+		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of("col_missing"), null, null, null, "Title", null,
 				List.of(), List.of(), List.of(), null, ContentType.PDF, AccessTier.ELITE, List.of(), "en", null, null,
 				null, null, null);
 
@@ -213,7 +213,7 @@ class CatalogueItemAdminServiceTest {
 		when(catalogueItemRepository.findById("item_42")).thenReturn(Optional.of(existing));
 		when(bookCollectionRepository.findAllById(List.of("col_1")))
 				.thenReturn(List.of(collection("col_1", "pub_other")));
-		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of("col_1"), "Title", null, List.of(),
+		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of("col_1"), null, null, null, "Title", null, List.of(),
 				List.of(), List.of(), null, ContentType.PDF, AccessTier.ELITE, List.of(), "en", null, null, null,
 				null, null);
 
@@ -228,7 +228,7 @@ class CatalogueItemAdminServiceTest {
 		when(bookCollectionRepository.findAllById(List.of("col_1")))
 				.thenReturn(List.of(collection("col_1", "pub_rtlg")));
 		when(catalogueItemRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of("col_1"), "Title", null, List.of(),
+		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of("col_1"), null, null, null, "Title", null, List.of(),
 				List.of(), List.of(), null, ContentType.PDF, AccessTier.ELITE, List.of(), "en", null, null, null,
 				null, null);
 
@@ -400,7 +400,7 @@ class CatalogueItemAdminServiceTest {
 		CatalogueItem existing = pdfItem("item_42", "pub_rtlg");
 		when(catalogueItemRepository.findById("item_42")).thenReturn(Optional.of(existing));
 		when(catalogueItemRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of(), "Title", null, List.of(), List.of(),
+		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of(), null, null, null, "Title", null, List.of(), List.of(),
 				List.of(), null, ContentType.PDF, AccessTier.ELITE, List.of(), "en", null, null, null, null,
 				ItemStatus.ARCHIVED);
 
@@ -563,7 +563,7 @@ class CatalogueItemAdminServiceTest {
 	// ---------------------------------------------------------------- fixtures
 
 	private static CatalogueItemWrite isbnWrite(String publisherId, String isbn) {
-		return new CatalogueItemWrite(publisherId, List.of(), "Rights for Robots", null, List.of("Joshua Gellers"),
+		return new CatalogueItemWrite(publisherId, List.of(), null, null, null, "Rights for Robots", null, List.of("Joshua Gellers"),
 				List.of(), List.of(), isbn, ContentType.PDF, AccessTier.ELITE, List.of("Law"), "en", null, null, null,
 				null, null);
 	}
@@ -583,6 +583,76 @@ class CatalogueItemAdminServiceTest {
 		item.setAccessTier(AccessTier.ELITE);
 		item.setStatus(ItemStatus.DRAFT);
 		item.setContentState(ContentState.NONE);
+		return item;
+	}
+
+	// ---------------------------------------------------------------- hierarchy
+
+	private static CatalogueItemWrite containerWrite(com.tf.reader.catalogue.entity.WorkType workType,
+			String parentId) {
+		return new CatalogueItemWrite("pub_rtlg", List.of(), workType, parentId, 1, "Journal of X", null, List.of(),
+				List.of(), List.of(), null, null, null, List.of(), "en", null, null, null, null, null);
+	}
+
+	@Test
+	@DisplayName("a valid Journal -> Volume -> Issue -> Article chain is accepted")
+	void validHierarchyChainIsAccepted() {
+		when(catalogueItemRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+		var journal = service.create(containerWrite(com.tf.reader.catalogue.entity.WorkType.JOURNAL, null));
+		when(catalogueItemRepository.findById(journal.id())).thenReturn(Optional.of(asItem(journal)));
+
+		var volume = service.create(containerWrite(com.tf.reader.catalogue.entity.WorkType.VOLUME, journal.id()));
+		when(catalogueItemRepository.findById(volume.id())).thenReturn(Optional.of(asItem(volume)));
+
+		var issue = service.create(containerWrite(com.tf.reader.catalogue.entity.WorkType.ISSUE, volume.id()));
+		when(catalogueItemRepository.findById(issue.id())).thenReturn(Optional.of(asItem(issue)));
+
+		CatalogueItemWrite articleWrite = new CatalogueItemWrite("pub_rtlg", List.of(),
+				com.tf.reader.catalogue.entity.WorkType.ARTICLE, issue.id(), 1, "Paper A", null, List.of(), List.of(),
+				List.of(), null, ContentType.PDF, AccessTier.SUBSCRIPTION, List.of(), "en", null, null, null, null,
+				null);
+		var article = service.create(articleWrite);
+
+		assertThat(volume.workType()).isEqualTo(com.tf.reader.catalogue.entity.WorkType.VOLUME);
+		assertThat(volume.parentId()).isEqualTo(journal.id());
+		assertThat(article.workType()).isEqualTo(com.tf.reader.catalogue.entity.WorkType.ARTICLE);
+		assertThat(article.parentId()).isEqualTo(issue.id());
+	}
+
+	@Test
+	@DisplayName("an ISSUE whose parentId points at a JOURNAL (not a VOLUME) is VALIDATION_FAILED")
+	void wrongParentWorkTypeIsRejected() {
+		when(catalogueItemRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+		var journal = service.create(containerWrite(com.tf.reader.catalogue.entity.WorkType.JOURNAL, null));
+		when(catalogueItemRepository.findById(journal.id())).thenReturn(Optional.of(asItem(journal)));
+
+		CatalogueItemWrite badIssue = containerWrite(com.tf.reader.catalogue.entity.WorkType.ISSUE, journal.id());
+
+		assertThatThrownBy(() -> service.create(badIssue)).isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+	}
+
+	@Test
+	@DisplayName("a container carrying contentType/accessTier is VALIDATION_FAILED")
+	void containerWithLeafFieldsIsRejected() {
+		CatalogueItemWrite bad = new CatalogueItemWrite("pub_rtlg", List.of(),
+				com.tf.reader.catalogue.entity.WorkType.JOURNAL, null, 1, "Journal of X", null, List.of(), List.of(),
+				List.of(), null, ContentType.PDF, AccessTier.SUBSCRIPTION, List.of(), "en", null, null, null, null,
+				null);
+
+		assertThatThrownBy(() -> service.create(bad)).isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+	}
+
+	private static CatalogueItem asItem(com.tf.reader.admin.dto.CatalogueItemView view) {
+		CatalogueItem item = new CatalogueItem();
+		item.setId(view.id());
+		item.setPublisherId(view.publisherId());
+		item.setWorkType(view.workType());
+		item.setParentId(view.parentId());
+		item.setSequence(view.sequence());
+		item.setStatus(view.status());
 		return item;
 	}
 

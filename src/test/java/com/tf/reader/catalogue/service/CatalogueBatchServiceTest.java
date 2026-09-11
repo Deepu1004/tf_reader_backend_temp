@@ -85,8 +85,10 @@ class CatalogueBatchServiceTest {
 		source.setIsbn("9780367211745");
 		source.setContentType(ContentType.PDF);
 		source.setAccessTier(AccessTier.ELITE);
+		CatalogueItem.Part indexedPart = new CatalogueItem.Part();
+		indexedPart.setHasSearchIndex(true);
 		CatalogueItem.Asset withIndex = new CatalogueItem.Asset();
-		withIndex.setHasSearchIndex(true);
+		withIndex.setParts(List.of(indexedPart));
 		source.setAssets(List.of(withIndex));
 
 		when(catalogueItemRepository.findAllById(any())).thenReturn(List.of(source));

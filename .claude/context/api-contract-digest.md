@@ -1,9 +1,9 @@
 # API contract digest
 
 **GENERATED FILE. Do not edit.** Run `./scripts/gen-api-digest.sh` after the contract changes.
-Source `api-docs/wokay-api.yaml`, generated 2026-09-08.
+Source `api-docs/wokay-api.yaml`, generated 2026-09-09.
 
-47 operations across 35 paths, 84 schemas. **`FROZEN` means another team is already building against it: changing one needs a cohort conversation.**
+48 operations across 36 paths, 86 schemas. **`FROZEN` means another team is already building against it: changing one needs a cohort conversation.**
 
 ## Public institutions
 
@@ -18,6 +18,7 @@ Source `api-docs/wokay-api.yaml`, generated 2026-09-08.
 |---|---|---|---|
 | GET | `/opds/v1/institutions/{institutionId}/catalogue` | FROZEN | team1 |
 | GET | `/opds/v1/institutions/{institutionId}/groups/{groupId}` | FROZEN | team1 |
+| GET | `/opds/v1/institutions/{institutionId}/works/{workId}` | DRAFT | team1 |
 | GET | `/opds/v1/institutions/{institutionId}/search` | FROZEN | team1 |
 | GET | `/opds/v1/institutions/{institutionId}/publications/{itemId}` | FROZEN | team1 |
 
@@ -107,7 +108,7 @@ Every one is reachable. There are no spare codes, so do not write a handler for 
 
 ## Schemas
 
-`Error`, `ErrorCode`, `PageMeta`, `RecordStatus`, `SortOrder`, `Isbn`, `ContentType`, `AssetFormat`, `AccessTier`, `ItemStatus`, `EntitlementScope`, `EntitlementStatus`, `Intent`, `InstitutionType`, `AdminRole`, `ContentState`, `StatusChange`, `InstitutionSummary`, `InstitutionPage`, `Branding`, `SignIn`, `SignInWrite`, `InstitutionDetail`, `OpdsLink`, `OpdsNavigationLink`, `OpdsPublicationLink`, `OpdsImageLink`, `OpdsLinkProperties`, `EncryptedInfo`, `OpdsFeedMetadata`, `OpdsGroupMetadata`, `OpdsNavigationFeed`, `OpdsPublicationFeed`, `OpdsGroup`, `OpdsPublicationDocument`, `OpdsPublication`, `OpdsContributor`, `OpdsPublicationMetadata`, `BatchItemsRequest`, `BatchItem`, `BatchItemsResponse`, `ContentGrantRequest`, `SubjectRef`, `LoanProof`, `SignedUrl`, `IndexUrl`, `Encryption`, `ContentGrant`, `AdminLoginRequest`, `TokenPair`, `AdminLoginResponse`, `RefreshResponse`, `RefreshRequest`, `AdminSession`, `AdminUser`, `AdminUserPage`, `AdminUserCreate`, `AdminUserUpdate`, `Publisher`, `PublisherWrite`, `PublisherPage`, `Collection`, `CollectionPage`, `CollectionWrite`, `CollectionEntitlementView`, `CollectionEntitlementPage`, `Asset`, `CatalogueItem`, `CatalogueItemWrite`, `CatalogueItemPage`, `IngestStatus`, `AdminInstitution`, `AdminInstitutionPage`, `InstitutionWrite`, `Entitlement`, `EntitlementPage`, `EntitlementCreate`, `EntitlementUpdate`, `EntitlementStatusChange`, `Shelf`, `FeedSettings`, `FeedSettingsWrite`, `AuditLog`, `AuditLogPage`
+`Error`, `ErrorCode`, `PageMeta`, `RecordStatus`, `SortOrder`, `Isbn`, `ContentType`, `AssetFormat`, `AccessTier`, `ItemStatus`, `EntitlementScope`, `EntitlementStatus`, `Intent`, `InstitutionType`, `AdminRole`, `ContentState`, `StatusChange`, `InstitutionSummary`, `InstitutionPage`, `Branding`, `SignIn`, `SignInWrite`, `InstitutionDetail`, `OpdsLink`, `OpdsNavigationLink`, `OpdsPublicationLink`, `OpdsImageLink`, `OpdsLinkProperties`, `EncryptedInfo`, `OpdsFeedMetadata`, `OpdsGroupMetadata`, `OpdsNavigationFeed`, `OpdsPublicationFeed`, `OpdsGroup`, `OpdsPublicationDocument`, `OpdsPublication`, `OpdsContributor`, `OpdsPublicationMetadata`, `BatchItemsRequest`, `BatchItem`, `BatchItemsResponse`, `ContentGrantRequest`, `SubjectRef`, `LoanProof`, `SignedUrl`, `IndexUrl`, `Encryption`, `ContentGrant`, `AdminLoginRequest`, `TokenPair`, `AdminLoginResponse`, `RefreshResponse`, `RefreshRequest`, `AdminSession`, `AdminUser`, `AdminUserPage`, `AdminUserCreate`, `AdminUserUpdate`, `Publisher`, `PublisherWrite`, `PublisherPage`, `Collection`, `CollectionPage`, `CollectionWrite`, `CollectionEntitlementView`, `CollectionEntitlementPage`, `Asset`, `AssetPart`, `WorkType`, `CatalogueItem`, `CatalogueItemWrite`, `CatalogueItemPage`, `IngestStatus`, `AdminInstitution`, `AdminInstitutionPage`, `InstitutionWrite`, `Entitlement`, `EntitlementPage`, `EntitlementCreate`, `EntitlementUpdate`, `EntitlementStatusChange`, `Shelf`, `FeedSettings`, `FeedSettingsWrite`, `AuditLog`, `AuditLogPage`
 
 ## When this is not enough
 

@@ -3,8 +3,8 @@
     "Task 8, Week 1. The fixed development dataset. Owner: Person C.",
     "",
     "This file is the source of truth for development ids. Do not invent your own ids in a test;",
-    "use these. Twenty-four documents across seven collections: 2 publishers, 2 collections,",
-    "3 institutions, 8 catalogue items, 3 entitlements, 3 admin users, 3 feed settings.",
+    "use these. One hundred documents across seven collections: 2 publishers, 2 collections,",
+    "3 institutions, 83 catalogue items, 4 entitlements, 3 admin users, 3 feed settings.",
     "",
     "Field names mirror Person B's @Document classes as delivered in ACADEMIC.docx (13 Aug 2026),",
     "because DemoDataSeeder binds this file to them. If a name here does not match a field there,",
@@ -29,10 +29,32 @@
     "Two test scenarios lost their seed-data coverage in that cleanup and have no replacement here:",
     "a multi-format single item (item_dual carried both a PDF and an EPUB asset; none of the eight",
     "real books is available in two formats) and a non-READY item reaching a feed (item_q7 was",
-    "QUEUED, item_f3 was FAILED; all eight real books are READY). Whoever picks either scenario back",
-    "up should say so rather than assume it is still covered."
+    "QUEUED, item_f3 was FAILED; all eight real books are READY).",
+    "",
+    "REAL FILES, WEEK 5 (chaptering + journal hierarchy). Added 75 more real, ingested items the",
+    "same way as week 4 - through the live admin API, real B2 objects, real encryption and search",
+    "index, no shortcuts - on top of week 4's 8, not replacing any of them:",
+    "",
+    "  - 3 standalone BOOKs (one per tier: OPEN_ACCESS, ELITE, SUBSCRIPTION), each with a real",
+    "    uploaded cover.",
+    "  - 3 JOURNALs, each with a real cover, 8 VOLUMEs and 11 ISSUEs under them (pure containers -",
+    "    no content, no accessTier, contentState always NONE, no cover of their own below the",
+    "    journal), and 50 ARTICLEs at the bottom (real content, real tier, real search index,",
+    "    exactly like a BOOK). Tiers are hybrid within a single journal/issue on purpose - an",
+    "    OPEN_ACCESS, an ELITE and a SUBSCRIPTION article can sit in the same ISSUE, because",
+    "    accessTier is a property of the article, never of its parent.",
+    "  - publisherId pub_rtlg, collectionIds [col_law2024] on every one of the 53 new leaves (not",
+    "    on the containers - a JOURNAL/VOLUME/ISSUE has no content to be entitled to). That makes",
+    "    ent_imp1's existing COLLECTION grant cover all of them for inst_7f3 already - no new",
+    "    entitlement row was needed or added.",
+    "",
+    "Every week-5 item's id, tier, and hierarchy is real data pulled back out of Mongo after the",
+    "real ingest finished - not hand-typed - so storageKey/indexKey/masterWrappedBek/sizeBytes/",
+    "cipherLength/indexTerms are all genuine. See temp/chapterise/manual-testing-postman.md for how",
+    "these files map to entities, and temp/chapterise/upload_test_files.py /",
+    "export_to_seed.py for exactly how they were produced (both gitignored, kept for reference,",
+    "not part of the app)."
   ],
-
   "_notes": {
     "cipherLength": "12 (nonce) + sizeBytes + 16 (GCM tag). Null here means the asset is not encrypted, so the number does not exist. B's Asset.cipherLength is a primitive long and cannot hold null, so DemoDataSeeder maps null to 0. The null is kept in this file because 'not applicable' and 'zero bytes of ciphertext' are different facts and the validator checks the first one.",
     "indexTerms": "Same treatment. Null means there is no search index at all; B's field is a primitive int, so the mapping writes 0.",
@@ -47,7 +69,6 @@
     "feedSettings": "Seeded, one per institution, because B's FeedSettings landed and week 2's shelf feeds need it. B's FeedSettingsPersistenceGuard rejects anything that is not exactly three shelves, so every row here has three, and an empty itemIds means a hidden shelf rather than an absent one.",
     "auditLogs": "Deliberately NOT seeded, although AuditLog and AuditLogRepository exist. An audit log records what actually happened; inventing entries would put fiction into the one collection whose value is that it is true. It also carries a 90-day TTL on 'at', so seeded rows would vanish and look like data loss. The admin console fills it as soon as anyone edits anything."
   },
-
   "publishers": [
     {
       "_id": "pub_rtlg",
@@ -70,7 +91,6 @@
       "updatedAt": "2026-08-10T09:00:00Z"
     }
   ],
-
   "collections": [
     {
       "_id": "col_law2024",
@@ -87,7 +107,6 @@
       "description": "CRC Press environment, policy and open science titles for 2024."
     }
   ],
-
   "institutions": [
     {
       "_id": "inst_7f3",
@@ -150,23 +169,33 @@
       "updatedAt": "2026-08-10T09:00:00Z"
     }
   ],
-
   "catalogueItems": [
     {
       "_seedWhy": "Real EPUB, ingested from Law and Ecology_26_08_26_14_47_52.epub. OPEN_ACCESS, so no entitlement is needed and it reaches every institution including UCL (zero grants) and Leeds (suspended, never shown anyway). Unencrypted per the OPEN_ACCESS rule. In col_env2024 for a themed shelf, though membership grants nothing on its own.",
       "_id": "dev-sample-epub",
       "publisherId": "pub_crc",
-      "collectionIds": ["col_env2024"],
+      "collectionIds": [
+        "col_env2024"
+      ],
+      "workType": null,
+      "parentId": null,
+      "sequence": null,
       "title": "Law and Ecology",
       "subtitle": "New Environmental Foundations",
-      "authors": ["Andreas Philippopoulos-Mihalopoulos"],
-      "editors": [],
+      "authors": [],
+      "editors": [
+        "Andreas Philippopoulos-Mihalopoulos"
+      ],
       "narrators": [],
-      "isbn": null,
-      "language": "en",
-      "description": "Real EPUB fixture (First Edition), ingested from a real file.",
-      "subjects": ["Law", "Environment"],
-      "publishedAt": "2022-05-14",
+      "isbn": "9780203829691",
+      "language": "English",
+      "description": "A collection of theoretical and applied essays proposing an ecological jurisprudential foundation for environmental law, addressing topics such as bioresource IP, biodiversity and tribal land claims, GMO ethics, and the geography of pollution, while challenging traditionally human-centered legal theory.",
+      "subjects": [
+        "Environment and Sustainability",
+        "Geography",
+        "Law"
+      ],
+      "publishedAt": "2011-03-03",
       "coverUrl": null,
       "coverKey": "items/dev-sample-epub/cover",
       "coverMimeType": "image/jpeg",
@@ -175,40 +204,57 @@
       "status": "PUBLISHED",
       "contentState": "READY",
       "contentError": null,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z",
       "assets": [
         {
           "format": "EPUB",
           "mimeType": "application/epub+zip",
-          "sizeBytes": 4430885,
-          "cipherLength": null,
           "encrypted": false,
-          "hasSearchIndex": true,
-          "indexTerms": 10666,
-          "indexSkipReason": null,
-          "keyId": null
+          "keyId": null,
+          "masterWrappedBek": null,
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 4430885,
+              "cipherLength": null,
+              "hasSearchIndex": true,
+              "indexTerms": 10666,
+              "indexSkipReason": null,
+              "storageKey": "items/dev-sample-epub/content",
+              "indexKey": "items/dev-sample-epub/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
         }
-      ],
-      "storageKey": "items/dev-sample-epub/content",
-      "indexKey": "items/dev-sample-epub/index",
-      "wrappedBek": null,
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      ]
     },
     {
       "_seedWhy": "Real PDF, ingested from Professional Competence And Higher Education_26_08_26_15_22_02-ELITE.pdf. ELITE, so it needs its own grant: pub_crc has no publisher/collection-level entitlement to inst_7f3, so ent_dev_elite (ITEM scope, copies:2) exists specifically for this book.",
       "_id": "dev-sample-pdf",
       "publisherId": "pub_crc",
       "collectionIds": [],
+      "workType": null,
+      "parentId": null,
+      "sequence": null,
       "title": "Professional Competence And Higher Education",
-      "subtitle": null,
-      "authors": ["Richard Winter", "Maire Maisch"],
+      "subtitle": "The ASSET Programme",
+      "authors": [
+        "Richard Winter",
+        "Maire Maisch"
+      ],
       "editors": [],
       "narrators": [],
-      "isbn": null,
-      "language": "en",
-      "description": "Real PDF fixture, ingested from a real file.",
-      "subjects": ["Education"],
-      "publishedAt": null,
+      "isbn": "9780203973165",
+      "language": "English",
+      "description": "Drawing on the ASSET programme, a UK national project on competence-based curriculum and assessment, this book lays out a research-grounded vision for the future of higher education and professional education.",
+      "subjects": [
+        "Education"
+      ],
+      "publishedAt": "2005-09-30",
       "coverUrl": null,
       "coverKey": "items/dev-sample-pdf/cover",
       "coverMimeType": "image/png",
@@ -217,127 +263,430 @@
       "status": "PUBLISHED",
       "contentState": "READY",
       "contentError": null,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z",
       "assets": [
         {
           "format": "PDF",
           "mimeType": "application/pdf",
-          "sizeBytes": 1624063,
-          "cipherLength": 1624091,
           "encrypted": true,
-          "hasSearchIndex": true,
-          "indexTerms": 6636,
-          "indexSkipReason": null,
-          "keyId": "master-v1"
+          "keyId": "master-v1",
+          "masterWrappedBek": "rY/mQdwO1ZmkbZCwpa3oyZ7reK853+92HPmPevuRw1q1vf3Htx+5wg==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 1624063,
+              "cipherLength": 1624091,
+              "hasSearchIndex": true,
+              "indexTerms": 6636,
+              "indexSkipReason": null,
+              "storageKey": "items/dev-sample-pdf/content",
+              "indexKey": "items/dev-sample-pdf/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
         }
-      ],
-      "storageKey": "items/dev-sample-pdf/content",
-      "indexKey": "items/dev-sample-pdf/index",
-      "wrappedBek": "rY/mQdwO1ZmkbZCwpa3oyZ7reK853+92HPmPevuRw1q1vf3Htx+5wg==",
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      ]
     },
     {
       "_seedWhy": "Real audio, ingested from doctor_dolittle_02_lofting_64kb-OPEN_ACCESS.mp3 (public-domain Hugh Lofting). OPEN_ACCESS, so no entitlement needed. Unencrypted, per both the OPEN_ACCESS rule and the audio-is-never-encrypted rule agreeing for once.",
       "_id": "dev-sample-audio",
       "publisherId": "pub_crc",
       "collectionIds": [],
+      "workType": null,
+      "parentId": null,
+      "sequence": null,
       "title": "Doctor Dolittle - Chapter 2: Animal Language",
       "subtitle": null,
-      "authors": [],
+      "authors": [
+        "Hugh Lofting"
+      ],
       "editors": [],
-      "narrators": ["Hugh Lofting"],
+      "narrators": [
+        "Phil Chenevert"
+      ],
       "isbn": null,
-      "language": "en",
-      "description": "Real audio fixture, ingested from a real file.",
-      "subjects": ["Fiction"],
-      "publishedAt": null,
+      "language": "English",
+      "description": "LibriVox audiobook recording of the first Doctor Dolittle novel, in which the kindly Puddleby physician discovers he can talk to animals, gives up human patients, falls into poverty, and travels to Africa with his animal companions on a rescue mission.",
+      "subjects": [
+        "Children's Literature",
+        "Fantasy",
+        "Audiobook"
+      ],
+      "publishedAt": "1920-10-25",
       "coverUrl": null,
-      "coverKey": null,
-      "coverMimeType": null,
+      "coverKey": "items/dev-sample-audio/cover",
+      "coverMimeType": "image/jpeg",
       "contentType": "AUDIO",
       "accessTier": "OPEN_ACCESS",
       "status": "PUBLISHED",
       "contentState": "READY",
       "contentError": null,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z",
       "assets": [
         {
           "format": "AUDIO",
           "mimeType": "audio/mpeg",
-          "sizeBytes": 6312497,
-          "cipherLength": null,
           "encrypted": false,
-          "hasSearchIndex": false,
-          "indexTerms": null,
-          "indexSkipReason": "AudioNotIndexable",
-          "keyId": null
+          "keyId": null,
+          "masterWrappedBek": null,
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 6312497,
+              "cipherLength": null,
+              "hasSearchIndex": false,
+              "indexTerms": null,
+              "indexSkipReason": "AudioNotIndexable",
+              "storageKey": "items/dev-sample-audio/content",
+              "indexKey": null,
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
         }
-      ],
-      "storageKey": "items/dev-sample-audio/content",
-      "indexKey": null,
-      "wrappedBek": null,
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      ]
     },
     {
       "_seedWhy": "Real audio, ingested from doctor_dolittle_01_lofting_64kb-ELITE.mp3. ELITE, so encrypted like any other locked asset - audio is not exempt above OPEN_ACCESS. Every ELITE item carries a real copy limit, so this one has its own ITEM-scope grant (ent_dev_elite_audio, copies:2) rather than riding pub_rtlg's UNLIMITED publisher grant (ent_imp2), which would otherwise win by scope but leave an ELITE title with no limit and no queue.",
       "_id": "dev-sample-audio-encrypted",
       "publisherId": "pub_rtlg",
       "collectionIds": [],
+      "workType": null,
+      "parentId": null,
+      "sequence": null,
       "title": "Doctor Dolittle - Chapter 1: Puddleby",
       "subtitle": null,
-      "authors": [],
+      "authors": [
+        "Hugh Lofting"
+      ],
       "editors": [],
-      "narrators": ["Hugh Lofting"],
+      "narrators": [
+        "Phil Chenevert"
+      ],
       "isbn": null,
-      "language": "en",
-      "description": "Real audio fixture, ingested from a real file.",
-      "subjects": ["Fiction"],
-      "publishedAt": null,
+      "language": "English",
+      "description": "LibriVox audiobook recording of the first Doctor Dolittle novel, in which the kindly Puddleby physician discovers he can talk to animals, gives up human patients, falls into poverty, and travels to Africa with his animal companions on a rescue mission.",
+      "subjects": [
+        "Children's Literature",
+        "Fantasy",
+        "Audiobook"
+      ],
+      "publishedAt": "1920-10-25",
       "coverUrl": null,
-      "coverKey": null,
-      "coverMimeType": null,
+      "coverKey": "items/dev-sample-audio-encrypted/cover",
+      "coverMimeType": "image/jpeg",
       "contentType": "AUDIO",
       "accessTier": "ELITE",
       "status": "PUBLISHED",
       "contentState": "READY",
       "contentError": null,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z",
       "assets": [
         {
           "format": "AUDIO",
           "mimeType": "audio/mpeg",
-          "sizeBytes": 2966528,
-          "cipherLength": 2966556,
           "encrypted": true,
-          "hasSearchIndex": false,
-          "indexTerms": null,
-          "indexSkipReason": "AudioNotIndexable",
-          "keyId": "master-v1"
+          "keyId": "master-v1",
+          "masterWrappedBek": "c+dPIopYlY8Ej/bljbhs3gH/j93DLo3ppOMn1YBS7sCbsJCRAdDw0g==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 2966528,
+              "cipherLength": 2966556,
+              "hasSearchIndex": false,
+              "indexTerms": null,
+              "indexSkipReason": "AudioNotIndexable",
+              "storageKey": "items/dev-sample-audio-encrypted/content",
+              "indexKey": null,
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
         }
-      ],
-      "storageKey": "items/dev-sample-audio-encrypted/content",
-      "indexKey": null,
-      "wrappedBek": "c+dPIopYlY8Ej/bljbhs3gH/j93DLo3ppOMn1YBS7sCbsJCRAdDw0g==",
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      ]
     },
     {
       "_seedWhy": "Real EPUB, ingested from The Politics of Coalition in Korea_26_08_26_15_21_48-ELITE.epub. ELITE, and deliberately placed in col_law2024 so the COLLECTION grant (ent_imp1, copies:2) beats the PUBLISHER grant (ent_imp2, UNLIMITED) on the same book - the same scope-precedence demonstration item_42 used to carry.",
       "_id": "dev-fixture-epub",
       "publisherId": "pub_rtlg",
-      "collectionIds": ["col_law2024"],
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": null,
+      "parentId": null,
+      "sequence": null,
       "title": "The Politics of Coalition in Korea",
-      "subtitle": "Between institutions and culture",
-      "authors": ["Youngmi Kim"],
+      "subtitle": "Between Institutions and Culture",
+      "authors": [
+        "Youngmi Kim"
+      ],
       "editors": [],
       "narrators": [],
-      "isbn": null,
-      "language": "en",
-      "description": "Real EPUB fixture (ELITE), ingested from a real file.",
-      "subjects": ["Political Science"],
-      "publishedAt": "2023-07-03",
+      "isbn": "9780203821138",
+      "language": "English",
+      "description": "Examines how coalition-building between and within parties affected governability in South Korea, focusing on the Kim Dae-jung administration (1998-2003). Combines coalition research on parliamentary systems with divided-government studies of presidential systems, and introduces a new dataset for comparative post-authoritarian analysis.",
+      "subjects": [
+        "Area Studies",
+        "Politics & International Relations"
+      ],
+      "publishedAt": "2011-04-05",
       "coverUrl": null,
       "coverKey": "items/dev-fixture-epub/cover",
       "coverMimeType": "image/png",
+      "contentType": "EPUB",
+      "accessTier": "ELITE",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z",
+      "assets": [
+        {
+          "format": "EPUB",
+          "mimeType": "application/epub+zip",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "TZqxxKUDnFXker050QYweDjoySxFk0+lfrLhwN/CuOJl2HNHyw5ppg==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 1124678,
+              "cipherLength": 1124706,
+              "hasSearchIndex": true,
+              "indexTerms": 6644,
+              "indexSkipReason": null,
+              "storageKey": "items/dev-fixture-epub/content",
+              "indexKey": "items/dev-fixture-epub/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "_seedWhy": "Real PDF, ingested from Playful Identities_26_08_26_14_47_56.pdf. SUBSCRIPTION, pub_rtlg, so it rides ent_imp2 (PUBLISHER scope, UNLIMITED); no new entitlement needed. In no collection, so it is reached through the PUBLISHER grant, not a narrower one.",
+      "_id": "dev-fixture-pdf",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": null,
+      "parentId": null,
+      "sequence": null,
+      "title": "Playful Identities",
+      "subtitle": "The Ludification of Digital Media Cultures",
+      "authors": [],
+      "editors": [
+        "Michiel de Lange",
+        "Joost Raessens",
+        "Jos de Mul",
+        "Sybille Lammes",
+        "Valerie Frissen"
+      ],
+      "narrators": [],
+      "isbn": "9789089646392",
+      "language": "English",
+      "description": "Eighteen scholars explore how digital media and play shape contemporary identity construction, moving beyond video games to examine phenomena like World of Warcraft, Foursquare, and digital mapping as identity-forming practices in play, media, and game studies.",
+      "subjects": [
+        "Humanities"
+      ],
+      "publishedAt": "2015-01-01",
+      "coverUrl": null,
+      "coverKey": "items/dev-fixture-pdf/cover",
+      "coverMimeType": "image/png",
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z",
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "lqNI+xpU8w41CXiZ4aMyLH2yZwmx8lYXgbuiQhr0EsJRTYjKxnbH4Q==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 14460017,
+              "cipherLength": 14460045,
+              "hasSearchIndex": true,
+              "indexTerms": 13515,
+              "indexSkipReason": null,
+              "storageKey": "items/dev-fixture-pdf/content",
+              "indexKey": "items/dev-fixture-pdf/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "_seedWhy": "Real EPUB, ingested from Contract Law in the Construction Industry Context_26_08_26_14_48_19.epub. Added alongside the six kept dev fixtures rather than replacing one - SUBSCRIPTION, pub_rtlg, rides ent_imp2 (PUBLISHER scope, UNLIMITED). Its subject fits the Imperial 'Law essentials' shelf.",
+      "_id": "item_e9a3c599",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": null,
+      "parentId": null,
+      "sequence": null,
+      "title": "Contract Law in the Construction Industry Context",
+      "subtitle": null,
+      "authors": [
+        "Carl J. Circo"
+      ],
+      "editors": [],
+      "narrators": [],
+      "isbn": "9780429326912",
+      "language": "English",
+      "description": "Traces how case law arising from the construction industry has shaped and refined U.S. contract law, arguing that construction disputes pushed courts toward more flexible standards than classical contract doctrine allows. Covers the role of Supreme Court and lower federal court cases and considers what this body of case law means for contract theory going forward.",
+      "subjects": [
+        "Built Environment",
+        "Economics, Finance, Business & Industry",
+        "Law"
+      ],
+      "publishedAt": "2019-10-16",
+      "coverUrl": null,
+      "coverKey": "items/item_e9a3c599/cover",
+      "coverMimeType": "image/png",
+      "contentType": "EPUB",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z",
+      "assets": [
+        {
+          "format": "EPUB",
+          "mimeType": "application/epub+zip",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "qsxVxQjcNRePRARtB80dSCk9iUTYx9WXwEqonHzA4peb6H5dJpaU/Q==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 583205,
+              "cipherLength": 583233,
+              "hasSearchIndex": true,
+              "indexTerms": 6787,
+              "indexSkipReason": null,
+              "storageKey": "items/item_e9a3c599/content",
+              "indexKey": "items/item_e9a3c599/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "_seedWhy": "Real EPUB, ingested from Humanitarianism and Challenges of Cooperation_26_08_26_14_48_25.epub. Added alongside the six kept dev fixtures. SUBSCRIPTION, pub_rtlg, rides ent_imp2 (PUBLISHER scope, UNLIMITED). Its own upload originally failed on a ZipInputStream/data-descriptor bug in EpubArchive; kept as the id that proves the fix (see EpubArchive.unzip).",
+      "_id": "item_4062cdea",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": null,
+      "parentId": null,
+      "sequence": null,
+      "title": "Humanitarianism and Challenges of Cooperation",
+      "subtitle": null,
+      "authors": [],
+      "editors": [
+        "Volker Heins",
+        "Kai Koddenbrock",
+        "Christine Unrau"
+      ],
+      "narrators": [],
+      "isbn": "9781315658827",
+      "language": "English",
+      "description": "An edited collection examining contemporary humanitarianism as a testing ground for cross-border cooperation. Combines broad analysis of trends transforming the humanitarian sector with field-based case studies of how aid actors cooperate on the ground, aimed at students and researchers in political science, international relations, and humanitarian practice.",
+      "subjects": [
+        "Global Development",
+        "Politics & International Relations"
+      ],
+      "publishedAt": "2016-02-05",
+      "coverUrl": null,
+      "coverKey": "items/item_4062cdea/cover",
+      "coverMimeType": "image/png",
+      "contentType": "EPUB",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z",
+      "assets": [
+        {
+          "format": "EPUB",
+          "mimeType": "application/epub+zip",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "0W8Ld3asvlGnVoAhqFGGNVeeTZ5PnZOkHYTx8OiyP796k6YmpH+ILQ==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 1672697,
+              "cipherLength": 1672725,
+              "hasSearchIndex": true,
+              "indexTerms": 11460,
+              "indexSkipReason": null,
+              "storageKey": "items/item_4062cdea/content",
+              "indexKey": "items/item_4062cdea/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "_id": "item_4a28c08a",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "BOOK",
+      "parentId": null,
+      "sequence": null,
+      "title": "Growing in the Shadow of Antifascism",
+      "subtitle": "Remembering the Holocaust in State-Socialist Eastern Europe",
+      "authors": [],
+      "editors": [
+        "Kata Bohus",
+        "Stephan Stach",
+        "Peter Hallama"
+      ],
+      "narrators": [],
+      "isbn": "9781003719960",
+      "language": "English",
+      "description": "Challenges the Cold-War-era assumption that Holocaust memory was systematically suppressed under communism, presenting case studies from across the Soviet Bloc that show how antifascism and Holocaust remembrance interacted through negotiation, cross-referencing, and local memory practices.",
+      "subjects": [
+        "Humanities"
+      ],
+      "publishedAt": "2022-07-26",
+      "coverUrl": null,
+      "coverKey": "items/item_4a28c08a/cover",
+      "coverMimeType": "image/webp",
       "contentType": "EPUB",
       "accessTier": "ELITE",
       "status": "PUBLISHED",
@@ -347,39 +696,119 @@
         {
           "format": "EPUB",
           "mimeType": "application/epub+zip",
-          "sizeBytes": 1124678,
-          "cipherLength": 1124706,
           "encrypted": true,
-          "hasSearchIndex": true,
-          "indexTerms": 6644,
-          "indexSkipReason": null,
-          "keyId": "master-v1"
+          "keyId": "master-v1",
+          "masterWrappedBek": "1vl/tnh1CC/ulMVVnStD4RL6xFuY9QzsQ+5yPYXxvyxi5v8w3jXTGw==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 8430559,
+              "cipherLength": 8430587,
+              "hasSearchIndex": true,
+              "indexTerms": 13850,
+              "indexSkipReason": null,
+              "storageKey": "items/item_4a28c08a/content",
+              "indexKey": "items/item_4a28c08a/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
         }
       ],
-      "storageKey": "items/dev-fixture-epub/content",
-      "indexKey": "items/dev-fixture-epub/index",
-      "wrappedBek": "TZqxxKUDnFXker050QYweDjoySxFk0+lfrLhwN/CuOJl2HNHyw5ppg==",
       "createdAt": "2026-08-10T09:00:00Z",
       "updatedAt": "2026-08-10T09:00:00Z"
     },
     {
-      "_seedWhy": "Real PDF, ingested from Playful Identities_26_08_26_14_47_56.pdf. SUBSCRIPTION, pub_rtlg, so it rides ent_imp2 (PUBLISHER scope, UNLIMITED); no new entitlement needed. In no collection, so it is reached through the PUBLISHER grant, not a narrower one.",
-      "_id": "dev-fixture-pdf",
+      "_id": "item_de2271f3",
       "publisherId": "pub_rtlg",
-      "collectionIds": [],
-      "title": "Playful Identities",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "BOOK",
+      "parentId": null,
+      "sequence": null,
+      "title": "News Framing Effects",
       "subtitle": null,
-      "authors": [],
+      "authors": [
+        "Sophie Lecheler",
+        "Claes H. de Vreese"
+      ],
       "editors": [],
       "narrators": [],
-      "isbn": null,
-      "language": "en",
-      "description": "Real PDF fixture, ingested from a real file.",
-      "subjects": ["Media Studies"],
-      "publishedAt": null,
+      "isbn": "9781315208077",
+      "language": "English",
+      "description": "A structured guide to news framing effects theory in media and communication science, walking through how to identify news frames, measure framing effects, and account for moderators and mediators, closing with a look at framing research amid shifting news technologies and consumption habits.",
+      "subjects": [
+        "Humanities",
+        "Politics & International Relations"
+      ],
+      "publishedAt": "2018-09-03",
       "coverUrl": null,
-      "coverKey": "items/dev-fixture-pdf/cover",
-      "coverMimeType": "image/png",
+      "coverKey": "items/item_de2271f3/cover",
+      "coverMimeType": "image/webp",
+      "contentType": "PDF",
+      "accessTier": "OPEN_ACCESS",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": false,
+          "keyId": null,
+          "masterWrappedBek": null,
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 2159752,
+              "cipherLength": 2159752,
+              "hasSearchIndex": true,
+              "indexTerms": 4829,
+              "indexSkipReason": null,
+              "storageKey": "items/item_de2271f3/content",
+              "indexKey": "items/item_de2271f3/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_d00f1ec0",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "BOOK",
+      "parentId": null,
+      "sequence": null,
+      "title": "The Laboratory Guinea Pig",
+      "subtitle": null,
+      "authors": [
+        "Donna J. Clemons",
+        "Jennifer L. Seeman"
+      ],
+      "editors": [],
+      "narrators": [],
+      "isbn": "9780429105739",
+      "language": "English",
+      "description": "A full-color reference guide to housing, husbandry, veterinary care, and experimental procedures for guinea pigs used in biomedical research, aimed at investigators, technicians, and animal care staff.",
+      "subjects": [
+        "Bioscience",
+        "Medicine, Dentistry, Nursing & Allied Health"
+      ],
+      "publishedAt": "2016-04-19",
+      "coverUrl": null,
+      "coverKey": "items/item_d00f1ec0/cover",
+      "coverMimeType": "image/webp",
       "contentType": "PDF",
       "accessTier": "SUBSCRIPTION",
       "status": "PUBLISHED",
@@ -389,110 +818,3452 @@
         {
           "format": "PDF",
           "mimeType": "application/pdf",
-          "sizeBytes": 14460017,
-          "cipherLength": 14460045,
           "encrypted": true,
-          "hasSearchIndex": true,
-          "indexTerms": 13515,
-          "indexSkipReason": null,
-          "keyId": "master-v1"
+          "keyId": "master-v1",
+          "masterWrappedBek": "1Cj21hrVAL0uuz17OQgFZDAX+RbfTgMg87qG21S5bRlCZ9SIeLeuXg==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 24313517,
+              "cipherLength": 24313545,
+              "hasSearchIndex": true,
+              "indexTerms": 6725,
+              "indexSkipReason": null,
+              "storageKey": "items/item_d00f1ec0/content",
+              "indexKey": "items/item_d00f1ec0/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
         }
       ],
-      "storageKey": "items/dev-fixture-pdf/content",
-      "indexKey": "items/dev-fixture-pdf/index",
-      "wrappedBek": "lqNI+xpU8w41CXiZ4aMyLH2yZwmx8lYXgbuiQhr0EsJRTYjKxnbH4Q==",
       "createdAt": "2026-08-10T09:00:00Z",
       "updatedAt": "2026-08-10T09:00:00Z"
     },
     {
-      "_seedWhy": "Real EPUB, ingested from Contract Law in the Construction Industry Context_26_08_26_14_48_19.epub. Added alongside the six kept dev fixtures rather than replacing one - SUBSCRIPTION, pub_rtlg, rides ent_imp2 (PUBLISHER scope, UNLIMITED). Its subject fits the Imperial 'Law essentials' shelf.",
-      "_id": "item_e9a3c599",
+      "_id": "item_88200446",
       "publisherId": "pub_rtlg",
       "collectionIds": [],
-      "title": "Contract Law in the Construction Industry Context",
+      "workType": "JOURNAL",
+      "parentId": null,
+      "sequence": null,
+      "title": "All life",
       "subtitle": null,
-      "authors": ["Carl J. Circo"],
+      "authors": [],
       "editors": [],
       "narrators": [],
       "isbn": null,
-      "language": "en",
-      "description": "Real EPUB fixture, ingested from a real file.",
-      "subjects": ["Law", "Construction"],
-      "publishedAt": "2023-02-17",
-      "coverUrl": null,
-      "coverKey": "items/item_e9a3c599/cover",
-      "coverMimeType": "image/png",
-      "contentType": "EPUB",
-      "accessTier": "SUBSCRIPTION",
-      "status": "PUBLISHED",
-      "contentState": "READY",
-      "contentError": null,
-      "assets": [
-        {
-          "format": "EPUB",
-          "mimeType": "application/epub+zip",
-          "sizeBytes": 583205,
-          "cipherLength": 583233,
-          "encrypted": true,
-          "hasSearchIndex": true,
-          "indexTerms": 6787,
-          "indexSkipReason": null,
-          "keyId": "master-v1"
-        }
+      "language": "English",
+      "description": "An international, open-access, peer-reviewed journal covering original research, reviews, rapid communications, data notes, and commentaries across the life sciences, with a focus on work contributing to UN Sustainable Development Goals such as Zero Hunger, Good Health and Well-being, and Life Below Water.",
+      "subjects": [
+        "Agriculture",
+        "Aquaculture and Marine Biology",
+        "Biochemistry, Cell and Molecular Biology",
+        "Bioengineering & Biotechnology",
+        "Cancer Biology",
+        "Computational Life Sciences, Bioinformatics and Systems Biology",
+        "Environmental Toxicology & Health",
+        "Epidemiology, Genetics & Genomics",
+        "Microbiology",
+        "Pharmacology & Pharmaceutics",
+        "Plant Biology",
+        "Translational Physiology"
       ],
-      "storageKey": "items/item_e9a3c599/content",
-      "indexKey": "items/item_e9a3c599/index",
-      "wrappedBek": "qsxVxQjcNRePRARtB80dSCk9iUTYx9WXwEqonHzA4peb6H5dJpaU/Q==",
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
-    },
-    {
-      "_seedWhy": "Real EPUB, ingested from Humanitarianism and Challenges of Cooperation_26_08_26_14_48_25.epub. Added alongside the six kept dev fixtures. SUBSCRIPTION, pub_rtlg, rides ent_imp2 (PUBLISHER scope, UNLIMITED). Its own upload originally failed on a ZipInputStream/data-descriptor bug in EpubArchive; kept as the id that proves the fix (see EpubArchive.unzip).",
-      "_id": "item_4062cdea",
-      "publisherId": "pub_rtlg",
-      "collectionIds": [],
-      "title": "Humanitarianism and Challenges of Cooperation",
-      "subtitle": "First Edition",
-      "authors": ["Volker M. Heins", "Kai Koddenbrock", "Christine Unrau"],
-      "editors": [],
-      "narrators": [],
-      "isbn": null,
-      "language": "en",
-      "description": "Real EPUB fixture, ingested from a real file. Published 2025; exact day not in the file's metadata.",
-      "subjects": ["Political Science"],
       "publishedAt": null,
       "coverUrl": null,
-      "coverKey": "items/item_4062cdea/cover",
-      "coverMimeType": "image/png",
-      "contentType": "EPUB",
+      "coverKey": "items/item_88200446/cover",
+      "coverMimeType": "image/jpeg",
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_460061f8",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": "VOLUME",
+      "parentId": "item_88200446",
+      "sequence": 1,
+      "title": "Volume 01",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_b629ab15",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": "ISSUE",
+      "parentId": "item_460061f8",
+      "sequence": 1,
+      "title": "Issue 01",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_c80ad620",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_b629ab15",
+      "sequence": 0,
+      "title": "Changing disciplinary borders into frontiers of progress",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "OPEN_ACCESS",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": false,
+          "keyId": null,
+          "masterWrappedBek": null,
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 222130,
+              "cipherLength": 222130,
+              "hasSearchIndex": true,
+              "indexTerms": 947,
+              "indexSkipReason": null,
+              "storageKey": "items/item_c80ad620/content",
+              "indexKey": "items/item_c80ad620/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_e44977d2",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_b629ab15",
+      "sequence": 1,
+      "title": "Human frontier science_ The program_ the organization_ and the journal",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "ELITE",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "k3icOT4HN60UqBYy6Zaor3TEd1ihGA90LBsLUbZotBedmqvyHR+vKg==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 206875,
+              "cipherLength": 206903,
+              "hasSearchIndex": true,
+              "indexTerms": 397,
+              "indexSkipReason": null,
+              "storageKey": "items/item_e44977d2/content",
+              "indexKey": "items/item_e44977d2/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_9f2be79f",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_b629ab15",
+      "sequence": 2,
+      "title": "Probing synaptic signaling with quantum dots",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
       "accessTier": "SUBSCRIPTION",
       "status": "PUBLISHED",
       "contentState": "READY",
       "contentError": null,
       "assets": [
         {
-          "format": "EPUB",
-          "mimeType": "application/epub+zip",
-          "sizeBytes": 1672697,
-          "cipherLength": 1672725,
+          "format": "PDF",
+          "mimeType": "application/pdf",
           "encrypted": true,
-          "hasSearchIndex": true,
-          "indexTerms": 11460,
-          "indexSkipReason": null,
-          "keyId": "master-v1"
+          "keyId": "master-v1",
+          "masterWrappedBek": "/Tukxl4Qq7n61M04xH4RstlUwvxgYLZdGRf0YLCaG7ooFyptxlTmnw==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 456054,
+              "cipherLength": 456082,
+              "hasSearchIndex": true,
+              "indexTerms": 1565,
+              "indexSkipReason": null,
+              "storageKey": "items/item_9f2be79f/content",
+              "indexKey": "items/item_9f2be79f/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
         }
       ],
-      "storageKey": "items/item_4062cdea/content",
-      "indexKey": "items/item_4062cdea/index",
-      "wrappedBek": "0W8Ld3asvlGnVoAhqFGGNVeeTZ5PnZOkHYTx8OiyP796k6YmpH+ILQ==",
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_06d7fc88",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": "ISSUE",
+      "parentId": "item_460061f8",
+      "sequence": 2,
+      "title": "Issue 02",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_035d84e7",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_06d7fc88",
+      "sequence": 0,
+      "title": "Editorial board",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "1j5Ci5ZjlewyUJb6jCrd0jURYHlFhHd8LQ85zUdWljxKigsiG8Xs+A==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 263751,
+              "cipherLength": 263779,
+              "hasSearchIndex": true,
+              "indexTerms": 517,
+              "indexSkipReason": null,
+              "storageKey": "items/item_035d84e7/content",
+              "indexKey": "items/item_035d84e7/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_46b59d00",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_06d7fc88",
+      "sequence": 1,
+      "title": "Reprogramming somatic cells to their embryonic state",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "PZv0Tawi96Azqbv0O9aQG1CB9LaHsH/qLYETYRDvhBMvr6cyX8Lxhg==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 387911,
+              "cipherLength": 387939,
+              "hasSearchIndex": true,
+              "indexTerms": 1053,
+              "indexSkipReason": null,
+              "storageKey": "items/item_46b59d00/content",
+              "indexKey": "items/item_46b59d00/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_e7ff7647",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_06d7fc88",
+      "sequence": 2,
+      "title": "The subtle benefits of being promiscuous_ Adaptive evolution potentiated by enzyme promiscuity",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "6J6lEvECjvVVgAwxNaN5yDA7GhKC8idtU1iQFZUY3hcTFlX0MdeviQ==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 387149,
+              "cipherLength": 387177,
+              "hasSearchIndex": true,
+              "indexTerms": 1482,
+              "indexSkipReason": null,
+              "storageKey": "items/item_e7ff7647/content",
+              "indexKey": "items/item_e7ff7647/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_086b44b2",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_06d7fc88",
+      "sequence": 3,
+      "title": "Phenotypic evolution is restrained by complex developmental processes",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "XmcGlzx478MLWZ//jZKW8cqGuyYa6DgfRnBlKvFFNCDvOMoDOMJL+g==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 325665,
+              "cipherLength": 325693,
+              "hasSearchIndex": true,
+              "indexTerms": 1269,
+              "indexSkipReason": null,
+              "storageKey": "items/item_086b44b2/content",
+              "indexKey": "items/item_086b44b2/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_767ea661",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": "VOLUME",
+      "parentId": "item_88200446",
+      "sequence": 2,
+      "title": "Volume 02",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_21a7ec1d",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": "ISSUE",
+      "parentId": "item_767ea661",
+      "sequence": 1,
+      "title": "Issue 01",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_c810c012",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_21a7ec1d",
+      "sequence": 0,
+      "title": "Insight or illusion_ Seeing inside the cell with mesoscopic simulations",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "lworRrqM6B/wbb5MSZN+nbHCUqx/4Cbq5wURjwQcZxqA8Y/DplfFzw==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 339022,
+              "cipherLength": 339050,
+              "hasSearchIndex": true,
+              "indexTerms": 1551,
+              "indexSkipReason": null,
+              "storageKey": "items/item_c810c012/content",
+              "indexKey": "items/item_c810c012/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_672d600b",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_21a7ec1d",
+      "sequence": 1,
+      "title": "Quantitative analysis of fluorescence lifetime imaging made easy",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "OPEN_ACCESS",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": false,
+          "keyId": null,
+          "masterWrappedBek": null,
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 309752,
+              "cipherLength": 309752,
+              "hasSearchIndex": true,
+              "indexTerms": 1333,
+              "indexSkipReason": null,
+              "storageKey": "items/item_672d600b/content",
+              "indexKey": "items/item_672d600b/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_989950b7",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_21a7ec1d",
+      "sequence": 2,
+      "title": "The network and the synapse_ 100 years after Cajal",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "ELITE",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "t7R7jruKURAXsjLpwNXth6j/UoNIlNIfBCWiAjrQaTgbO5ARcIJpKw==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 322753,
+              "cipherLength": 322781,
+              "hasSearchIndex": true,
+              "indexTerms": 1265,
+              "indexSkipReason": null,
+              "storageKey": "items/item_989950b7/content",
+              "indexKey": "items/item_989950b7/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_2a529fd3",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_21a7ec1d",
+      "sequence": 3,
+      "title": "Compositionality_ stochasticity_ and cooperativity in dynamic models of gene regulation",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "oeYSMC7+RO47dbZf5LJCnGyrsBkjwbj/yDqJ4B1Z01w9cnLZ8onURg==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 1002398,
+              "cipherLength": 1002426,
+              "hasSearchIndex": true,
+              "indexTerms": 1602,
+              "indexSkipReason": null,
+              "storageKey": "items/item_2a529fd3/content",
+              "indexKey": "items/item_2a529fd3/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_61f9d168",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_21a7ec1d",
+      "sequence": 4,
+      "title": "Role of bacterial peptidase F inferred by statistical analysis and further experimental valida",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "OPEN_ACCESS",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": false,
+          "keyId": null,
+          "masterWrappedBek": null,
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 538830,
+              "cipherLength": 538830,
+              "hasSearchIndex": true,
+              "indexTerms": 2613,
+              "indexSkipReason": null,
+              "storageKey": "items/item_61f9d168/content",
+              "indexKey": "items/item_61f9d168/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_7535c67f",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_21a7ec1d",
+      "sequence": 5,
+      "title": "Quantitative differences in tissue surface tension influence zebrafish germ layer positioning",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "OPEN_ACCESS",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": false,
+          "keyId": null,
+          "masterWrappedBek": null,
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 676849,
+              "cipherLength": 676849,
+              "hasSearchIndex": true,
+              "indexTerms": 2648,
+              "indexSkipReason": null,
+              "storageKey": "items/item_7535c67f/content",
+              "indexKey": "items/item_7535c67f/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_7bf60ff7",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": "ISSUE",
+      "parentId": "item_767ea661",
+      "sequence": 2,
+      "title": "Issue 02",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_fad881e6",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_7bf60ff7",
+      "sequence": 0,
+      "title": "Shining a light on post_translational modification",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "OPEN_ACCESS",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": false,
+          "keyId": null,
+          "masterWrappedBek": null,
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 314264,
+              "cipherLength": 314264,
+              "hasSearchIndex": true,
+              "indexTerms": 919,
+              "indexSkipReason": null,
+              "storageKey": "items/item_fad881e6/content",
+              "indexKey": "items/item_fad881e6/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_401bda89",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_7bf60ff7",
+      "sequence": 1,
+      "title": "Energy landscape along an enzymatic reaction trajectory_ Hinges or cracks_",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "ELITE",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "rJHFBFSUdkkxyIsGHNarh4v3WK1kX7hvDaaocTtTYj8nAT2/yYIjxQ==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 345534,
+              "cipherLength": 345562,
+              "hasSearchIndex": true,
+              "indexTerms": 1200,
+              "indexSkipReason": null,
+              "storageKey": "items/item_401bda89/content",
+              "indexKey": "items/item_401bda89/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_f18e1d8d",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_7bf60ff7",
+      "sequence": 2,
+      "title": "Get round and stiff for mitosis",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "OPEN_ACCESS",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": false,
+          "keyId": null,
+          "masterWrappedBek": null,
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 499438,
+              "cipherLength": 499438,
+              "hasSearchIndex": true,
+              "indexTerms": 1593,
+              "indexSkipReason": null,
+              "storageKey": "items/item_f18e1d8d/content",
+              "indexKey": "items/item_f18e1d8d/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_28cd997f",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_7bf60ff7",
+      "sequence": 3,
+      "title": "_Developmental mechanics__ Cellular patterns controlled by adhesion_ cortical tension and cell",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "A3knGCLVPrg4Hf7HDaVKdbzoA8Gc6CZtbpOjghoWdYjNQZNvbaUxhw==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 455854,
+              "cipherLength": 455882,
+              "hasSearchIndex": true,
+              "indexTerms": 1859,
+              "indexSkipReason": null,
+              "storageKey": "items/item_28cd997f/content",
+              "indexKey": "items/item_28cd997f/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_960c6e1c",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_7bf60ff7",
+      "sequence": 4,
+      "title": "Coupling between neuronal activity and microcirculation_ Implications for functional brain ima",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "OPEN_ACCESS",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": false,
+          "keyId": null,
+          "masterWrappedBek": null,
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 873114,
+              "cipherLength": 873114,
+              "hasSearchIndex": true,
+              "indexTerms": 3977,
+              "indexSkipReason": null,
+              "storageKey": "items/item_960c6e1c/content",
+              "indexKey": "items/item_960c6e1c/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_bd58a755",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_7bf60ff7",
+      "sequence": 5,
+      "title": "From DNA nanotechnology to synthetic biology",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "mauaH5/pbmqS4o+ZRFFet/jQJcDbv8gKCb5zX3dlUpQSf8LG9PeIzw==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 504902,
+              "cipherLength": 504930,
+              "hasSearchIndex": true,
+              "indexTerms": 2241,
+              "indexSkipReason": null,
+              "storageKey": "items/item_bd58a755/content",
+              "indexKey": "items/item_bd58a755/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_24860f8b",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_7bf60ff7",
+      "sequence": 6,
+      "title": "Mutational spaces for leaf shape and size",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "OPEN_ACCESS",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": false,
+          "keyId": null,
+          "masterWrappedBek": null,
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 622181,
+              "cipherLength": 622181,
+              "hasSearchIndex": true,
+              "indexTerms": 1914,
+              "indexSkipReason": null,
+              "storageKey": "items/item_24860f8b/content",
+              "indexKey": "items/item_24860f8b/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_87f84fbf",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_7bf60ff7",
+      "sequence": 7,
+      "title": "Erratum to _The origin of modern terrestrial life_ by Patrick Forterre and Simonetta Gribaldo",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "ELITE",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "BpcjAEpKICvv/Yb9CrsXyefUzPSko9Z+P1rP5HFCztoxLOctUY8RFg==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 208074,
+              "cipherLength": 208102,
+              "hasSearchIndex": true,
+              "indexTerms": 152,
+              "indexSkipReason": null,
+              "storageKey": "items/item_87f84fbf/content",
+              "indexKey": "items/item_87f84fbf/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_6a07466b",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_7bf60ff7",
+      "sequence": 8,
+      "title": "Editorial board",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "OPEN_ACCESS",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": false,
+          "keyId": null,
+          "masterWrappedBek": null,
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 232945,
+              "cipherLength": 232945,
+              "hasSearchIndex": true,
+              "indexTerms": 513,
+              "indexSkipReason": null,
+              "storageKey": "items/item_6a07466b/content",
+              "indexKey": "items/item_6a07466b/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_1fc8ea6d",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": "JOURNAL",
+      "parentId": null,
+      "sequence": null,
+      "title": "Applied Phycology",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": "English",
+      "description": "An international, peer-reviewed, open-access journal published on behalf of the British Phycological Society, covering all algal groups including cyanobacteria. Publishes primary research and state-of-the-art reviews on the applied and commercial dimensions of phycology.",
+      "subjects": [
+        "Seaweed Resources",
+        "Macroalgal and Microalgal Aquaculture",
+        "Integrated Aquaculture",
+        "Applied Taxonomy",
+        "Applied Genomics",
+        "Applied Ecology, Environmental Change and Conservation",
+        "Biofuels",
+        "Bioactives",
+        "Bioprospecting",
+        "Biotechnology"
+      ],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": "items/item_1fc8ea6d/cover",
+      "coverMimeType": "image/jpeg",
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_7efba8d2",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": "VOLUME",
+      "parentId": "item_1fc8ea6d",
+      "sequence": 1,
+      "title": "Volume 01",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_493b1a98",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": "ISSUE",
+      "parentId": "item_7efba8d2",
+      "sequence": 1,
+      "title": "Issue 01",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_4f53812d",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_493b1a98",
+      "sequence": 0,
+      "title": "Editorial",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "ELITE",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "OfgEtFISQNrzJ6HAAtVE93y27DCALPSAG3x2N38j6tLjLoKGes2jIA==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 834247,
+              "cipherLength": 834275,
+              "hasSearchIndex": true,
+              "indexTerms": 374,
+              "indexSkipReason": null,
+              "storageKey": "items/item_4f53812d/content",
+              "indexKey": "items/item_4f53812d/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_479fbb4f",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_493b1a98",
+      "sequence": 1,
+      "title": "Chlorella vulgaris_ a perspective on its potential for combining high biomass with high value",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "ELITE",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "nPDA6EwJSIOXY19jet+n8G3NYOS9CjmD35DSoTWo+ddVT0kyvFTWCw==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 1616892,
+              "cipherLength": 1616920,
+              "hasSearchIndex": true,
+              "indexTerms": 2079,
+              "indexSkipReason": null,
+              "storageKey": "items/item_479fbb4f/content",
+              "indexKey": "items/item_479fbb4f/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_c53eab93",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_493b1a98",
+      "sequence": 2,
+      "title": "Feasibility of farming the agarose-yielding red alga Gracilaria dura using tube-net cultivatio",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "ELITE",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "iZe+RX+D4G0f5PdKaj+o38Xazq7jJqjPYSS/NYa+rlVWsmhLSHY7yA==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 1446217,
+              "cipherLength": 1446245,
+              "hasSearchIndex": true,
+              "indexTerms": 1535,
+              "indexSkipReason": null,
+              "storageKey": "items/item_c53eab93/content",
+              "indexKey": "items/item_c53eab93/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_fbed0ba2",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_493b1a98",
+      "sequence": 3,
+      "title": "Non-photochemical quenching_ a non-invasive probe for monitoring microalgal grazing_ an early",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "ELITE",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "9MqWvvzsF1VB2bhehSqe5ncZm69MDqGLnN/dvHtNcjOL4AWF/NwuRQ==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 1983171,
+              "cipherLength": 1983199,
+              "hasSearchIndex": true,
+              "indexTerms": 2016,
+              "indexSkipReason": null,
+              "storageKey": "items/item_fbed0ba2/content",
+              "indexKey": "items/item_fbed0ba2/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_b70fc112",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": "VOLUME",
+      "parentId": "item_1fc8ea6d",
+      "sequence": 2,
+      "title": "Volume 02",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_f11df8a2",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": "ISSUE",
+      "parentId": "item_b70fc112",
+      "sequence": 1,
+      "title": "Issue 01",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_3f2cadf1",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_f11df8a2",
+      "sequence": 0,
+      "title": "Effects of extrinsic abiotic factors on induction of gametogenesis and efficacy of a device fo",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "OPEN_ACCESS",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": false,
+          "keyId": null,
+          "masterWrappedBek": null,
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 3377742,
+              "cipherLength": 3377742,
+              "hasSearchIndex": true,
+              "indexTerms": 1865,
+              "indexSkipReason": null,
+              "storageKey": "items/item_3f2cadf1/content",
+              "indexKey": "items/item_3f2cadf1/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_8da90f2c",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_f11df8a2",
+      "sequence": 1,
+      "title": "Profiling the activity of edible European macroalgae towards pharmacological targets for type",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "ELITE",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "o3/kn41dRP46sxBHUEjFQkh346p9E+VKKYtUND8BeCmODuVgm3H+hA==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 1291495,
+              "cipherLength": 1291523,
+              "hasSearchIndex": true,
+              "indexTerms": 2280,
+              "indexSkipReason": null,
+              "storageKey": "items/item_8da90f2c/content",
+              "indexKey": "items/item_8da90f2c/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_8efc34b5",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_f11df8a2",
+      "sequence": 2,
+      "title": "Computerized Optimization of Microalgal Photosynthesis and Growth",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "OPEN_ACCESS",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": false,
+          "keyId": null,
+          "masterWrappedBek": null,
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 7210319,
+              "cipherLength": 7210319,
+              "hasSearchIndex": true,
+              "indexTerms": 1439,
+              "indexSkipReason": null,
+              "storageKey": "items/item_8efc34b5/content",
+              "indexKey": "items/item_8efc34b5/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_38ab9791",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": "VOLUME",
+      "parentId": "item_1fc8ea6d",
+      "sequence": 3,
+      "title": "Volume 03",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_8b2a841f",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": "ISSUE",
+      "parentId": "item_38ab9791",
+      "sequence": 1,
+      "title": "Issue 01",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_aeb6aa44",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_8b2a841f",
+      "sequence": 0,
+      "title": "Photosynthesis of an endolithic Chlorococcum alga _Chlorophyta_ Chlorococcaceae_ from traverti",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "OPEN_ACCESS",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": false,
+          "keyId": null,
+          "masterWrappedBek": null,
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 1477661,
+              "cipherLength": 1477661,
+              "hasSearchIndex": true,
+              "indexTerms": 2166,
+              "indexSkipReason": null,
+              "storageKey": "items/item_aeb6aa44/content",
+              "indexKey": "items/item_aeb6aa44/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_5f10416f",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_8b2a841f",
+      "sequence": 1,
+      "title": "ADA_ an open-source software platform for plotting and analysis of data from laboratory photob",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "OPEN_ACCESS",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": false,
+          "keyId": null,
+          "masterWrappedBek": null,
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 3991576,
+              "cipherLength": 3991576,
+              "hasSearchIndex": true,
+              "indexTerms": 1770,
+              "indexSkipReason": null,
+              "storageKey": "items/item_5f10416f/content",
+              "indexKey": "items/item_5f10416f/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_dbdf6be9",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_8b2a841f",
+      "sequence": 2,
+      "title": "The effect of natural convection air temperature on the drying kinetics and desorption isother",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "OPEN_ACCESS",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": false,
+          "keyId": null,
+          "masterWrappedBek": null,
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 1827726,
+              "cipherLength": 1827726,
+              "hasSearchIndex": true,
+              "indexTerms": 1568,
+              "indexSkipReason": null,
+              "storageKey": "items/item_dbdf6be9/content",
+              "indexKey": "items/item_dbdf6be9/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_bf288881",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": "VOLUME",
+      "parentId": "item_1fc8ea6d",
+      "sequence": 4,
+      "title": "Volume 04",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_c7e63f4b",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": "ISSUE",
+      "parentId": "item_bf288881",
+      "sequence": 1,
+      "title": "Issue 01",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_08f7f6a3",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_c7e63f4b",
+      "sequence": 0,
+      "title": "Growth comparison of Arthrospira platensis in different vessels_ standard cylinder vs. enhance",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "kwKMV/wGdTl+560D565mby2dSLAxJiFk09CAqKbRZbDEtXsfd1YfFA==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 2316410,
+              "cipherLength": 2316438,
+              "hasSearchIndex": true,
+              "indexTerms": 2449,
+              "indexSkipReason": null,
+              "storageKey": "items/item_08f7f6a3/content",
+              "indexKey": "items/item_08f7f6a3/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_0142e8fb",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_c7e63f4b",
+      "sequence": 1,
+      "title": "Live algal sorbents for the removal of potentially toxic elements_ a review",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "IuzmKyDHVITo45aXXarVxm66jhld4DzuXmosWfYM0IHhcFM5lWxrpQ==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 3475941,
+              "cipherLength": 3475969,
+              "hasSearchIndex": true,
+              "indexTerms": 2600,
+              "indexSkipReason": null,
+              "storageKey": "items/item_0142e8fb/content",
+              "indexKey": "items/item_0142e8fb/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_fe481547",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_c7e63f4b",
+      "sequence": 2,
+      "title": "Replacing expensive synthetic media with banana stem compost extract medium for production of",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "P4h4wa6SGjR4Hp4s787X5AqIjx1x92g1bO7BrLzhMQ02LYobMnU6VQ==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 1011413,
+              "cipherLength": 1011441,
+              "hasSearchIndex": true,
+              "indexTerms": 1929,
+              "indexSkipReason": null,
+              "storageKey": "items/item_fe481547/content",
+              "indexKey": "items/item_fe481547/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_5d96a0a6",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_c7e63f4b",
+      "sequence": 3,
+      "title": "Nursery optimization for kelp aquaculture in the Southern Hemisphere_ the interactive effects",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "GDNU/gz1+5OtAvVSIXUu+KLaou8UeDQV3QOGAdTBKiDuH24PpeQ64Q==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 1377006,
+              "cipherLength": 1377034,
+              "hasSearchIndex": true,
+              "indexTerms": 1908,
+              "indexSkipReason": null,
+              "storageKey": "items/item_5d96a0a6/content",
+              "indexKey": "items/item_5d96a0a6/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_282abbc1",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": "JOURNAL",
+      "parentId": null,
+      "sequence": null,
+      "title": "Big Earth Data",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": "English",
+      "description": "Focuses on the theories, methods, algorithms, and technologies used to collect, manage, analyze, and visualize large-scale Earth-related datasets, aiming to support data-driven research into the Earth's historical, present, and future evolution.",
+      "subjects": [
+        "Earth Observation",
+        "Data Management and Sharing",
+        "Big Data Analytics",
+        "Earth System Science",
+        "Digital Earth"
+      ],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": "items/item_282abbc1/cover",
+      "coverMimeType": "image/jpeg",
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_468135bf",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": "VOLUME",
+      "parentId": "item_282abbc1",
+      "sequence": 1,
+      "title": "Volume 01",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_86e1d52a",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": "ISSUE",
+      "parentId": "item_468135bf",
+      "sequence": 1,
+      "title": "Issue 01",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_3300a090",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_86e1d52a",
+      "sequence": 0,
+      "title": "Big data drives the development of Earth science",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "+bGFgMeH+7M8LUiAcZq2C17O2CzsOoFPkDCAp9Xo2XgIZV3cHEwcVg==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 873687,
+              "cipherLength": 873715,
+              "hasSearchIndex": true,
+              "indexTerms": 700,
+              "indexSkipReason": null,
+              "storageKey": "items/item_3300a090/content",
+              "indexKey": "items/item_3300a090/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_47e6402a",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_86e1d52a",
+      "sequence": 1,
+      "title": "Big Earth data_ A new frontier in Earth and information sciences",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "TmNt4t/BFxeggsV/xfPLUXyRowKsAPDqgfDv4rZ+KaXshdQkQn0y3Q==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 2256146,
+              "cipherLength": 2256174,
+              "hasSearchIndex": true,
+              "indexTerms": 1655,
+              "indexSkipReason": null,
+              "storageKey": "items/item_47e6402a/content",
+              "indexKey": "items/item_47e6402a/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_b43dfca0",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_86e1d52a",
+      "sequence": 2,
+      "title": "Exploring the depths of the global earth observation system of systems",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "+MPS31fCyx5ltsPlYajHeDeioWmGDo1QFLyOSoiPegjz2Osf6X+f9w==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 6965308,
+              "cipherLength": 6965336,
+              "hasSearchIndex": true,
+              "indexTerms": 2401,
+              "indexSkipReason": null,
+              "storageKey": "items/item_b43dfca0/content",
+              "indexKey": "items/item_b43dfca0/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_345b0069",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_86e1d52a",
+      "sequence": 3,
+      "title": "A new big data approach based on geoecological information-modeling system",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "3Gj8kzSNnqgzqYvouqfe2ComnRdM8wMehQqF7lzRdL4mvYZT1i2gOA==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 4892985,
+              "cipherLength": 4893013,
+              "hasSearchIndex": true,
+              "indexTerms": 1844,
+              "indexSkipReason": null,
+              "storageKey": "items/item_345b0069/content",
+              "indexKey": "items/item_345b0069/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_4cf1c548",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_86e1d52a",
+      "sequence": 4,
+      "title": "Digital earth Australia _ unlocking new value from earth observation data",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "Xk6d9ZZhB13VBT1+VvLd3zWzvAtbDxSt+GrQp3myHX/SwMYUf298Pg==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 2229241,
+              "cipherLength": 2229269,
+              "hasSearchIndex": true,
+              "indexTerms": 1318,
+              "indexSkipReason": null,
+              "storageKey": "items/item_4cf1c548/content",
+              "indexKey": "items/item_4cf1c548/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_4e548dda",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_86e1d52a",
+      "sequence": 5,
+      "title": "A view-based model of data-cube to support big earth data systems interoperability",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "uSx8WfF6/jHPUI3wwow4fmfwqlysnRFYgJwJ/tJmfccJZt50jE24VQ==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 2437331,
+              "cipherLength": 2437359,
+              "hasSearchIndex": true,
+              "indexTerms": 2215,
+              "indexSkipReason": null,
+              "storageKey": "items/item_4e548dda/content",
+              "indexKey": "items/item_4e548dda/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_82398348",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": "VOLUME",
+      "parentId": "item_282abbc1",
+      "sequence": 2,
+      "title": "Volume 02",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_86dff58d",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": "ISSUE",
+      "parentId": "item_82398348",
+      "sequence": 1,
+      "title": "Issue 01",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_9741c993",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_86dff58d",
+      "sequence": 0,
+      "title": "The challenges of a Big Data Earth",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "JaGOEtPqjQqqBPMhxfL/Fc4TKFC44hwZCMrrOOy02N86cBjrNoBFAA==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 1070281,
+              "cipherLength": 1070309,
+              "hasSearchIndex": true,
+              "indexTerms": 1144,
+              "indexSkipReason": null,
+              "storageKey": "items/item_9741c993/content",
+              "indexKey": "items/item_9741c993/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_47ffc1b0",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_86dff58d",
+      "sequence": 1,
+      "title": "The Silk Road agenda of the Pan-Eurasian Experiment _PEEX_ program",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "qdujrAR7Zl0qhQXy9GPkKyKqnR+5N8/qzCnQi+s0SXVCQUble4IpRQ==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 5813799,
+              "cipherLength": 5813827,
+              "hasSearchIndex": true,
+              "indexTerms": 3129,
+              "indexSkipReason": null,
+              "storageKey": "items/item_47ffc1b0/content",
+              "indexKey": "items/item_47ffc1b0/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_f0472e22",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_86dff58d",
+      "sequence": 2,
+      "title": "Exploiting big earth data from space _ first experiences with the timescan processing chain",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "jkS0s5RFnUmCKcqD4VfkT2taqODaAiUTQZppooQ1gTUL6zfcmEaZ2g==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 3585466,
+              "cipherLength": 3585494,
+              "hasSearchIndex": true,
+              "indexTerms": 2125,
+              "indexSkipReason": null,
+              "storageKey": "items/item_f0472e22/content",
+              "indexKey": "items/item_f0472e22/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_9034c472",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [],
+      "workType": "ISSUE",
+      "parentId": "item_82398348",
+      "sequence": 2,
+      "title": "Issue 02",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": null,
+      "accessTier": null,
+      "status": "PUBLISHED",
+      "contentState": "NONE",
+      "contentError": null,
+      "assets": [],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_803e0019",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_9034c472",
+      "sequence": 0,
+      "title": "The GeoLink knowledge graph",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "YG/LjI7+Q7RsyArowCKw6yPlGd+Hq7WwCz4qcB9JFiVvlEfD/mzu8Q==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 2397313,
+              "cipherLength": 2397341,
+              "hasSearchIndex": true,
+              "indexTerms": 1421,
+              "indexSkipReason": null,
+              "storageKey": "items/item_803e0019/content",
+              "indexKey": "items/item_803e0019/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_ce5cb85b",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_9034c472",
+      "sequence": 1,
+      "title": "Parallelizing maximum likelihood classification _MLC_ for supervised image classification by p",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "GuGDbqM4QIs+7DkHAFx8m9cWbVofwKN9IWoeQZNW5tGS5ls2hNh2CA==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 2267961,
+              "cipherLength": 2267989,
+              "hasSearchIndex": true,
+              "indexTerms": 1255,
+              "indexSkipReason": null,
+              "storageKey": "items/item_ce5cb85b/content",
+              "indexKey": "items/item_ce5cb85b/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_e7e503d7",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_9034c472",
+      "sequence": 2,
+      "title": "Mapping landslide susceptibility and types using Random Forest",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "dSKOJOochmvv8fE4xshPMNsqAuWU8gvRardk+ZhZ/34nypy3RrcElA==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 2773076,
+              "cipherLength": 2773104,
+              "hasSearchIndex": true,
+              "indexTerms": 1974,
+              "indexSkipReason": null,
+              "storageKey": "items/item_e7e503d7/content",
+              "indexKey": "items/item_e7e503d7/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_3c1320ba",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_9034c472",
+      "sequence": 3,
+      "title": "Atmospheric heat source_sink dataset over the Tibetan Plateau based on satellite and routine m",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "LOlpj5BPWqZKHstdcN3+omshSr/2YDRLLDG+C8BGDJfhsRubpJuWVA==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 1786531,
+              "cipherLength": 1786559,
+              "hasSearchIndex": true,
+              "indexTerms": 1304,
+              "indexSkipReason": null,
+              "storageKey": "items/item_3c1320ba/content",
+              "indexKey": "items/item_3c1320ba/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-08-10T09:00:00Z"
+    },
+    {
+      "_id": "item_2d0bafd2",
+      "publisherId": "pub_rtlg",
+      "collectionIds": [
+        "col_law2024"
+      ],
+      "workType": "ARTICLE",
+      "parentId": "item_9034c472",
+      "sequence": 4,
+      "title": "Satellite record of the transition of air quality over China",
+      "subtitle": null,
+      "authors": [],
+      "editors": [],
+      "narrators": [],
+      "isbn": null,
+      "language": null,
+      "description": null,
+      "subjects": [],
+      "publishedAt": null,
+      "coverUrl": null,
+      "coverKey": null,
+      "coverMimeType": null,
+      "contentType": "PDF",
+      "accessTier": "SUBSCRIPTION",
+      "status": "PUBLISHED",
+      "contentState": "READY",
+      "contentError": null,
+      "assets": [
+        {
+          "format": "PDF",
+          "mimeType": "application/pdf",
+          "encrypted": true,
+          "keyId": "master-v1",
+          "masterWrappedBek": "3f4Zd0aCE2AMNtDzgtHn42EjXaHteyKMKJvrktORq/UBAoSjJ8Y1mg==",
+          "parts": [
+            {
+              "partNumber": 1,
+              "title": null,
+              "sizeBytes": 1751504,
+              "cipherLength": 1751532,
+              "hasSearchIndex": true,
+              "indexTerms": 1003,
+              "indexSkipReason": null,
+              "storageKey": "items/item_2d0bafd2/content",
+              "indexKey": "items/item_2d0bafd2/index",
+              "contentState": "READY",
+              "contentError": null,
+              "updatedAt": "2026-08-10T09:00:00Z"
+            }
+          ]
+        }
+      ],
       "createdAt": "2026-08-10T09:00:00Z",
       "updatedAt": "2026-08-10T09:00:00Z"
     }
   ],
-
   "entitlements": [
     {
-      "_seedWhy": "COLLECTION scope, CONCURRENT. Covers dev-fixture-epub, the only book in col_law2024. The narrower scope, so it must beat the publisher grant below on that same book - the scope-precedence demonstration item_42/ent_imp1 originally carried.",
+      "_seedWhy": "COLLECTION scope, CONCURRENT. Originally covered only dev-fixture-epub, the sole book in col_law2024 at the time. Week 5's real ingest put every new standalone book and every article (53 leaves total) into the same collection, so this one row now covers all of them for inst_7f3 too - narrower than ent_imp2's PUBLISHER grant below, so it wins by scope precedence on every one of them, the same demonstration item_42/ent_imp1 originally carried for one book.",
       "_id": "ent_imp1",
       "institutionId": "inst_7f3",
       "scopeType": "COLLECTION",
@@ -548,7 +4319,6 @@
       "updatedAt": "2026-08-10T09:00:00Z"
     }
   ],
-
   "adminUsers": [
     {
       "_seedWhy": "The account everyone logs into the console with.",
@@ -587,7 +4357,6 @@
       "lastLoginAt": null
     }
   ],
-
   "feedSettings": [
     {
       "_seedWhy": "The fully curated case. Three shelves, all populated, and every listed book is one Imperial can actually reach: dev-fixture-epub through the collection grant, dev-fixture-pdf and item_e9a3c599 through the publisher grant, dev-sample-epub and dev-sample-audio because open access needs no grant. itemIds order is display order and the feed must preserve it exactly.",
@@ -601,19 +4370,28 @@
           "id": "shelf_1",
           "title": "New this month",
           "order": 1,
-          "itemIds": ["dev-fixture-epub", "dev-fixture-pdf", "item_e9a3c599"]
+          "itemIds": [
+            "dev-fixture-epub",
+            "dev-fixture-pdf",
+            "item_e9a3c599"
+          ]
         },
         {
           "id": "shelf_2",
           "title": "Law essentials",
           "order": 2,
-          "itemIds": ["item_e9a3c599"]
+          "itemIds": [
+            "item_e9a3c599"
+          ]
         },
         {
           "id": "shelf_3",
           "title": "Open access picks",
           "order": 3,
-          "itemIds": ["dev-sample-epub", "dev-sample-audio"]
+          "itemIds": [
+            "dev-sample-epub",
+            "dev-sample-audio"
+          ]
         }
       ],
       "updatedAt": "2026-08-10T09:00:00Z"
@@ -630,7 +4408,10 @@
           "id": "shelf_1",
           "title": "New this month",
           "order": 1,
-          "itemIds": ["dev-sample-epub", "dev-sample-audio"]
+          "itemIds": [
+            "dev-sample-epub",
+            "dev-sample-audio"
+          ]
         },
         {
           "id": "shelf_2",
