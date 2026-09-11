@@ -143,7 +143,7 @@ class DemoDataSeederIT {
         // deleted publishers first and re-inserted in the same order, this would still pass; if either
         // order were reversed, the run would throw IllegalArgumentException instead.
         seederWithReset().run(null);
-        assertThat(items.count()).isEqualTo(8);
+        assertThat(items.count()).isEqualTo(83);
         assertThat(items.findById("dev-fixture-epub").orElseThrow().getPublisherId()).isEqualTo("pub_rtlg");
     }
 
@@ -197,7 +197,7 @@ class DemoDataSeederIT {
     }
 
     @Test
-    @DisplayName("items carry the server-only keys on the item and the assets under it")
+    @DisplayName("items carry the server-only keys on the part, one asset, one part deep")
     void itemsAreSeeded() {
         CatalogueItem elite = items.findById("dev-fixture-epub").orElseThrow();
         assertThat(elite.getAccessTier()).isEqualTo(AccessTier.ELITE);
@@ -205,19 +205,20 @@ class DemoDataSeederIT {
         assertThat(elite.getContentState()).isEqualTo(ContentState.READY);
         assertThat(elite.getCollectionIds()).containsExactly("col_law2024");
 
-        // storageKey, indexKey and wrappedBek are on the item in B's shape, not on the asset.
-        // Every item is a real ingested book now, so storageKey is a real "items/<id>/..." object,
-        // not a "seed/" placeholder.
-        assertThat(elite.getStorageKey()).startsWith("items/dev-fixture-epub/");
-        assertThat(elite.getMasterWrappedBek()).isNotNull();
-
         CatalogueItem.Asset epub = elite.getAssets().get(0);
         assertThat(epub.getFormat()).isEqualTo(ContentType.EPUB);
-        assertThat(epub.getSizeBytes()).isEqualTo(1_124_678L);
-        assertThat(epub.getCipherLength())
+        assertThat(epub.isEncrypted()).isTrue();
+        // masterWrappedBek is shared by every part of this asset - here, one part.
+        assertThat(epub.getMasterWrappedBek()).isNotNull();
+
+        CatalogueItem.Part part = epub.getParts().get(0);
+        // Every item is a real ingested book now, so storageKey is a real "items/<id>/..."
+        // object, not a "seed/" placeholder.
+        assertThat(part.getStorageKey()).startsWith("items/dev-fixture-epub");
+        assertThat(part.getSizeBytes()).isEqualTo(1_124_678L);
+        assertThat(part.getCipherLength())
                 .as("12 + sizeBytes + 16")
                 .isEqualTo(1_124_678L + 28L);
-        assertThat(epub.isEncrypted()).isTrue();
 
         // Membership is stored once, on the book. dev-fixture-pdf belongs to no collection and is
         // reachable only through the publisher-scope grant.
@@ -225,25 +226,28 @@ class DemoDataSeederIT {
     }
 
     @Test
-    @DisplayName("null cipherLength and indexTerms become 0 on the way into B's primitives")
+    @DisplayName("null cipherLength and indexTerms become 0 on the way into the entity's primitives")
     void nullableAssetNumbersBecomeZero() {
         // The dataset says null because "not encrypted" and "zero bytes of ciphertext" are different
         // facts. fields are primitives, so this is the one place the two representations meet, and
         // it is worth an assertion rather than a comment.
         CatalogueItem openAccess = items.findById("dev-sample-epub").orElseThrow();
-        assertThat(openAccess.getAssets().get(0).isEncrypted()).isFalse();
-        assertThat(openAccess.getAssets().get(0).getCipherLength()).isZero();
-        assertThat(openAccess.getMasterWrappedBek()).as("plaintext, so no wrapped key").isNull();
+        CatalogueItem.Asset openAccessAsset = openAccess.getAssets().get(0);
+        assertThat(openAccessAsset.isEncrypted()).isFalse();
+        assertThat(openAccessAsset.getParts().get(0).getCipherLength()).isZero();
+        assertThat(openAccessAsset.getMasterWrappedBek()).as("plaintext, so no wrapped key").isNull();
 
         // A freshly ingested SUBSCRIPTION/ELITE audiobook is encrypted like any other locked asset
         // (see TierRules); dev-sample-audio is OPEN_ACCESS, so it stays unencrypted for that reason
         // instead.
         CatalogueItem audio = items.findById("dev-sample-audio").orElseThrow();
+        CatalogueItem.Asset audioAsset = audio.getAssets().get(0);
+        CatalogueItem.Part audioPart = audioAsset.getParts().get(0);
         assertThat(audio.getAccessTier()).isEqualTo(AccessTier.OPEN_ACCESS);
-        assertThat(audio.getAssets().get(0).isEncrypted()).isFalse();
-        assertThat(audio.getAssets().get(0).isHasSearchIndex()).isFalse();
-        assertThat(audio.getAssets().get(0).getIndexTerms()).isZero();
-        assertThat(audio.getAssets().get(0).getIndexSkipReason()).isEqualTo("AudioNotIndexable");
+        assertThat(audioAsset.isEncrypted()).isFalse();
+        assertThat(audioPart.isHasSearchIndex()).isFalse();
+        assertThat(audioPart.getIndexTerms()).isZero();
+        assertThat(audioPart.getIndexSkipReason()).isEqualTo("AudioNotIndexable");
     }
 
     @Test
@@ -372,7 +376,7 @@ class DemoDataSeederIT {
         assertThat(publishers.count()).as("publishers").isEqualTo(2);
         assertThat(collections.count()).as("collections").isEqualTo(2);
         assertThat(institutions.count()).as("institutions").isEqualTo(3);
-        assertThat(items.count()).as("catalogueItems").isEqualTo(8);
+        assertThat(items.count()).as("catalogueItems").isEqualTo(83);
         assertThat(entitlements.count()).as("entitlements").isEqualTo(4);
         assertThat(adminUsers.count()).as("adminUsers").isEqualTo(3);
         assertThat(feedSettings.count()).as("feedSettings").isEqualTo(3);

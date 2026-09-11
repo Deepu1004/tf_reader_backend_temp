@@ -26,6 +26,7 @@ import com.tf.reader.catalogue.entity.InstitutionType;
 import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.catalogue.entity.Publisher;
 import com.tf.reader.catalogue.entity.ScopeType;
+import com.tf.reader.catalogue.entity.WorkType;
 import com.tf.reader.catalogue.entity.Shelf;
 import com.tf.reader.catalogue.repository.BookCollectionRepository;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
@@ -59,7 +60,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Task 8: seeds an empty local MongoDB with a fixed set of 23 dev records  so every developer works off the same data instead of five
+ * Task 8: seeds an empty local MongoDB with a fixed set of 100 dev records so every developer works off the same data instead of five
  * different hand-typed databases. Audit logs are left out since they're meant to record
  * real events. Only inserts missing docs (never overwrites), only deletes docs on reset
  * (never drops collections/indexes), respects write/delete order for entity
@@ -388,72 +389,88 @@ public class DemoDataSeeder implements ApplicationRunner {
 
     private CatalogueItem toItem(SeedDataset.SeedItem s) {
         List<CatalogueItem.Asset> assets = s.assets().stream().map(this::toAsset).toList();
-        return new CatalogueItem(
-                s.id(),
-                s.publisherId(),
-                s.collectionIds(),
-                s.title(),
-                s.subtitle(),
-                s.authors(),
-                s.editors(),
-                s.narrators(),
-                s.isbn(),
-                s.language(),
-                s.description(),
-                s.subjects(),
-                s.publishedAt(),
-                null, // numberOfPages: not carried by the seed dataset yet, ingest's territory
-                null, // duration: not carried by the seed dataset yet
-                s.coverUrl(),
-                s.coverKey(),
-                s.coverMimeType(),
-                ContentType.valueOf(s.contentType()),
-                AccessTier.valueOf(s.accessTier()),
-                ItemStatus.valueOf(s.status()),
-                ContentState.valueOf(s.contentState()),
-                s.contentError(),
-                assets,
-                // These three sit on the item, not on each asset. B's shape, not the handbook's.
-                s.storageKey(),
-                s.indexKey(),
-                resolveMasterWrappedBek(s),
-                s.createdAt(),
-                s.updatedAt());
+        CatalogueItem item = new CatalogueItem();
+        item.setId(s.id());
+        item.setPublisherId(s.publisherId());
+        item.setCollectionIds(s.collectionIds());
+        item.setWorkType(s.workType() == null ? null : WorkType.valueOf(s.workType()));
+        item.setParentId(s.parentId());
+        item.setSequence(s.sequence());
+        item.setTitle(s.title());
+        item.setSubtitle(s.subtitle());
+        item.setAuthors(s.authors());
+        item.setEditors(s.editors());
+        item.setNarrators(s.narrators());
+        item.setIsbn(s.isbn());
+        item.setLanguage(s.language());
+        item.setDescription(s.description());
+        item.setSubjects(s.subjects());
+        item.setPublishedAt(s.publishedAt());
+        // numberOfPages/duration: not carried by the seed dataset yet, ingest's territory.
+        item.setCoverUrl(s.coverUrl());
+        item.setCoverKey(s.coverKey());
+        item.setCoverMimeType(s.coverMimeType());
+        item.setContentType(s.contentType() == null ? null : ContentType.valueOf(s.contentType()));
+        item.setAccessTier(s.accessTier() == null ? null : AccessTier.valueOf(s.accessTier()));
+        item.setStatus(ItemStatus.valueOf(s.status()));
+        item.setContentState(ContentState.valueOf(s.contentState()));
+        item.setContentError(s.contentError());
+        item.setAssets(assets);
+        item.setCreatedAt(s.createdAt());
+        item.setUpdatedAt(s.updatedAt());
+
+        for (int i = 0; i < assets.size(); i++) {
+            assets.get(i).setMasterWrappedBek(resolveMasterWrappedBek(s.assets().get(i), assets.get(i)));
+        }
+        return item;
     }
 
     /**
-     * The dataset's "wrappedBek" is a documented fake for the Week-1 catalogue-only items, whose
-     * storageKey has nothing behind it. The dev fixtures under static/mock-content/ are real
-     * AES-256-GCM ciphertext under {@link #MOCK_BEK_BASE64}, so those get a genuine wrap of that
-     * key instead - one that actually unwraps under whichever TF_MASTER_KEY this instance has,
-     * rather than a string that only ever unwraps under whoever authored the JSON's key.
+     * The dataset's "masterWrappedBek" is a documented fake for the Week-1 catalogue-only items,
+     * whose parts' storageKeys have nothing behind them. The dev fixtures under
+     * static/mock-content/ are real AES-256-GCM ciphertext under {@link #MOCK_BEK_BASE64}, so
+     * those get a genuine wrap of that key instead - one that actually unwraps under whichever
+     * TF_MASTER_KEY this instance has, rather than a string that only ever unwraps under whoever
+     * authored the JSON's key.
      */
-    private String resolveMasterWrappedBek(SeedDataset.SeedItem s) {
-        if (s.storageKey() == null || !s.storageKey().startsWith(DEV_FIXTURE_STORAGE_PREFIX)) {
-            return s.wrappedBek();
-        }
-        boolean anyEncrypted = s.assets().stream().anyMatch(SeedDataset.SeedAsset::encrypted);
-        if (!anyEncrypted) {
-            return s.wrappedBek();
+    private String resolveMasterWrappedBek(SeedDataset.SeedAsset seedAsset, CatalogueItem.Asset asset) {
+        boolean isDevFixture = asset.getParts() != null && asset.getParts().stream()
+                .anyMatch(p -> p.getStorageKey() != null && p.getStorageKey().startsWith(DEV_FIXTURE_STORAGE_PREFIX));
+        if (!isDevFixture || !seedAsset.encrypted()) {
+            return seedAsset.masterWrappedBek();
         }
         SecretKeySpec mockBek = new SecretKeySpec(Base64.getDecoder().decode(MOCK_BEK_BASE64), "AES");
         return bookEncryptionKeys.wrapWithMasterKey(mockBek);
     }
 
     private CatalogueItem.Asset toAsset(SeedDataset.SeedAsset a) {
-        // cipherLength and indexTerms are primitives on the entity, so "not applicable" has to become
-        // a number here. The dataset keeps the null because that is the true statement; this is the
-        // one line where the two representations meet.
-        return new CatalogueItem.Asset(
-                ContentType.valueOf(a.format()),
-                a.mimeType(),
-                a.sizeBytes(),
-                a.cipherLength() == null ? 0L : a.cipherLength(),
-                a.encrypted(),
-                a.hasSearchIndex(),
-                a.indexTerms() == null ? 0 : a.indexTerms(),
-                a.indexSkipReason(),
-                a.keyId());
+        CatalogueItem.Asset asset = new CatalogueItem.Asset();
+        asset.setFormat(ContentType.valueOf(a.format()));
+        asset.setMimeType(a.mimeType());
+        asset.setEncrypted(a.encrypted());
+        asset.setKeyId(a.keyId());
+        asset.setParts(a.parts() == null ? List.of() : a.parts().stream().map(this::toPart).toList());
+        return asset;
+    }
+
+    private CatalogueItem.Part toPart(SeedDataset.SeedPart p) {
+        // cipherLength and indexTerms are primitives on the entity, so "not applicable" has to
+        // become a number here. The dataset keeps the null because that is the true statement;
+        // this is the one line where the two representations meet.
+        CatalogueItem.Part part = new CatalogueItem.Part();
+        part.setPartNumber(p.partNumber());
+        part.setTitle(p.title());
+        part.setSizeBytes(p.sizeBytes());
+        part.setCipherLength(p.cipherLength() == null ? 0L : p.cipherLength());
+        part.setHasSearchIndex(p.hasSearchIndex());
+        part.setIndexTerms(p.indexTerms() == null ? 0 : p.indexTerms());
+        part.setIndexSkipReason(p.indexSkipReason());
+        part.setStorageKey(p.storageKey());
+        part.setIndexKey(p.indexKey());
+        part.setContentState(p.contentState() == null ? null : ContentState.valueOf(p.contentState()));
+        part.setContentError(p.contentError());
+        part.setUpdatedAt(p.updatedAt());
+        return part;
     }
 
     private Entitlement toEntitlement(SeedDataset.SeedEntitlement s) {

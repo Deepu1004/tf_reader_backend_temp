@@ -166,21 +166,27 @@ class OpdsPublicationMapper {
 
     private OpdsLinkProperties propertiesFor(CatalogueItem item, AccessTier tier, EntitlementDecision decision) {
         Asset asset = matchingAsset(item);
+        // A reader still acquires one book through one acquisition link, whether it has one part
+        // or thirty (chapter selection happens through ContentAccessGrant, not OPDS) - so what
+        // crosses the wire here is part 1's own numbers, matching what a non-chaptered item has
+        // always reported.
+        CatalogueItem.Part part = firstPartOf(asset);
         Copies copies = tier == AccessTier.ELITE && decision.copies() != null
                 ? new Copies(decision.copies())
                 : null;
-        EncryptedInfo encrypted = asset != null && asset.isEncrypted()
-                ? new EncryptedInfo(ENCRYPTION_ALGORITHM, asset.getSizeBytes())
+        EncryptedInfo encrypted = asset != null && asset.isEncrypted() && part != null
+                ? new EncryptedInfo(ENCRYPTION_ALGORITHM, part.getSizeBytes())
                 : null;
         List<IndirectAcquisition> indirect = asset == null
                 ? null
                 : List.of(new IndirectAcquisition(asset.getMimeType()));
-        boolean hasSearchIndex = asset != null && asset.isHasSearchIndex();
+        boolean hasSearchIndex = part != null && part.isHasSearchIndex();
         boolean canPersist = tier != AccessTier.ELITE;
         // What actually crosses the wire: cipherLength for an encrypted asset (sizeBytes is the
         // plaintext length, already used for EncryptedInfo.originalLength above), sizeBytes
         // otherwise - same distinction content/api/SignedUrl draws between the two fields.
-        Long fileSize = asset == null ? null : (asset.isEncrypted() ? asset.getCipherLength() : asset.getSizeBytes());
+        Long fileSize = part == null ? null
+                : (asset.isEncrypted() ? part.getCipherLength() : part.getSizeBytes());
         return new OpdsLinkProperties(tier, indirect, copies, encrypted, hasSearchIndex, canPersist, fileSize, null);
     }
 
@@ -192,5 +198,13 @@ class OpdsPublicationMapper {
                 .filter(asset -> asset.getFormat() == item.getContentType())
                 .findFirst()
                 .orElse(null);
+    }
+
+    private CatalogueItem.Part firstPartOf(Asset asset) {
+        if (asset == null || asset.getParts() == null) {
+            return null;
+        }
+        return asset.getParts().stream().filter(p -> p.getPartNumber() == 1).findFirst()
+                .orElse(asset.getParts().isEmpty() ? null : asset.getParts().get(0));
     }
 }
