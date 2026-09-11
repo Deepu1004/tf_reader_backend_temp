@@ -241,6 +241,32 @@ class IngestServiceTest {
 	}
 
 	@Test
+	void aWavFileIsAcceptedForAudioJustLikeMp3() throws java.io.IOException {
+		CatalogueItem item = item(AccessTier.OPEN_ACCESS, ContentType.AUDIO);
+		when(items.findById("item_42")).thenReturn(Optional.of(item));
+		when(adminScope.canAccessPublisher("pub_rtlg")).thenReturn(true);
+		when(items.save(any())).thenAnswer(i -> i.getArgument(0));
+		MockMultipartFile file = new MockMultipartFile("file", "book.wav", "audio/wav", new byte[10]);
+
+		IngestStatus status = service.accept("item_42", file, AssetFormat.AUDIO, null, null);
+
+		assertThat(status.contentState()).isEqualTo(ContentState.QUEUED);
+	}
+
+	@Test
+	void anAudioUploadThatIsNotMp3OrWavIsRejected() {
+		CatalogueItem item = item(AccessTier.OPEN_ACCESS, ContentType.AUDIO);
+		when(items.findById("item_42")).thenReturn(Optional.of(item));
+		when(adminScope.canAccessPublisher("pub_rtlg")).thenReturn(true);
+		MockMultipartFile file = new MockMultipartFile("file", "book.m4a", "audio/mp4", new byte[10]);
+
+		assertThatExceptionOfType(ApiException.class)
+				.isThrownBy(() -> service.accept("item_42", file, AssetFormat.AUDIO, null, null))
+				.satisfies(e -> assertThat(e.getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+		verify(bookStorage, never()).store(any(), any(), any());
+	}
+
+	@Test
 	void unknownItemIs404() {
 		when(items.findById("item_nope")).thenReturn(Optional.empty());
 		MockMultipartFile file = new MockMultipartFile("file", "book.pdf", "application/pdf", new byte[10]);

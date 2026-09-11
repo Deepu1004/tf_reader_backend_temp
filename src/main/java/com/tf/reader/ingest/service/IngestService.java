@@ -65,6 +65,9 @@ public class IngestService {
 			throw new ApiException(ErrorCode.VALIDATION_FAILED,
 					"format must match this item's contentType (" + item.getContentType() + ")");
 		}
+		if (format == AssetFormat.AUDIO) {
+			requireAudioExtension(file);
+		}
 		int resolvedPartNumber = partNumber == null ? DEFAULT_PART_NUMBER : partNumber;
 		if (resolvedPartNumber < 1) {
 			throw new ApiException(ErrorCode.VALIDATION_FAILED, "partNumber must be 1 or greater");
@@ -189,6 +192,19 @@ public class IngestService {
 		if (workType != WorkType.BOOK && workType != WorkType.ARTICLE) {
 			throw new ApiException(ErrorCode.VALIDATION_FAILED,
 					"a " + workType + " is a container and cannot have content uploaded to it");
+		}
+	}
+
+	/**
+	 * The filename's extension, not the client-supplied Content-Type header - a browser or curl
+	 * caller can send any content type it likes, but it can't easily lie about what the file
+	 * actually is without also lying about its own name.
+	 */
+	private static void requireAudioExtension(MultipartFile file) {
+		String name = file.getOriginalFilename();
+		String lower = name == null ? "" : name.toLowerCase();
+		if (!lower.endsWith(".mp3") && !lower.endsWith(".wav")) {
+			throw new ApiException(ErrorCode.VALIDATION_FAILED, "audio format must be uploaded as .mp3 or .wav");
 		}
 	}
 
