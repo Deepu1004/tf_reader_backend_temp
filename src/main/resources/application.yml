@@ -38,7 +38,7 @@ spring:
               singlesignon:
                 # acs_url is NOT included here — UserSecurityConfig appends it dynamically
                 # from the actual request so it works on localhost and Render alike.
-                url: "https://samlmock.dev/idp?aud=tf-reader-sp"
+                url: ${SAML_MOCK_IDP_URL}
                 binding: redirect
                 sign-request: false
               verification:
