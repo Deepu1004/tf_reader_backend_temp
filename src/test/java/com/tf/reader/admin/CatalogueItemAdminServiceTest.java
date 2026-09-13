@@ -24,6 +24,7 @@ import com.tf.reader.admin.dto.CatalogueItemWrite;
 import com.tf.reader.admin.entity.AdminRole;
 import com.tf.reader.admin.security.AdminScopeAuthorizer;
 import com.tf.reader.catalogue.entity.AccessTier;
+import com.tf.reader.catalogue.entity.BookCollection;
 import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.ContentType;
@@ -31,6 +32,7 @@ import com.tf.reader.catalogue.entity.Entitlement;
 import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.catalogue.entity.ScopeType;
+import com.tf.reader.catalogue.repository.BookCollectionRepository;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.CatalogueItemSearchRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
@@ -42,6 +44,7 @@ import com.tf.reader.common.security.TokenClaims;
 import com.tf.reader.admin.service.CatalogueItemAdminService;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
+import com.tf.reader.ingest.service.CoverUrlResolver;
 
 /** Business rules for the four catalogue item admin operations, tested without a servlet or a database. */
 class CatalogueItemAdminServiceTest {
@@ -49,9 +52,11 @@ class CatalogueItemAdminServiceTest {
 	private CatalogueItemRepository catalogueItemRepository;
 	private CatalogueItemSearchRepository searchRepository;
 	private PublisherRepository publisherRepository;
+	private BookCollectionRepository bookCollectionRepository;
 	private EntitlementRepository entitlementRepository;
 	private CatalogueVersionBumper versionBumper;
 	private AdminAuditWriter auditWriter;
+	private CoverUrlResolver coverUrlResolver;
 
 	private CatalogueItemAdminService service;
 
@@ -60,12 +65,15 @@ class CatalogueItemAdminServiceTest {
 		catalogueItemRepository = mock(CatalogueItemRepository.class);
 		searchRepository = mock(CatalogueItemSearchRepository.class);
 		publisherRepository = mock(PublisherRepository.class);
+		bookCollectionRepository = mock(BookCollectionRepository.class);
 		entitlementRepository = mock(EntitlementRepository.class);
 		versionBumper = mock(CatalogueVersionBumper.class);
 		auditWriter = mock(AdminAuditWriter.class);
+		coverUrlResolver = mock(CoverUrlResolver.class);
 
 		service = new CatalogueItemAdminService(catalogueItemRepository, searchRepository, publisherRepository,
-				entitlementRepository, versionBumper, auditWriter, new AdminScopeAuthorizer());
+				bookCollectionRepository, entitlementRepository, versionBumper, auditWriter,
+				new AdminScopeAuthorizer(), coverUrlResolver);
 
 		actingAs(AdminRole.SUPER_ADMIN, null, null);
 	}
@@ -93,13 +101,13 @@ class CatalogueItemAdminServiceTest {
 	}
 
 	private static CatalogueItemWrite pdfWrite(String publisherId) {
-		return new CatalogueItemWrite(publisherId, List.of(), "Rights for Robots", null, List.of("Joshua Gellers"),
+		return new CatalogueItemWrite(publisherId, List.of(), null, null, null, "Rights for Robots", null, List.of("Joshua Gellers"),
 				List.of(), List.of(), null, ContentType.PDF, AccessTier.ELITE, List.of("Law"), "en", null, null, null,
 				null, null);
 	}
 
 	private static CatalogueItemWrite audioWrite(String publisherId, Integer duration) {
-		return new CatalogueItemWrite(publisherId, List.of(), "Robots, Read Aloud", null, List.of(), List.of(),
+		return new CatalogueItemWrite(publisherId, List.of(), null, null, null, "Robots, Read Aloud", null, List.of(), List.of(),
 				List.of("A Narrator"), null, ContentType.AUDIO, AccessTier.SUBSCRIPTION, List.of(), "en", null, null,
 				duration, null, null);
 	}
@@ -129,7 +137,7 @@ class CatalogueItemAdminServiceTest {
 	@Test
 	@DisplayName("create PDF with a duration throws VALIDATION_FAILED")
 	void createNonAudioWithDurationThrows() {
-		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of(), "Title", null, List.of(), List.of(),
+		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of(), null, null, null, "Title", null, List.of(), List.of(),
 				List.of(), null, ContentType.PDF, AccessTier.ELITE, List.of(), "en", null, null, 100, null, null);
 
 		assertThatThrownBy(() -> service.create(write)).isInstanceOf(ApiException.class)
@@ -150,7 +158,7 @@ class CatalogueItemAdminServiceTest {
 	@DisplayName("create with status PUBLISHED bumps the catalogue version")
 	void createPublishedBumpsVersion() {
 		when(catalogueItemRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of(), "Title", null, List.of(), List.of(),
+		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of(), null, null, null, "Title", null, List.of(), List.of(),
 				List.of(), null, ContentType.PDF, AccessTier.ELITE, List.of(), "en", null, null, null, null,
 				ItemStatus.PUBLISHED);
 
@@ -167,6 +175,166 @@ class CatalogueItemAdminServiceTest {
 		assertThatThrownBy(() -> service.create(pdfWrite("pub_other"))).isInstanceOf(ApiException.class)
 				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.FORBIDDEN_ROLE));
 		verify(catalogueItemRepository, never()).save(any());
+	}
+
+	// ------------------------------------------------- collection/publisher cross-check
+
+	@Test
+	@DisplayName("create with a collection belonging to another publisher throws VALIDATION_FAILED")
+	void createRejectsACollectionFromAnotherPublisher() {
+		when(bookCollectionRepository.findAllById(List.of("col_1")))
+				.thenReturn(List.of(collection("col_1", "pub_other")));
+		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of("col_1"), null, null, null, "Title", null, List.of(),
+				List.of(), List.of(), null, ContentType.PDF, AccessTier.ELITE, List.of(), "en", null, null, null,
+				null, null);
+
+		assertThatThrownBy(() -> service.create(write)).isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+		verify(catalogueItemRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("create with an unknown collection id throws VALIDATION_FAILED")
+	void createRejectsAnUnknownCollectionId() {
+		when(bookCollectionRepository.findAllById(List.of("col_missing"))).thenReturn(List.of());
+		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of("col_missing"), null, null, null, "Title", null,
+				List.of(), List.of(), List.of(), null, ContentType.PDF, AccessTier.ELITE, List.of(), "en", null, null,
+				null, null, null);
+
+		assertThatThrownBy(() -> service.create(write)).isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+		verify(catalogueItemRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("update with a collection belonging to another publisher throws VALIDATION_FAILED")
+	void updateRejectsACollectionFromAnotherPublisher() {
+		CatalogueItem existing = pdfItem("item_42", "pub_rtlg");
+		when(catalogueItemRepository.findById("item_42")).thenReturn(Optional.of(existing));
+		when(bookCollectionRepository.findAllById(List.of("col_1")))
+				.thenReturn(List.of(collection("col_1", "pub_other")));
+		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of("col_1"), null, null, null, "Title", null, List.of(),
+				List.of(), List.of(), null, ContentType.PDF, AccessTier.ELITE, List.of(), "en", null, null, null,
+				null, null);
+
+		assertThatThrownBy(() -> service.update("item_42", write)).isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+		verify(catalogueItemRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("create with a collection genuinely belonging to the same publisher succeeds")
+	void createAllowsACollectionFromTheSamePublisher() {
+		when(bookCollectionRepository.findAllById(List.of("col_1")))
+				.thenReturn(List.of(collection("col_1", "pub_rtlg")));
+		when(catalogueItemRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of("col_1"), null, null, null, "Title", null, List.of(),
+				List.of(), List.of(), null, ContentType.PDF, AccessTier.ELITE, List.of(), "en", null, null, null,
+				null, null);
+
+		var view = service.create(write);
+
+		assertThat(view.collectionIds()).containsExactly("col_1");
+	}
+
+	// ------------------------------------------------- duplicate ISBN (workstream 2)
+
+	@Test
+	@DisplayName("create with an ISBN nobody holds saves normally")
+	void createsWhenIsbnIsNew() {
+		when(catalogueItemRepository.findByIsbn("9780132350884")).thenReturn(Optional.empty());
+		when(catalogueItemRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+		var view = service.create(isbnWrite("pub_rtlg", "9780132350884"));
+
+		assertThat(view.isbn()).isEqualTo("9780132350884");
+	}
+
+	@Test
+	@DisplayName("create with an ISBN another book already holds throws CODE_TAKEN")
+	void rejectsCreateWhenIsbnAlreadyExists() {
+		when(catalogueItemRepository.findByIsbn("9780132350884"))
+				.thenReturn(Optional.of(isbnItem("item_42", "pub_rtlg", "9780132350884")));
+
+		assertThatThrownBy(() -> service.create(isbnWrite("pub_rtlg", "9780132350884")))
+				.isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.CODE_TAKEN));
+		verify(catalogueItemRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("the duplicate check compares normalised ISBNs, so punctuation and case cannot slip a copy past it")
+	void rejectsCreateWhenIsbnMatchesOnlyAfterNormalisation() {
+		when(catalogueItemRepository.findByIsbn("012345678X"))
+				.thenReturn(Optional.of(isbnItem("item_42", "pub_rtlg", "012345678X")));
+
+		assertThatThrownBy(() -> service.create(isbnWrite("pub_rtlg", "0-123456 78x")))
+				.isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.CODE_TAKEN));
+	}
+
+	@Test
+	@DisplayName("an absent ISBN is never a duplicate and is not even looked up")
+	void allowsCreateWhenIsbnIsNull() {
+		when(catalogueItemRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+		service.create(pdfWrite("pub_rtlg"));
+		service.create(pdfWrite("pub_rtlg"));
+
+		verify(catalogueItemRepository, never()).findByIsbn(any());
+	}
+
+	@Test
+	@DisplayName("update may keep the ISBN the item already holds")
+	void allowsUpdateToKeepItsOwnIsbn() {
+		CatalogueItem existing = isbnItem("item_42", "pub_rtlg", "9780132350884");
+		when(catalogueItemRepository.findById("item_42")).thenReturn(Optional.of(existing));
+		when(catalogueItemRepository.findByIsbn("9780132350884")).thenReturn(Optional.of(existing));
+		when(catalogueItemRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+		var view = service.update("item_42", isbnWrite("pub_rtlg", "9780132350884"));
+
+		assertThat(view.isbn()).isEqualTo("9780132350884");
+	}
+
+	@Test
+	@DisplayName("update may not change an ISBN once it has been set")
+	void rejectsUpdateThatChangesAnAlreadySetIsbn() {
+		CatalogueItem existing = isbnItem("item_42", "pub_rtlg", "9780132350884");
+		when(catalogueItemRepository.findById("item_42")).thenReturn(Optional.of(existing));
+
+		assertThatThrownBy(() -> service.update("item_42", isbnWrite("pub_rtlg", "9780321356680")))
+				.isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+		verify(catalogueItemRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("update may not take an ISBN a different book already holds")
+	void rejectsUpdateWhenIsbnBelongsToAnotherItem() {
+		when(catalogueItemRepository.findById("item_99"))
+				.thenReturn(Optional.of(isbnItem("item_99", "pub_rtlg", null)));
+		when(catalogueItemRepository.findByIsbn("9780132350884"))
+				.thenReturn(Optional.of(isbnItem("item_42", "pub_rtlg", "9780132350884")));
+
+		assertThatThrownBy(() -> service.update("item_99", isbnWrite("pub_rtlg", "9780132350884")))
+				.isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.CODE_TAKEN));
+		verify(catalogueItemRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("the refusal names the existing book only when the caller could already read it")
+	void doesNotNameAnotherPublishersBookInTheRefusal() {
+		actingAs(AdminRole.PUBLISHER_ADMIN, "pub_mine");
+		when(catalogueItemRepository.findByIsbn("9780132350884"))
+				.thenReturn(Optional.of(isbnItem("item_42", "pub_other", "9780132350884")));
+
+		assertThatThrownBy(() -> service.create(isbnWrite("pub_mine", "9780132350884")))
+				.isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.CODE_TAKEN))
+				.hasMessageNotContaining("item_42")
+				.hasMessageNotContaining("pub_other");
 	}
 
 	// ---------------------------------------------------------------- get
@@ -232,7 +400,7 @@ class CatalogueItemAdminServiceTest {
 		CatalogueItem existing = pdfItem("item_42", "pub_rtlg");
 		when(catalogueItemRepository.findById("item_42")).thenReturn(Optional.of(existing));
 		when(catalogueItemRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of(), "Title", null, List.of(), List.of(),
+		CatalogueItemWrite write = new CatalogueItemWrite("pub_rtlg", List.of(), null, null, null, "Title", null, List.of(), List.of(),
 				List.of(), null, ContentType.PDF, AccessTier.ELITE, List.of(), "en", null, null, null, null,
 				ItemStatus.ARCHIVED);
 
@@ -306,8 +474,8 @@ class CatalogueItemAdminServiceTest {
 
 		var result = service.list(null, null, null, null, null, null, null, null, null);
 
-		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("active");
-		assertThat(result.items().get(1).entitlementStatus()).isEqualTo("none");
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("ACTIVE");
+		assertThat(result.items().get(1).entitlementStatus()).isEqualTo("NONE");
 	}
 
 	@Test
@@ -323,7 +491,7 @@ class CatalogueItemAdminServiceTest {
 
 		var result = service.list(null, null, null, null, null, null, null, null, "inst_7f3");
 
-		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("active");
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("ACTIVE");
 	}
 
 	@Test
@@ -365,7 +533,7 @@ class CatalogueItemAdminServiceTest {
 
 		var result = service.list(null, null, null, null, null, null, null, null, "inst_other");
 
-		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("none");
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("NONE");
 		verify(entitlementRepository, never()).findByInstitutionId(eq("inst_other"), any());
 	}
 
@@ -389,10 +557,22 @@ class CatalogueItemAdminServiceTest {
 
 		var result = service.list(null, null, null, null, null, null, null, null, null);
 
-		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("active");
+		assertThat(result.items().get(0).entitlementStatus()).isEqualTo("ACTIVE");
 	}
 
 	// ---------------------------------------------------------------- fixtures
+
+	private static CatalogueItemWrite isbnWrite(String publisherId, String isbn) {
+		return new CatalogueItemWrite(publisherId, List.of(), null, null, null, "Rights for Robots", null, List.of("Joshua Gellers"),
+				List.of(), List.of(), isbn, ContentType.PDF, AccessTier.ELITE, List.of("Law"), "en", null, null, null,
+				null, null);
+	}
+
+	private static CatalogueItem isbnItem(String id, String publisherId, String isbn) {
+		CatalogueItem item = pdfItem(id, publisherId);
+		item.setIsbn(isbn);
+		return item;
+	}
 
 	private static CatalogueItem pdfItem(String id, String publisherId) {
 		CatalogueItem item = new CatalogueItem();
@@ -404,6 +584,83 @@ class CatalogueItemAdminServiceTest {
 		item.setStatus(ItemStatus.DRAFT);
 		item.setContentState(ContentState.NONE);
 		return item;
+	}
+
+	// ---------------------------------------------------------------- hierarchy
+
+	private static CatalogueItemWrite containerWrite(com.tf.reader.catalogue.entity.WorkType workType,
+			String parentId) {
+		return new CatalogueItemWrite("pub_rtlg", List.of(), workType, parentId, 1, "Journal of X", null, List.of(),
+				List.of(), List.of(), null, null, null, List.of(), "en", null, null, null, null, null);
+	}
+
+	@Test
+	@DisplayName("a valid Journal -> Volume -> Issue -> Article chain is accepted")
+	void validHierarchyChainIsAccepted() {
+		when(catalogueItemRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+		var journal = service.create(containerWrite(com.tf.reader.catalogue.entity.WorkType.JOURNAL, null));
+		when(catalogueItemRepository.findById(journal.id())).thenReturn(Optional.of(asItem(journal)));
+
+		var volume = service.create(containerWrite(com.tf.reader.catalogue.entity.WorkType.VOLUME, journal.id()));
+		when(catalogueItemRepository.findById(volume.id())).thenReturn(Optional.of(asItem(volume)));
+
+		var issue = service.create(containerWrite(com.tf.reader.catalogue.entity.WorkType.ISSUE, volume.id()));
+		when(catalogueItemRepository.findById(issue.id())).thenReturn(Optional.of(asItem(issue)));
+
+		CatalogueItemWrite articleWrite = new CatalogueItemWrite("pub_rtlg", List.of(),
+				com.tf.reader.catalogue.entity.WorkType.ARTICLE, issue.id(), 1, "Paper A", null, List.of(), List.of(),
+				List.of(), null, ContentType.PDF, AccessTier.SUBSCRIPTION, List.of(), "en", null, null, null, null,
+				null);
+		var article = service.create(articleWrite);
+
+		assertThat(volume.workType()).isEqualTo(com.tf.reader.catalogue.entity.WorkType.VOLUME);
+		assertThat(volume.parentId()).isEqualTo(journal.id());
+		assertThat(article.workType()).isEqualTo(com.tf.reader.catalogue.entity.WorkType.ARTICLE);
+		assertThat(article.parentId()).isEqualTo(issue.id());
+	}
+
+	@Test
+	@DisplayName("an ISSUE whose parentId points at a JOURNAL (not a VOLUME) is VALIDATION_FAILED")
+	void wrongParentWorkTypeIsRejected() {
+		when(catalogueItemRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+		var journal = service.create(containerWrite(com.tf.reader.catalogue.entity.WorkType.JOURNAL, null));
+		when(catalogueItemRepository.findById(journal.id())).thenReturn(Optional.of(asItem(journal)));
+
+		CatalogueItemWrite badIssue = containerWrite(com.tf.reader.catalogue.entity.WorkType.ISSUE, journal.id());
+
+		assertThatThrownBy(() -> service.create(badIssue)).isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+	}
+
+	@Test
+	@DisplayName("a container carrying contentType/accessTier is VALIDATION_FAILED")
+	void containerWithLeafFieldsIsRejected() {
+		CatalogueItemWrite bad = new CatalogueItemWrite("pub_rtlg", List.of(),
+				com.tf.reader.catalogue.entity.WorkType.JOURNAL, null, 1, "Journal of X", null, List.of(), List.of(),
+				List.of(), null, ContentType.PDF, AccessTier.SUBSCRIPTION, List.of(), "en", null, null, null, null,
+				null);
+
+		assertThatThrownBy(() -> service.create(bad)).isInstanceOf(ApiException.class)
+				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+	}
+
+	private static CatalogueItem asItem(com.tf.reader.admin.dto.CatalogueItemView view) {
+		CatalogueItem item = new CatalogueItem();
+		item.setId(view.id());
+		item.setPublisherId(view.publisherId());
+		item.setWorkType(view.workType());
+		item.setParentId(view.parentId());
+		item.setSequence(view.sequence());
+		item.setStatus(view.status());
+		return item;
+	}
+
+	private static BookCollection collection(String id, String publisherId) {
+		BookCollection collection = new BookCollection();
+		collection.setId(id);
+		collection.setPublisherId(publisherId);
+		return collection;
 	}
 
 	private static com.tf.reader.catalogue.entity.Publisher publisher(String id, String name) {

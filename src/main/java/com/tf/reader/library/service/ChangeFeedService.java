@@ -21,8 +21,8 @@ import com.tf.reader.library.repository.ChangeLogRepository;
 @Service
 public class ChangeFeedService {
 
-	public static final int DEFAULT_SIZE = 20;
-	public static final int MAX_SIZE = 100;
+	public static final int DEFAULT_SIZE = 50;
+	public static final int MAX_SIZE = 200;
 
 	private final ChangeLogRepository changeLog;
 	private final Clock clock;

@@ -33,7 +33,8 @@ import com.tf.reader.catalogue.api.InstitutionRef;
 /**
  * What the ACS leaves behind, and where it sends the browser - both matter as much as what it
  * mints. The browser is mid-redirect from the IdP here, so success and refusal both end at a
- * deep link, never at a JSON body.
+ * deep link, never at a JSON body. No demo users to seed any more: a completed sign-in mints its
+ * own device id rather than resolving one from a directory.
  */
 @SpringBootTest(properties = { "tf.security.jwt.secret=" + SamlAuthenticationSuccessHandlerTest.SECRET })
 @Import({ TestcontainersConfiguration.class, SamlAuthenticationSuccessHandlerTest.FixedTestConfig.class })
@@ -84,7 +85,7 @@ class SamlAuthenticationSuccessHandlerTest {
 
 		assertThat(response.getStatus()).isEqualTo(302);
 		assertThat(response.getRedirectedUrl())
-				.startsWith(SamlAuthenticationSuccessHandler.DEEP_LINK_CALLBACK + "?code=");
+				.startsWith(AuthorizationCodeStore.DEEP_LINK_CALLBACK + "?code=");
 		assertThat(session.isInvalid())
 				.describedAs("the sign-in session must not outlive the code it produced")
 				.isTrue();
@@ -99,7 +100,7 @@ class SamlAuthenticationSuccessHandlerTest {
 				samlAuthentication());
 
 		String code = response.getRedirectedUrl().substring(
-				(SamlAuthenticationSuccessHandler.DEEP_LINK_CALLBACK + "?code=").length());
+				(AuthorizationCodeStore.DEEP_LINK_CALLBACK + "?code=").length());
 
 		TokenResponse tokens = authorizationCodes.consume(code).orElseThrow();
 		assertThat(tokens.accessToken()).isNotBlank();
@@ -122,7 +123,7 @@ class SamlAuthenticationSuccessHandlerTest {
 
 		assertThat(response.getStatus()).isEqualTo(302);
 		assertThat(response.getRedirectedUrl()).isEqualTo(
-				SamlAuthenticationSuccessHandler.DEEP_LINK_CALLBACK + "?error=SAML_AUTHENTICATION_FAILED");
+				AuthorizationCodeStore.DEEP_LINK_CALLBACK + "?error=SAML_AUTHENTICATION_FAILED");
 		assertThat(session.isInvalid()).isTrue();
 	}
 

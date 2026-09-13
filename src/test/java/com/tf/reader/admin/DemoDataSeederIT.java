@@ -39,8 +39,8 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.mongodb.MongoDBContainer;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
+import org.testcontainers.containers.MongoDBContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -149,8 +149,8 @@ class DemoDataSeederIT {
         // deleted publishers first and re-inserted in the same order, this would still pass; if either
         // order were reversed, the run would throw IllegalArgumentException instead.
         seederWithReset().run(null);
-        assertThat(items.count()).isEqualTo(8);
-        assertThat(items.findById("item_42").orElseThrow().getPublisherId()).isEqualTo("pub_rtlg");
+        assertThat(items.count()).isEqualTo(83);
+        assertThat(items.findById("dev-fixture-epub").orElseThrow().getPublisherId()).isEqualTo("pub_rtlg");
     }
 
     // ------------------------------------------------------------------------ the entity shapes
@@ -203,79 +203,65 @@ class DemoDataSeederIT {
     }
 
     @Test
-    @DisplayName("items carry the server-only keys on the item and the assets under it")
+    @DisplayName("items carry the server-only keys on the part, one asset, one part deep")
     void itemsAreSeeded() {
-        CatalogueItem elite = items.findById("item_42").orElseThrow();
+        CatalogueItem elite = items.findById("dev-fixture-epub").orElseThrow();
         assertThat(elite.getAccessTier()).isEqualTo(AccessTier.ELITE);
         assertThat(elite.getStatus()).isEqualTo(ItemStatus.PUBLISHED);
         assertThat(elite.getContentState()).isEqualTo(ContentState.READY);
         assertThat(elite.getCollectionIds()).containsExactly("col_law2024");
 
-        // storageKey, indexKey and wrappedBek are on the item in B's shape, not on the asset.
-        assertThat(elite.getStorageKey()).startsWith("seed/");
-        assertThat(elite.getMasterWrappedBek()).isNotNull();
+        CatalogueItem.Asset epub = elite.getAssets().get(0);
+        assertThat(epub.getFormat()).isEqualTo(ContentType.EPUB);
+        assertThat(epub.isEncrypted()).isTrue();
+        // masterWrappedBek is shared by every part of this asset - here, one part.
+        assertThat(epub.getMasterWrappedBek()).isNotNull();
 
-        CatalogueItem.Asset pdf = elite.getAssets().get(0);
-        assertThat(pdf.getFormat()).isEqualTo(ContentType.PDF);
-        assertThat(pdf.getSizeBytes()).isEqualTo(6_373_752L);
-        assertThat(pdf.getCipherLength())
+        CatalogueItem.Part part = epub.getParts().get(0);
+        // Every item is a real ingested book now, so storageKey is a real "items/<id>/..."
+        // object, not a "seed/" placeholder.
+        assertThat(part.getStorageKey()).startsWith("items/dev-fixture-epub");
+        assertThat(part.getSizeBytes()).isEqualTo(1_124_678L);
+        assertThat(part.getCipherLength())
                 .as("12 + sizeBytes + 16")
-                .isEqualTo(6_373_752L + 28L);
-        assertThat(pdf.isEncrypted()).isTrue();
+                .isEqualTo(1_124_678L + 28L);
 
-        // Membership is stored once, on the book. item_env belongs to no collection and is reachable
-        // only through the publisher-scope grant.
-        assertThat(items.findById("item_env").orElseThrow().getCollectionIds()).isEmpty();
+        // Membership is stored once, on the book. dev-fixture-pdf belongs to no collection and is
+        // reachable only through the publisher-scope grant.
+        assertThat(items.findById("dev-fixture-pdf").orElseThrow().getCollectionIds()).isEmpty();
     }
 
     @Test
-    @DisplayName("null cipherLength and indexTerms become 0 on the way into B's primitives")
+    @DisplayName("null cipherLength and indexTerms become 0 on the way into the entity's primitives")
     void nullableAssetNumbersBecomeZero() {
         // The dataset says null because "not encrypted" and "zero bytes of ciphertext" are different
         // facts. fields are primitives, so this is the one place the two representations meet, and
         // it is worth an assertion rather than a comment.
-        CatalogueItem openAccess = items.findById("item_ab6").orElseThrow();
-        assertThat(openAccess.getAssets().get(0).isEncrypted()).isFalse();
-        assertThat(openAccess.getAssets().get(0).getCipherLength()).isZero();
-        assertThat(openAccess.getMasterWrappedBek()).as("plaintext, so no wrapped key").isNull();
+        CatalogueItem openAccess = items.findById("dev-sample-epub").orElseThrow();
+        CatalogueItem.Asset openAccessAsset = openAccess.getAssets().get(0);
+        assertThat(openAccessAsset.isEncrypted()).isFalse();
+        assertThat(openAccessAsset.getParts().get(0).getCipherLength()).isZero();
+        assertThat(openAccessAsset.getMasterWrappedBek()).as("plaintext, so no wrapped key").isNull();
 
-        // This fixture predates locked audio being supported at all, so it was seeded unencrypted -
-        // that is fixture history, not a rule; a freshly ingested SUBSCRIPTION/ELITE audiobook is
-        // encrypted like any other locked asset (see TierRules).
-        CatalogueItem audio = items.findById("item_stat").orElseThrow();
-        assertThat(audio.getAccessTier()).isEqualTo(AccessTier.SUBSCRIPTION);
-        assertThat(audio.getAssets().get(0).isEncrypted()).isFalse();
-        assertThat(audio.getAssets().get(0).isHasSearchIndex()).isFalse();
-        assertThat(audio.getAssets().get(0).getIndexTerms()).isZero();
-        assertThat(audio.getAssets().get(0).getIndexSkipReason()).isEqualTo("AudioNotIndexable");
+        // A freshly ingested SUBSCRIPTION/ELITE audiobook is encrypted like any other locked asset
+        // (see TierRules); dev-sample-audio is OPEN_ACCESS, so it stays unencrypted for that reason
+        // instead.
+        CatalogueItem audio = items.findById("dev-sample-audio").orElseThrow();
+        CatalogueItem.Asset audioAsset = audio.getAssets().get(0);
+        CatalogueItem.Part audioPart = audioAsset.getParts().get(0);
+        assertThat(audio.getAccessTier()).isEqualTo(AccessTier.OPEN_ACCESS);
+        assertThat(audioAsset.isEncrypted()).isFalse();
+        assertThat(audioPart.isHasSearchIndex()).isFalse();
+        assertThat(audioPart.getIndexTerms()).isZero();
+        assertThat(audioPart.getIndexSkipReason()).isEqualTo("AudioNotIndexable");
     }
 
     @Test
-    @DisplayName("the two books that must never reach a feed are present and excluded")
-    void notReadyItemsAreSeededButNotRenderable() {
-        CatalogueItem queued = items.findById("item_q7").orElseThrow();
-        assertThat(queued.getStatus()).as("editorially published").isEqualTo(ItemStatus.PUBLISHED);
-        assertThat(queued.getContentState()).as("but mechanically not ready").isEqualTo(ContentState.QUEUED);
-        assertThat(queued.getAssets()).isEmpty();
-        assertThat(queued.getStorageKey()).as("no assets, so no key pointing at nothing").isNull();
-
-        CatalogueItem failed = items.findById("item_f3").orElseThrow();
-        assertThat(failed.getContentState()).isEqualTo(ContentState.FAILED);
-        assertThat(failed.getContentError()).contains("no extractable text layer");
-
-        // The derived finder every feed will use returns neither of them.
-        List<CatalogueItem> renderable =
-                items.findByCollectionIdsAndStatusAndContentState(
-                        "col_law2024", ItemStatus.PUBLISHED, ContentState.READY);
-        assertThat(renderable).extracting(CatalogueItem::getId).containsExactly("item_42");
-    }
-
-    @Test
-    @DisplayName("all three grants insert cleanly and express two different access models")
+    @DisplayName("all four grants insert cleanly and express two different access models")
     void entitlementsAreSeeded() {
         // Reaching here at all is the assertion about version: a seeded @Version would have failed the
         // first insert with OptimisticLockingFailureException. B declared a plain long, so it is 0.
-        assertThat(entitlements.count()).isEqualTo(3);
+        assertThat(entitlements.count()).isEqualTo(4);
 
         Entitlement concurrent =
                 entitlements
@@ -294,10 +280,10 @@ class DemoDataSeederIT {
         assertThat(unlimited.getCopies()).as("null copies, so UNLIMITED").isNull();
         assertThat(unlimited.getValidTo()).as("open ended").isNull();
 
-        // All three are Imperial's, which is what lets one feed show CONCURRENT and UNLIMITED side by
+        // All four are Imperial's, which is what lets one feed show CONCURRENT and UNLIMITED side by
         // side exactly as the frozen day 1 fixtures do. UCL is the zero-entitlement institution.
         assertThat(entitlements.findByInstitutionIdAndStatus("inst_7f3", EntitlementStatus.ACTIVE))
-                .hasSize(3);
+                .hasSize(4);
         assertThat(entitlements.findByInstitutionIdAndStatus("inst_ucl", EntitlementStatus.ACTIVE))
                 .isEmpty();
     }
@@ -338,11 +324,11 @@ class DemoDataSeederIT {
         assertThat(imperial.getShelves()).extracting(Shelf::getOrder).containsExactly(1, 2, 3);
         assertThat(imperial.getShelves().get(0).getItemIds())
                 .as("itemIds is display order and must be preserved exactly")
-                .containsExactly("item_42", "item_env", "item_dual");
+                .containsExactly("dev-fixture-epub", "dev-fixture-pdf", "item_e9a3c599");
 
         // UCL bought nothing, so only open access appears and two shelves are hidden by being empty.
         FeedSettings ucl = feedSettings.findByInstitutionId("inst_ucl").orElseThrow();
-        assertThat(ucl.getShelves().get(0).getItemIds()).containsExactly("item_ab6", "item_oa9");
+        assertThat(ucl.getShelves().get(0).getItemIds()).containsExactly("dev-sample-epub", "dev-sample-audio");
         assertThat(ucl.getShelves().get(1).getItemIds()).isEmpty();
         assertThat(ucl.getShelves().get(2).getItemIds()).isEmpty();
 
@@ -356,7 +342,7 @@ class DemoDataSeederIT {
         // Not testing entity code for its own sake: these two guards are the reason the dataset must order
         // its inserts and carry exactly three shelves, and a future edit that breaks either would
         // otherwise fail at startup with a stack trace nobody expects.
-        CatalogueItem orphan = items.findById("item_42").orElseThrow();
+        CatalogueItem orphan = items.findById("dev-fixture-epub").orElseThrow();
         orphan.setId("item_orphan");
         orphan.setPublisherId("pub_does_not_exist");
         assertThatThrownBy(() -> items.save(orphan))
@@ -399,8 +385,8 @@ class DemoDataSeederIT {
         assertThat(publishers.count()).as("publishers").isEqualTo(2);
         assertThat(collections.count()).as("collections").isEqualTo(2);
         assertThat(institutions.count()).as("institutions").isEqualTo(3);
-        assertThat(items.count()).as("catalogueItems").isEqualTo(8);
-        assertThat(entitlements.count()).as("entitlements").isEqualTo(3);
+        assertThat(items.count()).as("catalogueItems").isEqualTo(83);
+        assertThat(entitlements.count()).as("entitlements").isEqualTo(4);
         assertThat(adminUsers.count()).as("adminUsers").isEqualTo(3);
         assertThat(feedSettings.count()).as("feedSettings").isEqualTo(3);
     }

@@ -19,6 +19,7 @@ import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
+import com.tf.reader.ingest.service.CoverUrlResolver;
 
 import lombok.RequiredArgsConstructor;
 
@@ -36,6 +37,7 @@ public class CatalogueBatchService {
 
 	private final CatalogueItemRepository catalogueItemRepository;
 	private final EntitlementQuery entitlementQuery;
+	private final CoverUrlResolver coverUrlResolver;
 
 	public BatchItemsResponse batch(SubjectRef subject, BatchItemsRequest request) {
 		List<String> ids = request.ids();
@@ -51,16 +53,24 @@ public class CatalogueBatchService {
 		List<String> notFound = new ArrayList<>();
 		List<String> denied = new ArrayList<>();
 
+		// An archived (or still-draft) item is treated the same as one that does not exist - the
+		// contract is explicit that notFound covers both - and is filtered out before the
+		// entitlement check, which is one call for the whole batch rather than one per id.
+		List<String> eligibleIds = new ArrayList<>();
 		for (String id : ids) {
 			CatalogueItem item = found.get(id);
-			// An archived (or still-draft) item is treated the same as one that does not exist -
-			// the contract is explicit that notFound covers both.
 			if (item == null || item.getStatus() != ItemStatus.PUBLISHED) {
 				notFound.add(id);
-				continue;
 			}
+			else {
+				eligibleIds.add(id);
+			}
+		}
 
-			EntitlementDecision decision = entitlementQuery.check(subject, id);
+		Map<String, EntitlementDecision> decisions = entitlementQuery.checkAll(subject, eligibleIds);
+		for (String id : eligibleIds) {
+			CatalogueItem item = found.get(id);
+			EntitlementDecision decision = decisions.get(id);
 			if (!decision.entitled()) {
 				denied.add(id);
 				continue;
@@ -73,11 +83,13 @@ public class CatalogueBatchService {
 	}
 
 	private BatchItem toBatchItem(CatalogueItem item, EntitlementDecision decision) {
-		boolean hasSearchIndex = item.getAssets() != null
-				&& item.getAssets().stream().anyMatch(CatalogueItem.Asset::isHasSearchIndex);
+		boolean hasSearchIndex = item.getAssets() != null && item.getAssets().stream()
+				.filter(asset -> asset.getParts() != null)
+				.flatMap(asset -> asset.getParts().stream())
+				.anyMatch(CatalogueItem.Part::isHasSearchIndex);
 
-		return new BatchItem(item.getId(), item.getTitle(), item.getAuthors(), item.getCoverUrl(), item.getIsbn(),
-				item.getContentType(), item.getAccessTier(), decision.copies(), hasSearchIndex);
+		return new BatchItem(item.getId(), item.getTitle(), item.getAuthors(), coverUrlResolver.resolve(item),
+				item.getIsbn(), item.getContentType(), item.getAccessTier(), decision.copies(), hasSearchIndex);
 	}
 
 }

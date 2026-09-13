@@ -138,6 +138,61 @@ class AuthTransactionStoreTest {
 	}
 
 	@Test
+	void openingWithNoUsernameHintLeavesItNull() {
+		// The default path, and the only one that matters for a real IdP: nothing about this
+		// changes unless a caller explicitly opts in by sending a username.
+		AuthTransaction transaction = store.open("inst_7f3");
+
+		assertThat(transaction.usernameHint()).isNull();
+	}
+
+	@Test
+	void openingWithAUsernameHintRecordsIt() {
+		AuthTransaction transaction = store.open("inst_7f3", "jane.roe@example.com");
+
+		assertThat(transaction.usernameHint()).isEqualTo("jane.roe@example.com");
+		assertThat(transaction.institutionId()).isEqualTo("inst_7f3");
+	}
+
+	@Test
+	void openingWithNoDeviceIdLeavesItNull() {
+		// The default path: a device signing in for the first time has none to present.
+		AuthTransaction transaction = store.open("inst_7f3", null, null);
+
+		assertThat(transaction.deviceId()).isNull();
+	}
+
+	@Test
+	void openingWithADeviceIdRecordsIt() {
+		AuthTransaction transaction = store.open("inst_7f3", null, "dev_abc123");
+
+		assertThat(transaction.deviceId()).isEqualTo("dev_abc123");
+		assertThat(transaction.institutionId()).isEqualTo("inst_7f3");
+	}
+
+	@Test
+	void peekingReadsTheHintWithoutSpendingTheTransaction() {
+		// The mock IdP has to read this before the ACS runs consume() for real. If peek spent the
+		// transaction, the sign-in it belongs to could never complete.
+		AuthTransaction opened = store.open("inst_7f3", "jane.roe@example.com");
+
+		assertThat(store.peek(opened.id())).contains(opened);
+		assertThat(store.consume(opened.id()))
+				.describedAs("still consumable after being peeked")
+				.contains(opened);
+	}
+
+	@Test
+	void peekingAnUnknownOrExpiredIdIsEmpty() {
+		AuthTransaction opened = store.open("inst_7f3");
+		clock.advance(AuthTransactionStore.LIFETIME);
+
+		assertThat(store.peek("authTxn_madeUp")).isEmpty();
+		assertThat(store.peek(null)).isEmpty();
+		assertThat(store.peek(opened.id())).isEmpty();
+	}
+
+	@Test
 	void anUnknownTransactionIsRejected() {
 		assertThat(store.consume("authTxn_madeUp")).isEmpty();
 		assertThat(store.consume(null)).isEmpty();

@@ -13,7 +13,12 @@ final class LeaseKeys {
 	}
 
 	static String itemKey(String scope, String itemId) {
-		return ITEM_KEY_PREFIX + scope + ":" + itemId;
+		// A null scope (from acquire() which has no institution context) produces
+		// "lease::itemId" — the scope segment is deliberately empty rather than
+		// the string "null", which Java concatenation would silently produce and
+		// which could collide with a real institution named "null".
+		String safeScope = scope == null ? "" : scope;
+		return ITEM_KEY_PREFIX + safeScope + ":" + itemId;
 	}
 
 	static String tokenKey(String token) {

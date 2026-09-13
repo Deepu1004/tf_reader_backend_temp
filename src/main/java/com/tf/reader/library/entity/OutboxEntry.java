@@ -3,6 +3,7 @@ package com.tf.reader.library.entity;
 import java.time.Instant;
 
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import com.tf.reader.library.api.ChangeReason;
@@ -37,7 +38,15 @@ public class OutboxEntry {
 	private String holdId;
 	private Instant occurredAt;
 
-	/** When the original write first failed. Replay drains oldest first. */
+	/**
+	 * When the original write first failed. Replay drains oldest first.
+	 *
+	 * <p><b>Indexed because the replay sorts on it every minute.</b> An unindexed sort is done in
+	 * memory and aborts past 32MB — and this collection only fills when something has already gone
+	 * wrong, so the limit would be reached exactly when there is a backlog to drain and the replay
+	 * is the thing that matters. {@code auto-index-creation} builds it at startup.
+	 */
+	@Indexed
 	private Instant failedAt;
 
 	/** How many replay attempts have run against this entry, for observability only. */

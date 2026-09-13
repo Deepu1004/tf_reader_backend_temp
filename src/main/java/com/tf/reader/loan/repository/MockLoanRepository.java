@@ -19,8 +19,7 @@ import com.tf.reader.loan.entity.LoanStatus;
  * filter and each tier is visible.
  *
  * <p>This is a seam, not the store. The real {@code loans} collection is the Mongo-backed
- * {@link LoanRepository}; this class never replaces it — it only holds deterministic sample data,
- * exactly as {@code auth.repository.MockUserRepository} does for users.
+ * {@link LoanRepository}; this class never replaces it — it only holds deterministic sample data.
  */
 @Component
 public class MockLoanRepository {

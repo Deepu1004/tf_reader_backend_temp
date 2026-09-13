@@ -15,6 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.tf.reader.auth.model.CurrentUser;
 import com.tf.reader.auth.model.UserType;
 import com.tf.reader.auth.security.CurrentUserAuthenticationToken;
+import com.tf.reader.auth.service.SessionQueryImpl;
 import com.tf.reader.common.error.GlobalExceptionHandler;
 import com.tf.reader.library.api.ChangeReason;
 import com.tf.reader.library.controller.ChangesController;
@@ -52,7 +53,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * both exercised here rather than asserted in isolation.
  */
 @WebMvcTest(controllers = { LibraryController.class, ChangesController.class })
-@Import({ CurrentReaderResolver.class, GlobalExceptionHandler.class })
+@Import({ CurrentReaderResolver.class, SessionQueryImpl.class, GlobalExceptionHandler.class })
 class LibraryEndpointsWebTest {
 
 	private static final Instant NOW = Instant.parse("2026-08-20T10:00:00Z");

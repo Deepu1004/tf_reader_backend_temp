@@ -7,9 +7,10 @@ import com.tf.reader.catalogue.api.SubjectRef;
 /**
  * Read model describing the current session.
  *
- * <p>PROPOSED by Deepak (reading), as the consumer — the read broker's controller needs
- * exactly this shape to build a {@link SubjectRef} without importing {@code auth.model}.
- * Change it if it is wrong for another lane's use.
+ * <p>Originally proposed by Deepak (reading) as the consumer — the read broker's controller needs
+ * exactly this shape to build a {@link SubjectRef} without importing {@code auth.model}. Now also
+ * consumed by {@code library.support.CurrentReaderResolver}. Change it if it is wrong for another
+ * lane's use.
  *
  * <p>{@code institutionId} is null for an individual subscriber. That is not the same as
  * belonging to every institution, so every institution-scoped rule must treat it as

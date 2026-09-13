@@ -24,7 +24,7 @@ import com.tf.reader.common.error.ApiException;
  *
  * <p>HTTP only in spirit, though it now does more than write a body: the browser here is
  * mid-redirect from the IdP, not a fetch call that could read a JSON response, so this handler's
- * only job on either path is to end up at {@link #DEEP_LINK_CALLBACK}. On success that means
+ * only job on either path is to end up at {@link AuthorizationCodeStore#DEEP_LINK_CALLBACK}. On success that means
  * minting a refresh token ({@link ReaderSessionService}) alongside the access token
  * {@link SamlAuthenticationService} already minted, stashing both behind a one-time code
  * ({@link AuthorizationCodeStore}), and redirecting with it. Neither token is ever placed in the
@@ -32,9 +32,6 @@ import com.tf.reader.common.error.ApiException;
  */
 @Component
 public class SamlAuthenticationSuccessHandler implements AuthenticationSuccessHandler {
-
-	/** Where the browser is sent once the ACS is done, success or failure. */
-	public static final String DEEP_LINK_CALLBACK = "tfreader://auth/callback";
 
 	/** The parameter the IdP echoes our transaction id back in. */
 	private static final String RELAY_STATE = "RelayState";
@@ -63,16 +60,16 @@ public class SamlAuthenticationSuccessHandler implements AuthenticationSuccessHa
 			IssuedRefreshToken refreshToken = readerSessions.createSession(result.user());
 			long expiresIn = Duration.between(clock.instant(), result.expiresAt()).getSeconds();
 			String code = authorizationCodes.issue(
-					new TokenResponse(result.token(), refreshToken.value(), expiresIn));
+					new TokenResponse(result.token(), refreshToken.value(), expiresIn, result.user().userId()));
 
-			response.sendRedirect(DEEP_LINK_CALLBACK + "?code=" + code);
+			response.sendRedirect(AuthorizationCodeStore.DEEP_LINK_CALLBACK + "?code=" + code);
 		}
 		catch (ApiException failure) {
 			// A valid assertion can still fail to become a sign-in - an expired transaction, or
 			// an identity with no membership at the institution it was started for. The browser
 			// is mid-redirect either way, so the refusal travels the same path as success: back
 			// to the app, which is the only thing that can read a query parameter here.
-			response.sendRedirect(DEEP_LINK_CALLBACK + "?error=" + failure.getCode().name());
+			response.sendRedirect(AuthorizationCodeStore.DEEP_LINK_CALLBACK + "?error=" + failure.getCode().name());
 		}
 		finally {
 			discardTheSignInSession(request);

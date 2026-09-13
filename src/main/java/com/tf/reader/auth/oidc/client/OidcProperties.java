@@ -1,6 +1,5 @@
 package com.tf.reader.auth.oidc.client;
 
-import java.time.Duration;
 import java.util.List;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -22,56 +21,47 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * metadata url carries the tenant name and the policy while the issuer carries the directory
  * guid. Deriving one from the other is the mistake that ends with the issuer unchecked.
  *
- * @param clientId         our client id at the provider
- * @param clientSecret     the client secret. From the environment; never committed
- * @param issuer           the exact {@code iss} every ID token must carry
- * @param authorizationUri where the browser is sent to authenticate
- * @param tokenUri         where the backend exchanges the authorization code, server to server
- * @param jwkSetUri        where the provider publishes the keys its ID tokens are signed with
- * @param redirectUri      our callback. Must be registered at the provider, character for
- *                         character, and is never taken from a request
- * @param scopes           requested scopes. {@code openid} is what makes this OIDC rather than
- *                         plain OAuth 2.0 - without it there is no ID token at all
- * @param transactionTtl   how long a sign-in may take before its transaction expires
- * @param claims           which ID token claims we are willing to read
+ * @param clientId     our client id at the provider
+ * @param clientSecret the client secret. From the environment; never committed
+ * @param issuer       the exact {@code iss} every ID token must carry
+ * @param tokenUri     where the backend exchanges the reader's credentials for tokens, server to
+ *                     server - the only endpoint this relying party ever calls now that sign-in
+ *                     is the password grant rather than a browser redirect
+ * @param jwkSetUri    where the provider publishes the keys its ID tokens are signed with
+ * @param scopes       requested scopes. {@code openid} is what makes this OIDC rather than plain
+ *                     OAuth 2.0 - without it there is no ID token at all
+ * @param claims       which ID token claims we are willing to read
  */
 @ConfigurationProperties(prefix = "tnf.auth.oidc")
 public record OidcProperties(
 		String clientId,
 		String clientSecret,
 		String issuer,
-		String authorizationUri,
 		String tokenUri,
 		String jwkSetUri,
-		String redirectUri,
 		List<String> scopes,
-		Duration transactionTtl,
 		Claims claims) {
 
 	private static final List<String> DEFAULT_SCOPES = List.of("openid", "profile", "email");
 
-	/** Long enough for a human to work through a sign-in page, short enough to be useless later. */
-	private static final Duration DEFAULT_TRANSACTION_TTL = Duration.ofMinutes(10);
-
 	public OidcProperties {
 		scopes = (scopes == null || scopes.isEmpty()) ? DEFAULT_SCOPES : List.copyOf(scopes);
-		transactionTtl = (transactionTtl != null) ? transactionTtl : DEFAULT_TRANSACTION_TTL;
 		claims = (claims != null) ? claims : Claims.defaults();
 	}
 
-	/** The scopes as the space-delimited string an authorization request carries. */
+	/** The scopes as the space-delimited string a token request carries. */
 	public String scopeParameter() {
 		return String.join(" ", scopes);
 	}
 
 	/** Defaults with one issuer set, for a caller constructing this outside Spring. */
 	public static OidcProperties forIssuer(String issuer) {
-		return new OidcProperties(null, null, issuer, null, null, null, null, null, null, null);
+		return new OidcProperties(null, null, issuer, null, null, null, null);
 	}
 
 	/** Defaults with a claim mapping set, for the tests that vary it. */
 	public static OidcProperties withClaims(Claims claims) {
-		return new OidcProperties(null, null, null, null, null, null, null, null, null, claims);
+		return new OidcProperties(null, null, null, null, null, null, claims);
 	}
 
 	/**

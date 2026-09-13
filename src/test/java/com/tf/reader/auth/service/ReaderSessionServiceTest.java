@@ -1,6 +1,7 @@
 package com.tf.reader.auth.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import java.util.List;
 import java.util.Optional;
@@ -82,5 +83,22 @@ class ReaderSessionServiceTest {
 		assertThat(readerSessions.revokeForExchange(first.value())).isPresent();
 		// Rotating the first session must not have touched the second.
 		assertThat(readerSessions.revokeForExchange(second.value())).isPresent();
+	}
+
+	@Test
+	void logoutRevokesTheSessionSoItCanNoLongerBeExchanged() {
+		IssuedRefreshToken issued = readerSessions.createSession(MEMBER);
+
+		readerSessions.revoke(issued.value());
+
+		assertThat(readerSessions.revokeForExchange(issued.value()))
+				.describedAs("a logged-out session must not still be live for refresh")
+				.isEmpty();
+	}
+
+	@Test
+	void logoutOfATokenThatWasNeverIssuedDoesNothing() {
+		// Idempotent by design: the caller's goal is "not signed in", which is already true.
+		assertThatCode(() -> readerSessions.revoke("never-issued")).doesNotThrowAnyException();
 	}
 }

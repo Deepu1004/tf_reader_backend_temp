@@ -1,9 +1,11 @@
 package com.tf.reader.admin.service;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.data.domain.Pageable;
@@ -14,6 +16,7 @@ import com.tf.reader.admin.dto.CatalogueItemWrite;
 import com.tf.reader.admin.entity.AdminRole;
 import com.tf.reader.admin.security.AdminScopeAuthorizer;
 import com.tf.reader.catalogue.entity.AccessTier;
+import com.tf.reader.catalogue.entity.BookCollection;
 import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.ContentType;
@@ -21,6 +24,8 @@ import com.tf.reader.catalogue.entity.Entitlement;
 import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.catalogue.entity.Publisher;
+import com.tf.reader.catalogue.entity.WorkType;
+import com.tf.reader.catalogue.repository.BookCollectionRepository;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.CatalogueItemSearchRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
@@ -31,6 +36,7 @@ import com.tf.reader.common.audit.AuditLog;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.common.page.PageResponse;
+import com.tf.reader.ingest.service.CoverUrlResolver;
 
 import lombok.RequiredArgsConstructor;
 
@@ -46,10 +52,12 @@ public class CatalogueItemAdminService {
 	private final CatalogueItemRepository catalogueItemRepository;
 	private final CatalogueItemSearchRepository searchRepository;
 	private final PublisherRepository publisherRepository;
+	private final BookCollectionRepository bookCollectionRepository;
 	private final EntitlementRepository entitlementRepository;
 	private final CatalogueVersionBumper catalogueVersionBumper;
 	private final AdminAuditWriter auditWriter;
 	private final AdminScopeAuthorizer adminScope;
+	private final CoverUrlResolver coverUrlResolver;
 
 	private static final List<EntitlementStatus> STATUS_RANK = List.of(EntitlementStatus.REVOKED,
 			EntitlementStatus.SUSPENDED, EntitlementStatus.PENDING, EntitlementStatus.ACTIVE);
@@ -137,10 +145,16 @@ public class CatalogueItemAdminService {
 		if (!adminScope.canAccessPublisher(write.publisherId())) {
 			throw new ApiException(ErrorCode.FORBIDDEN_ROLE, "Not permitted to create a book for this publisher");
 		}
+		WorkType workType = write.workType() == null ? WorkType.BOOK : write.workType();
+		requireValidParentChain(workType, write.parentId());
+		requireLeafFieldsConsistentWithWorkType(workType, write);
 		validateDuration(write);
+		requireIsbnFree(write.isbn(), null);
+		requireCollectionsBelongToPublisher(write.publisherId(), write.collectionIds());
 
 		CatalogueItem item = new CatalogueItem();
 		item.setId("item_" + UUID.randomUUID().toString().substring(0, 8));
+		item.setWorkType(workType);
 		applyWrite(item, write);
 		item.setContentState(ContentState.NONE);
 		item.setStatus(write.status() == null ? ItemStatus.DRAFT : write.status());
@@ -172,10 +186,17 @@ public class CatalogueItemAdminService {
 		if (!adminScope.canAccessPublisher(write.publisherId())) {
 			throw new ApiException(ErrorCode.FORBIDDEN_ROLE, "Not permitted to move a book to this publisher");
 		}
+		WorkType workType = write.workType() == null ? WorkType.BOOK : write.workType();
+		requireValidParentChain(workType, write.parentId());
+		requireLeafFieldsConsistentWithWorkType(workType, write);
 		validateDuration(write);
+		requireIsbnImmutable(item.getIsbn(), write.isbn());
+		requireIsbnFree(write.isbn(), itemId);
+		requireCollectionsBelongToPublisher(write.publisherId(), write.collectionIds());
 
 		Map<String, Object> before = afterMap(item);
 
+		item.setWorkType(workType);
 		applyWrite(item, write);
 		if (write.status() != null) {
 			item.setStatus(write.status());
@@ -207,6 +228,8 @@ public class CatalogueItemAdminService {
 	private void applyWrite(CatalogueItem item, CatalogueItemWrite write) {
 		item.setPublisherId(write.publisherId());
 		item.setCollectionIds(write.collectionIds());
+		item.setParentId(write.parentId());
+		item.setSequence(write.sequence());
 		item.setTitle(write.title());
 		item.setSubtitle(write.subtitle());
 		item.setAuthors(write.authors());
@@ -238,6 +261,28 @@ public class CatalogueItemAdminService {
 		}
 	}
 
+	private void requireCollectionsBelongToPublisher(String publisherId, List<String> collectionIds) {
+		if (collectionIds == null || collectionIds.isEmpty()) {
+			return;
+		}
+		List<BookCollection> found = bookCollectionRepository.findAllById(collectionIds);
+		Map<String, BookCollection> byId = new HashMap<>();
+		for (BookCollection collection : found) {
+			byId.put(collection.getId(), collection);
+		}
+		List<String> invalid = new ArrayList<>();
+		for (String collectionId : collectionIds) {
+			BookCollection collection = byId.get(collectionId);
+			if (collection == null || !Objects.equals(collection.getPublisherId(), publisherId)) {
+				invalid.add(collectionId);
+			}
+		}
+		if (!invalid.isEmpty()) {
+			throw new ApiException(ErrorCode.VALIDATION_FAILED,
+					"Collections not belonging to publisher '" + publisherId + "': " + invalid);
+		}
+	}
+
 	private static void validateDuration(CatalogueItemWrite write) {
 		boolean audio = write.contentType() == ContentType.AUDIO;
 		if (audio && write.duration() == null) {
@@ -245,6 +290,118 @@ public class CatalogueItemAdminService {
 		}
 		if (!audio && write.duration() != null) {
 			throw new ApiException(ErrorCode.VALIDATION_FAILED, "duration is only meaningful when contentType is AUDIO");
+		}
+	}
+
+	/**
+	 * Only BOOK and ARTICLE are leaves: they carry a file and go through ingest, so contentType
+	 * and accessTier are required exactly as they always were. JOURNAL/VOLUME/ISSUE are pure
+	 * containers - the same fields would describe a file that will never exist, so they must be
+	 * absent instead. isbn is allowed on either (an article is citable by ISBN same as a book) so
+	 * it is not restricted here.
+	 */
+	private static void requireLeafFieldsConsistentWithWorkType(WorkType workType, CatalogueItemWrite write) {
+		boolean leaf = workType == WorkType.BOOK || workType == WorkType.ARTICLE;
+		if (leaf) {
+			if (write.contentType() == null) {
+				throw new ApiException(ErrorCode.VALIDATION_FAILED, "contentType is required for a " + workType);
+			}
+			if (write.accessTier() == null) {
+				throw new ApiException(ErrorCode.VALIDATION_FAILED, "accessTier is required for a " + workType);
+			}
+		}
+		else {
+			if (write.contentType() != null || write.accessTier() != null || write.duration() != null) {
+				throw new ApiException(ErrorCode.VALIDATION_FAILED,
+						"contentType, accessTier and duration are not meaningful for a " + workType + " container");
+			}
+		}
+	}
+
+	/**
+	 * Enforces the one nesting shape this hierarchy allows: JOURNAL at the top, VOLUME under a
+	 * JOURNAL, ISSUE under a VOLUME, ARTICLE under an ISSUE or standalone, BOOK always standalone.
+	 * Checked here rather than assumed, because a wrong parent is a browsing dead end no OPDS
+	 * client would ever detect on its own.
+	 */
+	private void requireValidParentChain(WorkType workType, String parentId) {
+		WorkType requiredParentType = switch (workType) {
+			case BOOK, JOURNAL -> null;
+			case VOLUME -> WorkType.JOURNAL;
+			case ISSUE -> WorkType.VOLUME;
+			case ARTICLE -> null; // an ARTICLE's parent, if present, must be an ISSUE - checked below
+		};
+
+		if (requiredParentType == null && workType != WorkType.ARTICLE) {
+			if (parentId != null) {
+				throw new ApiException(ErrorCode.VALIDATION_FAILED, "a " + workType + " may not have a parentId");
+			}
+			return;
+		}
+
+		if (parentId == null) {
+			if (workType == WorkType.ARTICLE) {
+				return; // a standalone article
+			}
+			throw new ApiException(ErrorCode.VALIDATION_FAILED, "a " + workType + " requires a parentId");
+		}
+
+		WorkType expected = workType == WorkType.ARTICLE ? WorkType.ISSUE : requiredParentType;
+		CatalogueItem parent = catalogueItemRepository.findById(parentId)
+				.orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_FAILED, "parentId does not exist: " + parentId));
+		WorkType parentWorkType = parent.getWorkType() == null ? WorkType.BOOK : parent.getWorkType();
+		if (parentWorkType != expected) {
+			throw new ApiException(ErrorCode.VALIDATION_FAILED,
+					"a " + workType + "'s parent must be a " + expected + ", not a " + parentWorkType);
+		}
+	}
+
+	/**
+	 * A repeat ISBN is refused rather than linked to the book that already holds it. Putting an
+	 * existing book into a collection is already
+	 * available via the endpoint PUT /api/admin/v1/collections/{collectionId}/items ,and one URL that either creates
+	 * or links depending on data the caller cannot see is worse than a 409.
+	 *
+	 * <p>Compares on the normalised form, so ISBN 978-0-13-235088-4 and ISBN 9780132350884
+	 * are the same book. An absent ISBN is never a duplicate: it is optional , and most audiobooks and ingest-first drafts have none.
+	 *
+	 * @param editingItemId the item being updated, excluded from the match so a PUT that leaves
+	 *                      the ISBN alone does not collide with itself; null when creating
+	 */
+	private void requireIsbnFree(String rawIsbn, String editingItemId) {
+		String isbn = normalizeIsbn(rawIsbn);
+		if (isbn == null || isbn.isBlank()) {
+			return;
+		}
+		catalogueItemRepository.findByIsbn(isbn)
+				.filter(existing -> !existing.getId().equals(editingItemId))
+				.ifPresent(existing -> {
+					throw new ApiException(ErrorCode.CODE_TAKEN, duplicateIsbnMessage(existing));
+				});
+	}
+
+	// Naming the existing book tells an operator what to do next, but only when the book is
+	// already theirs to see. To an admin scoped elsewhere it is another publisher's catalogue,
+	// so they get the refusal without the id - same reason findActiveById hides a suspended
+	// institution behind a 404.
+	private String duplicateIsbnMessage(CatalogueItem existing) {
+		if (!adminScope.canAccessPublisher(existing.getPublisherId())) {
+			return "That ISBN is already in the catalogue";
+		}
+		return "ISBN already belongs to " + existing.getId()
+				+ ". To add that book to a collection use PUT /api/admin/v1/collections/{collectionId}/items";
+	}
+
+	// Once an ISBN is set it is a fact about the physical book, not a form field an admin can
+	// second-guess later - a later PUT that tries to change it is almost always a copy-paste
+	// mistake, not an intentional correction, and an intentional one is a new book, not an edit.
+	private static void requireIsbnImmutable(String existingIsbn, String newIsbn) {
+		String existing = normalizeIsbn(existingIsbn);
+		if (existing == null) {
+			return;
+		}
+		if (!existing.equals(normalizeIsbn(newIsbn))) {
+			throw new ApiException(ErrorCode.VALIDATION_FAILED, "isbn cannot be changed once it has been set");
 		}
 	}
 
@@ -259,11 +416,11 @@ public class CatalogueItemAdminService {
 
 
 	private CatalogueItemView toSummaryView(CatalogueItem item, boolean institutionView, EntitlementStatus status) {
-		String entitlementStatusLabel = !institutionView ? null : (status == null ? "none" : status.name().toLowerCase());
+		String entitlementStatusLabel = !institutionView ? null : (status == null ? "NONE" : status.name());
 		return toView(item, null, List.of(), entitlementStatusLabel);
 	}
 
-	private CatalogueItemView toFullView(CatalogueItem item) {
+	public CatalogueItemView toFullView(CatalogueItem item) {
 		String publisherName = publisherRepository.findById(item.getPublisherId()).map(Publisher::getName)
 				.orElse(null);
 		List<CatalogueItemView.Asset> assets = item.getAssets() == null ? List.of()
@@ -274,17 +431,24 @@ public class CatalogueItemAdminService {
 	private CatalogueItemView toView(CatalogueItem item, String publisherName, List<CatalogueItemView.Asset> assets,
 			String entitlementStatusLabel) {
 		return new CatalogueItemView(item.getId(), item.getPublisherId(), publisherName, item.getCollectionIds(),
-				item.getTitle(), item.getSubtitle(), item.getAuthors(), item.getEditors(), item.getNarrators(),
-				item.getIsbn(), item.getContentType(), item.getAccessTier(), item.getSubjects(), item.getLanguage(),
-				item.getDescription(), item.getPublishedAt(), item.getNumberOfPages(), item.getDuration(),
-				item.getCoverUrl(), item.getStatus(), item.getContentState(), item.getContentError(), assets,
-				item.getCreatedAt(), item.getUpdatedAt(), entitlementStatusLabel);
+				item.getWorkType(), item.getParentId(), item.getSequence(), item.getTitle(), item.getSubtitle(),
+				item.getAuthors(), item.getEditors(), item.getNarrators(), item.getIsbn(), item.getContentType(),
+				item.getAccessTier(), item.getSubjects(), item.getLanguage(), item.getDescription(),
+				item.getPublishedAt(), item.getNumberOfPages(), item.getDuration(), coverUrlResolver.resolve(item),
+				item.getStatus(), item.getContentState(), item.getContentError(), assets, item.getCreatedAt(),
+				item.getUpdatedAt(), entitlementStatusLabel);
 	}
 
 	private CatalogueItemView.Asset toAssetView(CatalogueItem.Asset asset) {
-		return new CatalogueItemView.Asset(asset.getFormat(), asset.getMimeType(), asset.getSizeBytes(),
-				asset.getCipherLength(), asset.isEncrypted(), asset.isHasSearchIndex(), asset.getIndexSkipReason(),
-				asset.getIndexTerms());
+		List<CatalogueItemView.Part> parts = asset.getParts() == null ? List.of()
+				: asset.getParts().stream().map(this::toPartView).toList();
+		return new CatalogueItemView.Asset(asset.getFormat(), asset.getMimeType(), asset.isEncrypted(), parts);
+	}
+
+	private CatalogueItemView.Part toPartView(CatalogueItem.Part part) {
+		return new CatalogueItemView.Part(part.getPartNumber(), part.getTitle(), part.getSizeBytes(),
+				part.getCipherLength(), part.isHasSearchIndex(), part.getIndexSkipReason(), part.getIndexTerms(),
+				part.getContentState(), part.getContentError(), part.getUpdatedAt());
 	}
 
 	private static Map<String, Object> afterMap(CatalogueItem item) {

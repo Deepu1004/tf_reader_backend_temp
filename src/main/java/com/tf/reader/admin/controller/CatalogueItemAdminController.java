@@ -23,6 +23,7 @@ import com.tf.reader.admin.service.CatalogueItemAdminService;
 import com.tf.reader.catalogue.entity.AccessTier;
 import com.tf.reader.catalogue.entity.ContentType;
 import com.tf.reader.common.page.PageResponse;
+import com.tf.reader.ingest.service.CoverImageService;
 import com.tf.reader.ingest.service.IngestService;
 
 import jakarta.validation.Valid;
@@ -35,12 +36,14 @@ public class CatalogueItemAdminController {
 	private final CatalogueItemAdminService catalogueItems;
 	private final AdminScopeAuthorizer adminScope;
 	private final IngestService ingestItems;
+	private final CoverImageService coverImages;
 
 	public CatalogueItemAdminController(CatalogueItemAdminService catalogueItems, AdminScopeAuthorizer adminScope,
-			IngestService ingestItems) {
+			IngestService ingestItems, CoverImageService coverImages) {
 		this.catalogueItems = catalogueItems;
 		this.adminScope = adminScope;
 		this.ingestItems = ingestItems;
+		this.coverImages = coverImages;
 	}
 
 	@GetMapping
@@ -77,13 +80,19 @@ public class CatalogueItemAdminController {
 	@PostMapping(value = "/{itemId}/content", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 	@ResponseStatus(HttpStatus.ACCEPTED)
 	public IngestStatus uploadContent(@PathVariable String itemId, @RequestParam("file") MultipartFile file,
-			@RequestParam("format") AssetFormat format) {
-		return ingestItems.accept(itemId, file, format);
+			@RequestParam("format") AssetFormat format, @RequestParam(required = false) Integer partNumber,
+			@RequestParam(required = false) String partTitle) {
+		return ingestItems.accept(itemId, file, format, partNumber, partTitle);
 	}
 
 	@GetMapping("/{itemId}/ingest-status")
-	public IngestStatus ingestStatus(@PathVariable String itemId) {
-		return ingestItems.getStatus(itemId);
+	public IngestStatus ingestStatus(@PathVariable String itemId, @RequestParam(required = false) Integer partNumber) {
+		return ingestItems.getStatus(itemId, partNumber);
+	}
+
+	@PostMapping(value = "/{itemId}/cover", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+	public CatalogueItemView uploadCover(@PathVariable String itemId, @RequestParam("file") MultipartFile file) {
+		return catalogueItems.toFullView(coverImages.upload(itemId, file));
 	}
 
 }

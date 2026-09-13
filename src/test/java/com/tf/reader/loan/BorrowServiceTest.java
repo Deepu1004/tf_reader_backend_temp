@@ -22,6 +22,9 @@ import org.springframework.dao.DuplicateKeyException;
 import com.tf.reader.catalogue.api.AccessLevel;
 import com.tf.reader.catalogue.api.EntitlementQuery;
 import com.tf.reader.catalogue.api.SubjectRef;
+import com.tf.reader.library.api.ChangeLog;
+import com.tf.reader.library.api.ChangeReason;
+import com.tf.reader.library.api.ChangeRecord;
 import com.tf.reader.loan.api.LicenceView;
 import com.tf.reader.loan.entity.LicenceModel;
 import com.tf.reader.loan.entity.Loan;
@@ -47,10 +50,11 @@ class BorrowServiceTest {
 	private static final SubjectRef SUBJECT = new SubjectRef("user_1", "inst_1");
 
 	private final LoanRepository loans = mock(LoanRepository.class);
+	private final ChangeLog changeLog = mock(ChangeLog.class);
 	// create() (the LicenceCommand port) uses neither the entitlement nor the lease port — those
 	// are the borrow-flow's collaborators (see BorrowFlowTest). Mocks satisfy the constructor.
 	private final BorrowService service = new BorrowService(
-			loans, mock(EntitlementQuery.class), mock(CopyLease.class), CLOCK);
+			loans, mock(EntitlementQuery.class), mock(CopyLease.class), changeLog, CLOCK);
 
 	@Test
 	void subscriptionCreatesAnUnlimitedLicenceThatCanPersist() {
@@ -60,9 +64,23 @@ class BorrowServiceTest {
 		LicenceView view = service.create(SUBJECT, "item_1", AccessLevel.ENTITLED_UNLIMITED, 0, null);
 
 		assertThat(view.canPersist()).isTrue();
-		assertThat(view.expiresAt()).isNull();
+		assertThat(view.expiresAt()).isNull();   // loanPeriodDays 0 = unlimited → open-ended
 		assertThat(view.leaseId()).isNull();
 		assertThat(savedLoan().getLicenceModel()).isEqualTo(LicenceModel.SUBSCRIPTION);
+	}
+
+	@Test
+	void subscriptionWithAFiniteLoanPeriodGetsADueDate() {
+		noExistingLoan();
+		savesTheGivenLoan();
+
+		LicenceView view = service.create(SUBJECT, "item_1", AccessLevel.ENTITLED_UNLIMITED, 30, null);
+
+		// Contract: dueAt = borrowedAt + loanPeriodDays for anything but OPEN_ACCESS (D-030).
+		// A subscription with a finite entitlement window must expire, not read as open-ended.
+		assertThat(view.expiresAt()).isEqualTo(NOW.plus(Duration.ofDays(30)));
+		assertThat(savedLoan().getDueAt()).isEqualTo(NOW.plus(Duration.ofDays(30)));
+		assertThat(view.canPersist()).isTrue();   // still persists; only the window changes
 	}
 
 	@Test
@@ -70,7 +88,8 @@ class BorrowServiceTest {
 		noExistingLoan();
 		savesTheGivenLoan();
 
-		LicenceView view = service.create(SUBJECT, "item_1", AccessLevel.OPEN_ACCESS, 0, null);
+		// Even with a positive loanPeriodDays, open access never expires (the != OPEN_ACCESS guard).
+		LicenceView view = service.create(SUBJECT, "item_1", AccessLevel.OPEN_ACCESS, 14, null);
 
 		assertThat(view.canPersist()).isTrue();
 		assertThat(view.expiresAt()).isNull();
@@ -93,6 +112,23 @@ class BorrowServiceTest {
 	}
 
 	@Test
+	void recordsLoanCreatedOnceOnAGenuineNewSave() {
+		noExistingLoan();
+		savesTheGivenLoan();
+
+		LicenceView view = service.create(SUBJECT, "item_1", AccessLevel.ENTITLED_UNLIMITED, 0, null);
+
+		ArgumentCaptor<ChangeRecord> captor = ArgumentCaptor.forClass(ChangeRecord.class);
+		verify(changeLog).record(captor.capture());
+		ChangeRecord rec = captor.getValue();
+		assertThat(rec.reason()).isEqualTo(ChangeReason.LOAN_CREATED);
+		assertThat(rec.userId()).isEqualTo("user_1");
+		assertThat(rec.itemId()).isEqualTo("item_1");
+		assertThat(rec.loanId()).isEqualTo(view.licenceId());   // the just-saved loan
+		assertThat(rec.occurredAt()).isEqualTo(NOW);
+	}
+
+	@Test
 	void anExistingActiveLicenceIsReturnedWithoutASecondSave() {
 		Loan existing = Loan.builder()
 				.loanId("loan_existing").userId("user_1").itemId("item_1")
@@ -105,6 +141,8 @@ class BorrowServiceTest {
 
 		assertThat(view.licenceId()).isEqualTo("loan_existing");
 		verify(loans, never()).save(any());
+		// Re-borrow / Read-again of a held title is not a new loan — no phantom LOAN_CREATED (D-029).
+		verify(changeLog, never()).record(any());
 	}
 
 	@Test
@@ -120,6 +158,8 @@ class BorrowServiceTest {
 		LicenceView view = service.create(SUBJECT, "item_1", AccessLevel.ENTITLED_UNLIMITED, 0, null);
 
 		assertThat(view.licenceId()).isEqualTo("loan_winner");
+		// The race loser created nothing of its own — the winner's row already exists, so no record.
+		verify(changeLog, never()).record(any());
 	}
 
 	@Test

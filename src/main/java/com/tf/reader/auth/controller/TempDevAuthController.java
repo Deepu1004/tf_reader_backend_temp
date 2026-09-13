@@ -3,6 +3,7 @@ package com.tf.reader.auth.controller;
 import java.time.Duration;
 import java.util.List;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,9 +30,15 @@ import com.tf.reader.auth.token.TokenService;
  *       for whoever is already authenticated, purely so a manual tester can see both halves of a
  *       token pair at once instead of only the access token an Alert or a log line shows.</li>
  * </ul>
+ *
+ * <p><b>{@code tnf.dev-auth.enabled} must be set explicitly, the same way {@code mock-oidc.enabled}
+ * and {@code saml-mock.enabled} are.</b> {@code /dev-token} mints a token for anyone with no
+ * check at all, so leaving this on by default anywhere but a developer's own machine is a full
+ * auth bypass. {@code SecurityArchitectureTest} asserts {@code application.yml} ships it disabled.
  */
 @RestController
 @RequestMapping("/api/v1/auth")
+@ConditionalOnProperty(prefix = "tnf.dev-auth", name = "enabled", havingValue = "true")
 public class TempDevAuthController {
 
 	private final TokenService tokenService;

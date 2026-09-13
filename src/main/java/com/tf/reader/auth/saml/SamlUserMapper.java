@@ -1,71 +1,79 @@
 package com.tf.reader.auth.saml;
 
+import java.security.SecureRandom;
+import java.time.Clock;
+import java.util.HexFormat;
 import java.util.List;
 
-import org.springframework.security.saml2.provider.service.authentication.Saml2ResponseAssertionAccessor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
+import com.tf.reader.auth.model.Role;
 import com.tf.reader.auth.model.TnfUser;
-import com.tf.reader.auth.repository.MockUserRepository;
+import com.tf.reader.auth.model.UserType;
+import com.tf.reader.auth.repository.ReaderSessionRepository;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 
 /**
- * Turns a validated SAML assertion into a TnF user.
+ * Turns a completed institutional sign-in into a TnF user, without ever asking who signed in.
  *
- * <p>The IdP tells us who someone is. The institution comes from the sign-in transaction our
- * own backend opened, never from the assertion and never from the client. This class is where
- * those two facts meet, and it is the only place they do.
+ * <p>A validly signed assertion is proof of institutional membership and nothing more - there is
+ * no per-student account to resolve it against, no username, no email, no id anyone chose. The
+ * institution comes from the sign-in transaction our own backend opened, never from the assertion
+ * and never from the client. Identity is the device: a device signing in for the first time is
+ * minted an opaque {@code deviceId}, and a returning device presents the one it already has to
+ * reclaim the same loans and shelf, rather than starting over as somebody new.
  *
- * <p>Reads {@link Saml2ResponseAssertionAccessor} rather than the deprecated
- * {@code Saml2AuthenticatedPrincipal}, which Spring Security 7 replaced it with.
+ * <p>Minting a new device is also the one place concurrency is enforced: an institution has a
+ * fixed number of concurrent seats, spent by live sessions and freed as they end. A returning
+ * device is never refused on this account - refusing one already in use, just because the cap
+ * has since filled up, would read as a bug rather than a policy.
  */
 @Component
 public class SamlUserMapper {
 
-	/**
-	 * The claim samlmock.dev uses for the email address. It is the WS-Federation style URI most
-	 * IdPs emit, and it is what appears in the mock's default assertion.
-	 */
-	static final String EMAIL_CLAIM = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress";
+	private static final SecureRandom RANDOM = new SecureRandom();
 
-	private final MockUserRepository users;
+	private final ReaderSessionRepository readerSessions;
+	private final Clock clock;
+	private final int maxConcurrentSessionsPerInstitution;
 
-	public SamlUserMapper(MockUserRepository users) {
-		this.users = users;
+	public SamlUserMapper(ReaderSessionRepository readerSessions, Clock clock,
+			@Value("${tnf.auth.max-concurrent-sessions-per-institution:50}") int maxConcurrentSessionsPerInstitution) {
+		this.readerSessions = readerSessions;
+		this.clock = clock;
+		this.maxConcurrentSessionsPerInstitution = maxConcurrentSessionsPerInstitution;
 	}
 
 	/**
-	 * @param assertion     an assertion Spring Security has already validated
-	 * @param institutionId the institution recovered from the sign-in transaction
-	 * @throws ApiException 403 if the identity holds no membership at that institution
+	 * @param institutionId    the institution recovered from the sign-in transaction
+	 * @param existingDeviceId the device id this device already holds from a previous sign-in to
+	 *                         this institution, or null/blank for a device signing in for the
+	 *                         first time
+	 * @throws ApiException 403 ({@code SEAT_LIMIT_REACHED}) if this is a new device and the
+	 *                       institution has no concurrent seat free
 	 */
-	public TnfUser map(Saml2ResponseAssertionAccessor assertion, String institutionId) {
-		String email = resolveEmail(assertion);
-		return users.find(email, institutionId)
-				.orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_PROVISIONED,
-						"This identity holds no membership at institution '" + institutionId + "'."));
+	public TnfUser map(String institutionId, String existingDeviceId) {
+		String deviceId = existingDeviceId != null && !existingDeviceId.isBlank()
+				? existingDeviceId
+				: admitNewDevice(institutionId);
+		return new TnfUser(deviceId, UserType.INSTITUTION, institutionId, List.of(Role.MEMBER.name()), List.of());
 	}
 
-	/**
-	 * Prefers the email attribute and falls back to the NameID, because an IdP may assert the
-	 * subject in either place and samlmock.dev happens to put the same value in both.
-	 */
-	String resolveEmail(Saml2ResponseAssertionAccessor assertion) {
-		List<Object> emails = assertion.getAttributes().get(EMAIL_CLAIM);
-		if (emails != null) {
-			for (Object candidate : emails) {
-				if (candidate instanceof String value && StringUtils.hasText(value)) {
-					return value;
-				}
-			}
+	private String admitNewDevice(String institutionId) {
+		long liveSessions = readerSessions.countByInstitutionIdAndRevokedAtIsNullAndExpiresAtAfter(
+				institutionId, clock.instant());
+		if (liveSessions >= maxConcurrentSessionsPerInstitution) {
+			throw new ApiException(ErrorCode.SEAT_LIMIT_REACHED,
+					"Institution '" + institutionId + "' has no concurrent seats free right now.");
 		}
-		String nameId = assertion.getNameId();
-		if (!StringUtils.hasText(nameId)) {
-			throw new ApiException(ErrorCode.SAML_AUTHENTICATION_FAILED,
-					"The SAML assertion carried no subject we could identify.");
-		}
-		return nameId;
+		return newDeviceId();
+	}
+
+	private static String newDeviceId() {
+		byte[] bytes = new byte[16];
+		RANDOM.nextBytes(bytes);
+		return "dev_" + HexFormat.of().formatHex(bytes);
 	}
 }

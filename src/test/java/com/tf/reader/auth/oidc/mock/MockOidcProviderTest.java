@@ -303,13 +303,64 @@ class MockOidcProviderTest extends MockOidcTestProfile {
 	void theTokenEndpointRejectsAnyOtherGrantType() throws Exception {
 		mockMvc.perform(post("/oauth2/token")
 						.contentType(MediaType.APPLICATION_FORM_URLENCODED)
-						.param("grant_type", "password")
+						.param("grant_type", "client_credentials")
 						.param("code", authorizationCode())
 						.param("client_id", CLIENT_ID)
 						.param("client_secret", CLIENT_SECRET)
 						.param("redirect_uri", REDIRECT_URI))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error").value("unsupported_grant_type"));
+	}
+
+	// ───────────────────────── the password grant ─────────────────────────
+
+	@Test
+	void thePasswordGrantExchangesTheMockUsersOwnCredentials() throws Exception {
+		mockMvc.perform(passwordTokenRequest(EMAIL, PASSWORD))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.token_type").value("Bearer"))
+				.andExpect(jsonPath("$.access_token").isNotEmpty())
+				.andExpect(jsonPath("$.id_token").value(org.hamcrest.Matchers.matchesRegex(
+						"^[\\w-]+\\.[\\w-]+\\.[\\w-]+$")));
+	}
+
+	@Test
+	void thePasswordGrantMintsAnIdTokenWithNoNonce() throws Exception {
+		// There is no authorization request behind this grant, so there is nothing to bind the
+		// token to and no nonce claim to carry.
+		String idToken = (String) json(mockMvc.perform(passwordTokenRequest(EMAIL, PASSWORD)))
+				.get("id_token");
+
+		String payload = new String(java.util.Base64.getUrlDecoder()
+				.decode(idToken.split("\\.")[1]), java.nio.charset.StandardCharsets.UTF_8);
+		assertThat(payload).doesNotContain("nonce");
+	}
+
+	@Test
+	void thePasswordGrantRejectsAWrongPassword() throws Exception {
+		mockMvc.perform(passwordTokenRequest(EMAIL, "not-the-password"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error").value("invalid_grant"));
+	}
+
+	@Test
+	void thePasswordGrantRejectsAnUnknownUsername() throws Exception {
+		mockMvc.perform(passwordTokenRequest("nobody@example.com", PASSWORD))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error").value("invalid_grant"));
+	}
+
+	@Test
+	void thePasswordGrantStillRequiresTheRealClientSecret() throws Exception {
+		mockMvc.perform(post("/oauth2/token")
+						.contentType(MediaType.APPLICATION_FORM_URLENCODED)
+						.param("grant_type", "password")
+						.param("username", EMAIL)
+						.param("password", PASSWORD)
+						.param("client_id", CLIENT_ID)
+						.param("client_secret", "not-the-secret"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error").value("invalid_client"));
 	}
 
 	@Test
@@ -344,6 +395,20 @@ class MockOidcProviderTest extends MockOidcTestProfile {
 	}
 
 	// ───────────────────────────── helpers ─────────────────────────────
+
+	private static final String EMAIL = "john.doe@example.com";
+
+	private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder passwordTokenRequest(
+			String username, String password) {
+		return post("/oauth2/token")
+				.contentType(MediaType.APPLICATION_FORM_URLENCODED)
+				.param("grant_type", "password")
+				.param("username", username)
+				.param("password", password)
+				.param("client_id", CLIENT_ID)
+				.param("client_secret", CLIENT_SECRET)
+				.param("scope", "openid profile email");
+	}
 
 	private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder authorizeRequest() {
 		return get("/oauth2/authorize")

@@ -38,6 +38,7 @@ import org.opensaml.saml.saml2.core.SubjectConfirmationData;
 import org.opensaml.xmlsec.signature.Signature;
 import org.opensaml.xmlsec.signature.support.SignatureConstants;
 import org.opensaml.xmlsec.signature.support.Signer;
+import org.springframework.util.StringUtils;
 import org.w3c.dom.Element;
 
 import net.shibboleth.shared.xml.SerializeSupport;
@@ -94,13 +95,17 @@ public class SamlMockResponseBuilder {
 	}
 
 	/**
-	 * @param samlRequest the redirect-binding {@code SAMLRequest} parameter: base64 of a raw
-	 *                    (unwrapped) DEFLATE stream, exactly as
-	 *                    {@code OpenSaml5AuthenticationRequestResolver} produced it
+	 * @param samlRequest    the redirect-binding {@code SAMLRequest} parameter: base64 of a raw
+	 *                       (unwrapped) DEFLATE stream, exactly as
+	 *                       {@code OpenSaml5AuthenticationRequestResolver} produced it
+	 * @param nameIdOverride which identity to assert instead of {@link SamlMockProperties#user()}'s
+	 *                       configured default. Blank or {@code null} keeps the default - this is
+	 *                       what happens when a caller of {@code /auth/saml/start} sends no
+	 *                       {@code username}, and what already happens for every request today
 	 */
-	public SamlMockResponse build(String samlRequest) {
+	public SamlMockResponse build(String samlRequest, String nameIdOverride) {
 		AuthnRequest authnRequest = decodeAuthnRequest(samlRequest);
-		Response response = buildResponse(authnRequest);
+		Response response = buildResponse(authnRequest, nameIdOverride);
 		return new SamlMockResponse(authnRequest.getAssertionConsumerServiceURL(), encode(response));
 	}
 
@@ -119,7 +124,7 @@ public class SamlMockResponseBuilder {
 		}
 	}
 
-	private Response buildResponse(AuthnRequest authnRequest) {
+	private Response buildResponse(AuthnRequest authnRequest, String nameIdOverride) {
 		Instant now = clock.instant();
 		String acsUrl = authnRequest.getAssertionConsumerServiceURL();
 		String spEntityId = authnRequest.getIssuer().getValue();
@@ -129,7 +134,7 @@ public class SamlMockResponseBuilder {
 		assertion.setID(newId());
 		assertion.setIssueInstant(now);
 		assertion.setIssuer(issuer());
-		assertion.setSubject(subject(authnRequest.getID(), acsUrl, now));
+		assertion.setSubject(subject(authnRequest.getID(), acsUrl, now, nameIdOverride));
 		assertion.setConditions(conditions(spEntityId, now));
 		assertion.getAuthnStatements().add(authnStatement(now));
 		sign(assertion);
@@ -146,9 +151,9 @@ public class SamlMockResponseBuilder {
 		return response;
 	}
 
-	private Subject subject(String inResponseTo, String recipient, Instant now) {
+	private Subject subject(String inResponseTo, String recipient, Instant now, String nameIdOverride) {
 		NameID nameId = build(NameID.DEFAULT_ELEMENT_NAME);
-		nameId.setValue(properties.user().nameId());
+		nameId.setValue(StringUtils.hasText(nameIdOverride) ? nameIdOverride : properties.user().nameId());
 		nameId.setFormat(NameID.EMAIL);
 
 		SubjectConfirmationData confirmationData = build(SubjectConfirmationData.DEFAULT_ELEMENT_NAME);

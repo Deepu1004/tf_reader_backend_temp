@@ -35,7 +35,7 @@ class AvailabilityQueryImplTest {
 
     @Test
     void nullCopiesOmitsTheNumbersRatherThanZeroingThem() {
-        var result = availability.forItem("inst_1", "item_1", null);
+        var result = availability.forItem("inst_1", "item_1", null, "user_a");
 
         assertThat(result.available()).isNull();
         assertThat(result.queueLength()).isNull();
@@ -48,7 +48,7 @@ class AvailabilityQueryImplTest {
         when(lease.available("inst_1", "item_1", 2)).thenReturn(1);
         when(zsetOps.zCard(anyString())).thenReturn(3L);
 
-        var result = availability.forItem("inst_1", "item_1", 2);
+        var result = availability.forItem("inst_1", "item_1", 2, "user_a");
 
         assertThat(result.available()).isEqualTo(1);
         assertThat(result.queueLength()).isEqualTo(3);
@@ -59,7 +59,7 @@ class AvailabilityQueryImplTest {
         when(lease.available("inst_1", "item_1", 2)).thenReturn(0);
         when(zsetOps.zCard(anyString())).thenReturn(0L);
 
-        var result = availability.forItem("inst_1", "item_1", 2);
+        var result = availability.forItem("inst_1", "item_1", 2, "user_a");
 
         assertThat(result.available()).isEqualTo(0);
     }
@@ -68,9 +68,42 @@ class AvailabilityQueryImplTest {
     void anExceptionAnywhereStillProducesAnHonestUnknownAnswer() {
         when(lease.available(anyString(), anyString(), anyInt())).thenThrow(new RuntimeException("Redis unreachable"));
 
-        var result = availability.forItem("inst_1", "item_1", 2);
+        var result = availability.forItem("inst_1", "item_1", 2, "user_a");
 
         assertThat(result.available()).isNull();
         assertThat(result.queueLength()).isNull();
+    }
+
+    @Test
+    void reportsMyPositionWhenTheCallerIsCurrentlyQueued() {
+        when(lease.available("inst_1", "item_1", 2)).thenReturn(0);
+        when(zsetOps.zCard(anyString())).thenReturn(3L);
+        when(zsetOps.rank("queue:inst_1:item_1", "u:user_a")).thenReturn(2L);
+
+        var result = availability.forItem("inst_1", "item_1", 2, "user_a");
+
+        assertThat(result.myPosition()).isEqualTo(3);
+    }
+
+    @Test
+    void omitsMyPositionWhenTheCallerIsNotQueued() {
+        when(lease.available("inst_1", "item_1", 2)).thenReturn(1);
+        when(zsetOps.zCard(anyString())).thenReturn(0L);
+        when(zsetOps.rank("queue:inst_1:item_1", "u:user_a")).thenReturn(null);
+
+        var result = availability.forItem("inst_1", "item_1", 2, "user_a");
+
+        assertThat(result.myPosition()).isNull();
+    }
+
+    @Test
+    void omitsMyPositionWhenNoUserIdIsGiven() {
+        when(lease.available("inst_1", "item_1", 2)).thenReturn(1);
+        when(zsetOps.zCard(anyString())).thenReturn(0L);
+
+        var result = availability.forItem("inst_1", "item_1", 2, null);
+
+        assertThat(result.myPosition()).isNull();
+        verify(zsetOps, never()).rank(anyString(), anyString());
     }
 }

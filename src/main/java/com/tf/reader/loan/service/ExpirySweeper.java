@@ -10,6 +10,10 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import com.tf.reader.hold.api.HoldPromotion;
+import com.tf.reader.library.api.ChangeLog;
+import com.tf.reader.sync.api.DownloadInvalidation;
+import com.tf.reader.library.api.ChangeReason;
+import com.tf.reader.library.api.ChangeRecord;
 import com.tf.reader.loan.entity.Loan;
 import com.tf.reader.loan.entity.LoanStatus;
 import com.tf.reader.loan.repository.LoanRepository;
@@ -32,13 +36,17 @@ public class ExpirySweeper {
 	private final LoanRepository loans;
 	private final CopyLease copyLease;
 	private final HoldPromotion holdPromotion;
+	private final ChangeLog changeLog;
+	private final DownloadInvalidation downloads;
 	private final Clock clock;
 
 	public ExpirySweeper(LoanRepository loans, CopyLease copyLease, HoldPromotion holdPromotion,
-			Clock clock) {
+			ChangeLog changeLog, DownloadInvalidation downloads, Clock clock) {
 		this.loans = loans;
 		this.copyLease = copyLease;
 		this.holdPromotion = holdPromotion;
+		this.changeLog = changeLog;
+		this.downloads = downloads;
 		this.clock = clock;
 	}
 
@@ -46,6 +54,10 @@ public class ExpirySweeper {
 	public void sweep() {
 		Instant now = clock.instant();
 		List<Loan> due = loans.findByStatusAndDueAtLessThanEqual(LoanStatus.ACTIVE, now);
+		if (due.isEmpty()) {
+			return;
+		}
+		log.info("expiry-sweep: {} loan(s) due", due.size());
 		for (Loan loan : due) {
 			try {
 				expire(loan, now);
@@ -60,9 +72,18 @@ public class ExpirySweeper {
 		loan.setStatus(LoanStatus.EXPIRED);
 		loan.setExpiredAt(now);
 		Loan closed = loans.save(loan);
+		log.info("expiry-sweep: revoked loanId={} itemId={} userId={} institutionId={}", closed.getLoanId(),
+				closed.getItemId(), closed.getUserId(), closed.getInstitutionId());
+		// After the state write, per the ChangeLog contract (D-029). One entry per expired loan; the
+		// port never throws, and the per-item try/catch in sweep() already isolates any failure.
+		changeLog.record(ChangeRecord.forLoan(closed.getUserId(), ChangeReason.LOAN_EXPIRED,
+				closed.getItemId(), closed.getLoanId(), now));
+		downloads.invalidate(closed.getUserId(), closed.getItemId());
 		if (closed.getLeaseId() != null) {          // Elite only — release exactly once
+			log.info("expiry-sweep: releasing copy lease loanId={} itemId={}", closed.getLoanId(),
+					closed.getItemId());
 			copyLease.release(closed.getLeaseId());
 		}
-		holdPromotion.promote(closed.getItemId());
+		holdPromotion.promote(closed.getInstitutionId(), closed.getItemId());
 	}
 }

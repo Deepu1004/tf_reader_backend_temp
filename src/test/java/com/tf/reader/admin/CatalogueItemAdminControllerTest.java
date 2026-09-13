@@ -3,6 +3,8 @@ package com.tf.reader.admin;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -32,6 +34,7 @@ import com.tf.reader.admin.dto.IngestStatus;
 import com.tf.reader.admin.security.AdminScopeAuthorizer;
 import com.tf.reader.admin.service.CatalogueItemAdminService;
 import com.tf.reader.catalogue.entity.AccessTier;
+import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.ContentType;
 import com.tf.reader.catalogue.entity.ItemStatus;
@@ -39,6 +42,7 @@ import com.tf.reader.common.page.PageResponse;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.common.error.GlobalExceptionHandler;
+import com.tf.reader.ingest.service.CoverImageService;
 import com.tf.reader.ingest.service.IngestService;
 
 import tools.jackson.databind.ObjectMapper;
@@ -65,19 +69,24 @@ class CatalogueItemAdminControllerTest {
 	@MockitoBean
 	IngestService ingestService;
 
+	@MockitoBean
+	CoverImageService coverImageService;
+
 	private static final Instant CREATED = Instant.parse("2026-08-10T09:00:00Z");
 
 	private static CatalogueItemView summaryView() {
-		return new CatalogueItemView("item_42", "pub_rtlg", null, List.of("col_law2024"), "Rights for Robots", null,
-				List.of("Joshua C. Gellers"), List.of(), List.of(), "9780367211745", ContentType.PDF,
-				AccessTier.ELITE, List.of("Law"), "en", null, null, null, null, null, ItemStatus.PUBLISHED,
-				ContentState.QUEUED, null, List.of(), CREATED, CREATED, null);
+		return new CatalogueItemView("item_42", "pub_rtlg", null, List.of("col_law2024"), null, null, null,
+				"Rights for Robots", null, List.of("Joshua C. Gellers"), List.of(), List.of(), "9780367211745",
+				ContentType.PDF, AccessTier.ELITE, List.of("Law"), "en", null, null, null, null, null,
+				ItemStatus.PUBLISHED, ContentState.QUEUED, null, List.of(), CREATED, CREATED, null);
 	}
 
 	private static CatalogueItemView fullView() {
-		CatalogueItemView.Asset asset = new CatalogueItemView.Asset(ContentType.PDF, "application/pdf", 1024L, null,
-				true, true, null, 500);
-		return new CatalogueItemView("item_42", "pub_rtlg", "Routledge", List.of("col_law2024"),
+		CatalogueItemView.Part part = new CatalogueItemView.Part(1, null, 1024L, null, true, null, 500,
+				ContentState.READY, null, CREATED);
+		CatalogueItemView.Asset asset = new CatalogueItemView.Asset(ContentType.PDF, "application/pdf", true,
+				List.of(part));
+		return new CatalogueItemView("item_42", "pub_rtlg", "Routledge", List.of("col_law2024"), null, null, null,
 				"Rights for Robots", null, List.of("Joshua C. Gellers"), List.of(), List.of(), "9780367211745",
 				ContentType.PDF, AccessTier.ELITE, List.of("Law"), "en", null, null, null, null, null,
 				ItemStatus.PUBLISHED, ContentState.QUEUED, null, List.of(asset), CREATED, CREATED, null);
@@ -129,6 +138,22 @@ class CatalogueItemAdminControllerTest {
 				""")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
 	}
 
+	/**
+	 * The duplicate-ISBN check in {@code CatalogueItemAdminService} normalises before comparing but
+	 * does not re-validate the shape, on the grounds that {@code @Valid} has already refused
+	 * anything that is not an ISBN. This test is what makes that safe to rely on: if the
+	 * {@code @Pattern} on {@code CatalogueItemWrite.isbn} were ever relaxed or dropped, free text
+	 * would reach the service and be stored as an ISBN, and this fails first.
+	 */
+	@Test
+	void createWithFreeTextInIsbnIs400AndNeverReachesTheService() throws Exception {
+		mvc.perform(post("/api/admin/v1/catalogue-items").contentType(MediaType.APPLICATION_JSON).content("""
+				{"publisherId":"pub_rtlg","title":"x","isbn":"hello","contentType":"PDF","accessTier":"ELITE"}
+				""")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+		verify(service, never()).create(any());
+	}
+
 	// ---------------------------------------------------------------- get
 
 	@Test
@@ -163,8 +188,8 @@ class CatalogueItemAdminControllerTest {
 
 	@Test
 	void uploadContentReturns202WithIngestStatusBody() throws Exception {
-		when(ingestService.accept(eq("item_42"), any(), eq(AssetFormat.PDF))).thenReturn(
-				new IngestStatus("item_42", AssetFormat.PDF, ContentState.QUEUED, null, CREATED));
+		when(ingestService.accept(eq("item_42"), any(), eq(AssetFormat.PDF), any(), any())).thenReturn(
+				new IngestStatus("item_42", AssetFormat.PDF, 1, ContentState.QUEUED, null, CREATED));
 		MockMultipartFile file = new MockMultipartFile("file", "book.pdf", "application/pdf", new byte[10]);
 
 		mvc.perform(multipart("/api/admin/v1/catalogue-items/item_42/content").file(file).param("format", "PDF"))
@@ -174,7 +199,7 @@ class CatalogueItemAdminControllerTest {
 
 	@Test
 	void uploadContentOnUnknownItemIs404() throws Exception {
-		when(ingestService.accept(eq("item_nope"), any(), any()))
+		when(ingestService.accept(eq("item_nope"), any(), any(), any(), any()))
 				.thenThrow(new ApiException(ErrorCode.NOT_FOUND, "No such catalogue item"));
 		MockMultipartFile file = new MockMultipartFile("file", "book.pdf", "application/pdf", new byte[10]);
 
@@ -184,8 +209,8 @@ class CatalogueItemAdminControllerTest {
 
 	@Test
 	void ingestStatusReflectsTheCurrentState() throws Exception {
-		when(ingestService.getStatus("item_42")).thenReturn(
-				new IngestStatus("item_42", AssetFormat.PDF, ContentState.FAILED, "boom", CREATED));
+		when(ingestService.getStatus("item_42", null)).thenReturn(
+				new IngestStatus("item_42", AssetFormat.PDF, 1, ContentState.FAILED, "boom", CREATED));
 
 		mvc.perform(get("/api/admin/v1/catalogue-items/item_42/ingest-status")).andExpect(status().isOk())
 				.andExpect(jsonPath("$.contentState").value("FAILED")).andExpect(jsonPath("$.contentError").value("boom"));
@@ -193,11 +218,35 @@ class CatalogueItemAdminControllerTest {
 
 	@Test
 	void ingestStatusOnUnknownItemIs404() throws Exception {
-		when(ingestService.getStatus("item_nope"))
+		when(ingestService.getStatus("item_nope", null))
 				.thenThrow(new ApiException(ErrorCode.NOT_FOUND, "No such catalogue item"));
 
 		mvc.perform(get("/api/admin/v1/catalogue-items/item_nope/ingest-status")).andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("NOT_FOUND"));
+	}
+
+	// ---------------------------------------------------------------- cover
+
+	@Test
+	void uploadCoverReturns200WithTheRefreshedItem() throws Exception {
+		CatalogueItem savedItem = new CatalogueItem();
+		savedItem.setId("item_42");
+		when(coverImageService.upload(eq("item_42"), any())).thenReturn(savedItem);
+		when(service.toFullView(savedItem)).thenReturn(fullView());
+		MockMultipartFile file = new MockMultipartFile("file", "cover.jpg", "image/jpeg", new byte[10]);
+
+		mvc.perform(multipart("/api/admin/v1/catalogue-items/item_42/cover").file(file))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.id").value("item_42"));
+	}
+
+	@Test
+	void uploadCoverOnUnknownItemIs404() throws Exception {
+		when(coverImageService.upload(eq("item_nope"), any()))
+				.thenThrow(new ApiException(ErrorCode.NOT_FOUND, "No such catalogue item"));
+		MockMultipartFile file = new MockMultipartFile("file", "cover.jpg", "image/jpeg", new byte[10]);
+
+		mvc.perform(multipart("/api/admin/v1/catalogue-items/item_nope/cover").file(file))
+				.andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("NOT_FOUND"));
 	}
 
 }

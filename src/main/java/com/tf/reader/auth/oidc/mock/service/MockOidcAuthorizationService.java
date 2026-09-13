@@ -20,8 +20,9 @@ import com.tf.reader.auth.oidc.mock.store.MockAuthorizationCodeStore.IssuedCode;
  * {@code openid} scope that silently produces no ID token. Every check here is one a real
  * provider performs, and each one has failed for somebody on their first day against B2C.
  *
- * <p><b>The redirect uri check is the one that matters most.</b> It is compared to the single
- * registered value and must be exactly equal - not a prefix, not "starts with our host". An
+ * <p><b>The redirect uri check is the one that matters most.</b> It is compared against the
+ * registered values and must be exactly equal to one of them - not a prefix, not "starts with our
+ * host". An
  * open redirect here would mean an attacker could have the provider deliver a legitimately
  * issued authorization code to a url they control, which is the classic way an OAuth
  * integration is turned into an account takeover. It is also why the error for a bad redirect
@@ -64,11 +65,11 @@ public class MockOidcAuthorizationService {
 			throw new MockOidcRequestException("unauthorized_client",
 					"Unknown client_id.");
 		}
-		if (!StringUtils.hasText(redirectUri) || !redirectUri.equals(properties.redirectUri())) {
-			log.warn("Mock OIDC authorization request refused: redirect_uri does not match the "
+		if (!StringUtils.hasText(redirectUri) || !properties.redirectUris().contains(redirectUri)) {
+			log.warn("Mock OIDC authorization request refused: redirect_uri does not match any "
 					+ "registered value");
 			throw new MockOidcRequestException("invalid_request",
-					"redirect_uri does not match the one registered for this client.");
+					"redirect_uri does not match one registered for this client.");
 		}
 		if (!RESPONSE_TYPE_CODE.equals(responseType)) {
 			throw new MockOidcRequestException("unsupported_response_type",

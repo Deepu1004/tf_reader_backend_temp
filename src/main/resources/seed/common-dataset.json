@@ -1,0 +1,116 @@
+{
+  "users": [
+    {
+      "_seedWhy": "MEMBER at inst_7f3, matches loan_seed and hold_seed fixtures using the same email across institutions.",
+      "userId": "usr_6712ab",
+      "email": "john.doe@example.com",
+      "institutionId": "inst_7f3",
+      "roles": ["MEMBER"],
+      "collections": ["col_medicine"]
+    },
+    {
+      "_seedWhy": "MEMBER + ADMIN at inst_7f3, for exercising admin-role checks against the same institution as usr_6712ab.",
+      "userId": "usr_b920fe",
+      "email": "jane.roe@example.com",
+      "institutionId": "inst_7f3",
+      "roles": ["MEMBER", "ADMIN"],
+      "collections": ["col_medicine", "col_engineering"]
+    },
+    {
+      "_seedWhy": "inst_7f3 student #3, for a 4-user roster at this institution.",
+      "userId": "usr_7f3a01",
+      "email": "amelia.clarke@inst-7f3.example.com",
+      "institutionId": "inst_7f3",
+      "roles": ["MEMBER"],
+      "collections": ["col_medicine"]
+    },
+    {
+      "_seedWhy": "inst_7f3 student #4.",
+      "userId": "usr_7f3a02",
+      "email": "noah.patel@inst-7f3.example.com",
+      "institutionId": "inst_7f3",
+      "roles": ["MEMBER"],
+      "collections": ["col_nursing"]
+    },
+    {
+      "_seedWhy": "inst_imperial student #1, a 3-user roster at a second real institution from MockInstitutionRepository.",
+      "userId": "usr_imp001",
+      "email": "olivia.chen@inst-imperial.example.com",
+      "institutionId": "inst_imperial",
+      "roles": ["MEMBER"],
+      "collections": ["col_engineering"]
+    },
+    {
+      "_seedWhy": "inst_imperial student #2.",
+      "userId": "usr_imp002",
+      "email": "liam.osei@inst-imperial.example.com",
+      "institutionId": "inst_imperial",
+      "roles": ["MEMBER"],
+      "collections": ["col_engineering"]
+    },
+    {
+      "_seedWhy": "inst_imperial student #3.",
+      "userId": "usr_imp003",
+      "email": "sophia.novak@inst-imperial.example.com",
+      "institutionId": "inst_imperial",
+      "roles": ["MEMBER"],
+      "collections": ["col_open"]
+    },
+    {
+      "_seedWhy": "inst_dsu student #1, a 5-user roster at Dayananda Sagar University.",
+      "userId": "usr_dsu001",
+      "email": "aarav.sharma@inst-dsu.example.com",
+      "institutionId": "inst_dsu",
+      "roles": ["MEMBER"],
+      "collections": ["col_engineering"]
+    },
+    {
+      "_seedWhy": "inst_dsu student #2.",
+      "userId": "usr_dsu002",
+      "email": "diya.reddy@inst-dsu.example.com",
+      "institutionId": "inst_dsu",
+      "roles": ["MEMBER"],
+      "collections": ["col_engineering"]
+    },
+    {
+      "_seedWhy": "inst_dsu student #3.",
+      "userId": "usr_dsu003",
+      "email": "kabir.nair@inst-dsu.example.com",
+      "institutionId": "inst_dsu",
+      "roles": ["MEMBER"],
+      "collections": ["col_medicine"]
+    },
+    {
+      "_seedWhy": "inst_dsu student #4, MEMBER + ADMIN for an admin-role case at this institution too.",
+      "userId": "usr_dsu004",
+      "email": "ananya.iyer@inst-dsu.example.com",
+      "institutionId": "inst_dsu",
+      "roles": ["MEMBER", "ADMIN"],
+      "collections": ["col_engineering", "col_medicine"]
+    },
+    {
+      "_seedWhy": "inst_dsu student #5.",
+      "userId": "usr_dsu005",
+      "email": "vihaan.gupta@inst-dsu.example.com",
+      "institutionId": "inst_dsu",
+      "roles": ["MEMBER"],
+      "collections": ["col_open"]
+    },
+    {
+      "_seedWhy": "inst_xyz student #1, a 2-user roster — the minimum of the 2-to-5 range — at University XYZ.",
+      "userId": "usr_xyz001",
+      "email": "ethan.brooks@inst-xyz.example.com",
+      "institutionId": "inst_xyz",
+      "roles": ["MEMBER"],
+      "collections": ["col_open"]
+    },
+    {
+      "_seedWhy": "inst_xyz student #2.",
+      "userId": "usr_xyz002",
+      "email": "mia.fischer@inst-xyz.example.com",
+      "institutionId": "inst_xyz",
+      "roles": ["MEMBER"],
+      "collections": ["col_open"]
+    }
+  ]
+}

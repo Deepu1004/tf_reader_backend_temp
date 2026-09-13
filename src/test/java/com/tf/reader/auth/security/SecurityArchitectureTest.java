@@ -128,17 +128,21 @@ class SecurityArchitectureTest {
 	 * forgets its condition fails the build instead of shipping switched on.
 	 */
 	@Test
-	void everyPartOfTheMockIdentityProviderIsSwitchedOffUnlessAskedFor() throws IOException {
+	void everyPartOfEitherMockIdentityProviderIsSwitchedOffUnlessAskedFor() throws IOException {
+		// Both mocks get the same rule: the OIDC one via @MockOidcComponent, the SAML one via its
+		// own mirror, @SamlMockComponent. Neither package may ship a class that forgot its
+		// condition.
 		List<String> unconditional = new ArrayList<>();
 
 		for (Path file : sourceFiles()) {
 			String path = file.toString().replace('\\', '/');
-			if (!path.contains("/auth/oidc/mock/")) {
+			if (!path.contains("/auth/oidc/mock/") && !path.contains("/auth/saml/mock/")) {
 				continue;
 			}
 			String source = Files.readString(file);
 			boolean conditional = source.contains("@ConditionalOnProperty")
 					|| source.contains("@MockOidcComponent")
+					|| source.contains("@SamlMockComponent")
 					// Records holding configuration are inert: they are only ever constructed by
 					// the conditional configuration that binds them.
 					|| source.contains("public record ")
@@ -151,20 +155,43 @@ class SecurityArchitectureTest {
 
 		assertThat(unconditional)
 				.describedAs("""
-						Every class in the mock identity provider must be conditional on \
-						mock-oidc.enabled - annotate it @MockOidcComponent. A mock provider mints \
-						identities for arbitrary users; one that can be switched on by forgetting \
-						to switch it off is a hole, not a convenience.""")
+						Every class in a mock identity provider must be conditional on \
+						mock-oidc.enabled or saml-mock.enabled - annotate it @MockOidcComponent or \
+						@SamlMockComponent. A mock provider mints identities for arbitrary users; \
+						one that can be switched on by forgetting to switch it off is a hole, not a \
+						convenience.""")
 				.isEmpty();
 	}
 
 	@Test
-	void theMockIdentityProviderIsOffByDefault() throws IOException {
+	void bothMockIdentityProvidersAreOffByDefault() throws IOException {
 		// The configuration half of the rule above. A default of true here would make every one of
 		// those conditions pass everywhere, including production.
-		assertThat(Files.readString(Path.of("src/main/resources/application.yml")))
+		String applicationYml = Files.readString(Path.of("src/main/resources/application.yml"));
+		assertThat(applicationYml)
 				.describedAs("application.yml must ship mock-oidc disabled")
 				.contains("mock-oidc:")
+				.contains("enabled: false");
+		assertThat(applicationYml)
+				.describedAs("application.yml must ship saml-mock disabled")
+				.contains("saml-mock:")
+				.contains("enabled: false");
+	}
+
+	@Test
+	void theDevTokenControllerIsConditionalAndOffByDefault() throws IOException {
+		// TempDevAuthController mints a token for anyone with no check at all - the same risk
+		// category as the mock identity providers above, so it gets the same two-part guarantee:
+		// the class itself must declare a condition, and application.yml must ship it disabled.
+		String source = Files.readString(Path.of(
+				"src/main/java/com/tf/reader/auth/controller/TempDevAuthController.java"));
+		assertThat(source)
+				.describedAs("TempDevAuthController must be @ConditionalOnProperty-gated")
+				.contains("@ConditionalOnProperty");
+
+		assertThat(Files.readString(Path.of("src/main/resources/application.yml")))
+				.describedAs("application.yml must ship tnf.dev-auth disabled")
+				.contains("dev-auth:")
 				.contains("enabled: false");
 	}
 

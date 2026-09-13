@@ -44,9 +44,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * <p>
  * Security filters are excluded ({@code addFilters = false}) so shape and
- * status-code assertions are fast and don't need a JWT. The scope guard on the
- * list endpoint ({@code @adminScope.isSuperAdmin()}) is verified in
- * {@link PublisherAdminListSecurityTest}.
+ * status-code assertions are fast and don't need a JWT. The role guard and the
+ * publisher scope narrowing on the list endpoint live entirely in
+ * {@link com.tf.reader.admin.service.PublisherAdminService} and are verified in
+ * {@link PublisherAdminServiceTest} - the controller reads no role of its own.
  */
 @WebMvcTest(controllers = PublisherAdminController.class)
 @AutoConfigureMockMvc(addFilters = false)
@@ -65,7 +66,7 @@ class PublisherAdminControllerTest {
 
 	private static PublisherView routledgeView() {
 		return new PublisherView("pub_r1", "ROUTLEDGE", "Routledge", "Academic imprint of Taylor and Francis",
-				"https://cdn.tf/logos/routledge.png", RecordStatus.ACTIVE, 42, 3, CREATED);
+				"https://cdn.tf/logos/routledge.png", RecordStatus.ACTIVE, 42, 3, CREATED, null);
 	}
 
 	// ---------------------------------------------------------------- list
@@ -74,7 +75,7 @@ class PublisherAdminControllerTest {
 	@DisplayName("list returns 200 with the four page keys and correct item shape")
 	@SuppressWarnings("unchecked")
 	void listReturns200WithPageShape() throws Exception {
-		when(service.list(any(), any(), any()))
+		when(service.list(any(), any(), any(), any()))
 				.thenReturn(new PageResponse<>(List.of(routledgeView()), 0, 20, 1));
 
 		String body = mvc.perform(get("/api/admin/v1/publishers")).andExpect(status().isOk())
@@ -85,8 +86,11 @@ class PublisherAdminControllerTest {
 		assertThat(parsed.keySet()).containsExactlyInAnyOrder("items", "page", "size", "total");
 
 		Map<String, Object> item = ((List<Map<String, Object>>) parsed.get("items")).get(0);
+		// entitlementStatus is serialised even when null, and deliberately so: null ("not viewing as
+		// an institution") and "none" ("viewing as one, no grant") are different answers, and a
+		// missing key would be indistinguishable from the first.
 		assertThat(item.keySet()).containsExactlyInAnyOrder("id", "code", "name", "description", "logoUrl", "status",
-				"itemCount", "collectionCount", "createdAt");
+				"itemCount", "collectionCount", "createdAt", "entitlementStatus");
 	}
 
 	// ---------------------------------------------------------------- create
@@ -161,7 +165,7 @@ class PublisherAdminControllerTest {
 	@DisplayName("PATCH status returns 200 with the updated publisher")
 	void changeStatusReturns200() throws Exception {
 		PublisherView suspended = new PublisherView("pub_r1", "ROUTLEDGE", "Routledge", null, null,
-				RecordStatus.SUSPENDED, 42, 3, CREATED);
+				RecordStatus.SUSPENDED, 42, 3, CREATED, null);
 		when(service.changeStatus(eq("pub_r1"), any())).thenReturn(suspended);
 
 		mvc.perform(patch("/api/admin/v1/publishers/pub_r1/status").contentType(MediaType.APPLICATION_JSON)

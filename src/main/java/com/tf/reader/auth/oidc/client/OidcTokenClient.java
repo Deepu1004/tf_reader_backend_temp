@@ -16,19 +16,18 @@ import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 
 /**
- * Exchanges an authorization code for tokens, <b>server to server</b>.
+ * Exchanges the reader's own username and password for tokens, <b>server to server</b>, using
+ * the OAuth 2.0 {@code password} grant (RFC 6749 §4.3).
  *
- * <p>That phrase is the whole reason the authorization-code flow exists. The browser only ever
- * carries the code - a single-use, short-lived value that is worthless without our client
- * secret - and the tokens themselves travel on a connection between this backend and the
- * provider that the user's browser never sees and cannot intercept. It is also why no ID token
- * is ever put in a redirect url.
+ * <p>The credential travels once, from our backend to the provider, over a connection the
+ * reader's client never sees. It is never logged and never stored - only forwarded, in this one
+ * request, and then forgotten.
  *
- * <p>The client secret proves we are the application the code was issued to. It is sent in the
+ * <p>The client secret proves we are the application the request is issued to. It is sent in the
  * request body ({@code client_secret_post}), which both Azure AD B2C and the local mock accept.
  *
  * <p><b>Nothing here is provider-specific.</b> The url comes from configuration; the request is
- * the one RFC 6749 §4.1.3 specifies. Pointing {@code tnf.auth.oidc.token-uri} at B2C instead of
+ * the one RFC 6749 §4.3.2 specifies. Pointing {@code tnf.auth.oidc.token-uri} at B2C instead of
  * the mock is the entire migration, as far as this class is concerned.
  */
 @Component
@@ -68,25 +67,24 @@ public class OidcTokenClient {
 	}
 
 	/**
-	 * @param code the authorization code the provider sent to our callback
+	 * @param username the reader's own username, presented directly to the provider
+	 * @param password the reader's own password, presented directly to the provider
 	 * @return the token response, whose ID token is <b>not yet validated</b> - it is a string
 	 *         from the network until {@link com.tf.reader.auth.oidc.validation.OidcIdTokenValidator} has finished with it
-	 * @throws ApiException 401 if the exchange fails for any reason
+	 * @throws ApiException 401 if the exchange fails for any reason, including a wrong password
 	 */
-	public OidcTokenResponse exchangeAuthorizationCode(String code) {
+	public OidcTokenResponse exchangePassword(String username, String password) {
 		MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-		form.add("grant_type", "authorization_code");
-		form.add("code", code);
+		form.add("grant_type", "password");
+		form.add("username", username);
+		form.add("password", password);
 		form.add("client_id", properties.clientId());
 		form.add("client_secret", properties.clientSecret());
-		// Sent again, and the provider checks it matches the one the code was issued against.
-		// RFC 6749 §4.1.3 requires it precisely so a stolen code cannot be redeemed towards a
-		// different redirect uri.
-		form.add("redirect_uri", properties.redirectUri());
+		form.add("scope", properties.scopeParameter());
 
 		try {
-			// Deliberately NOT logged with the code in it. An authorization code is a credential:
-			// short-lived and single use, but a credential, and logs outlive both.
+			// Deliberately NOT logged with the username or password in it - both are credentials,
+			// and logs outlive a request.
 			log.debug("OIDC token exchange: POST {}", properties.tokenUri());
 
 			@SuppressWarnings("unchecked")

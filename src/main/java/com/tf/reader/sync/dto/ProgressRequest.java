@@ -36,7 +36,9 @@ public record ProgressRequest(
     public void applyTo(Progress target) {
         target.setUserId(userId);
         target.setBookId(bookId);
-        target.setOffset(offset);
+        // Audio position lives entirely in locator.positionMs; offset carries no meaning for audio.
+        boolean isAudio = locator != null && Locator.TYPE_AUDIO.equals(locator.getType());
+        target.setOffset(isAudio ? 0L : offset);
         target.setLocator(locator);
     }
 }

@@ -20,7 +20,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.mongodb.MongoDBContainer;
+import org.testcontainers.containers.MongoDBContainer;
 
 import com.tf.reader.library.service.ReaderSequenceAllocator;
 
@@ -46,7 +46,10 @@ class ReaderSequenceAllocatorIT {
 
 	@DynamicPropertySource
 	static void mongoProperties(DynamicPropertyRegistry registry) {
-		registry.add("spring.data.mongodb.uri", MONGO::getReplicaSetUrl);
+		// spring.mongodb.uri, not spring.data.mongodb.uri: Spring Boot 4 split the driver's
+		// connection settings out of Spring Data's, and spring.data.mongodb.uri now binds to
+		// nothing — leaving the driver on its localhost:27017 default and the container ignored.
+		registry.add("spring.mongodb.uri", MONGO::getReplicaSetUrl);
 	}
 
 	@Autowired
