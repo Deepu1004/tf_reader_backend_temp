@@ -29,9 +29,9 @@ import com.tf.reader.catalogue.opds.dto.OpdsNavigationFeed;
 import com.tf.reader.catalogue.opds.dto.OpdsPublication;
 import com.tf.reader.catalogue.opds.dto.OpdsPublicationDocument;
 import com.tf.reader.catalogue.opds.dto.OpdsPublicationFeed;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.FeedSettingsRepository;
 import com.tf.reader.catalogue.repository.InstitutionSearchRepository;
+import com.tf.reader.catalogue.service.CatalogueItemStore;
 import com.tf.reader.catalogue.service.CatalogueUrlBuilder;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
@@ -54,7 +54,7 @@ public class OpdsFeedService {
 
     private final InstitutionSearchRepository institutionSearchRepository;
     private final FeedSettingsRepository feedSettingsRepository;
-    private final CatalogueItemRepository catalogueItemRepository;
+    private final CatalogueItemStore catalogueItemStore;
     private final OpdsEntitlementFilter entitlementFilter;
     private final OpdsCatalogueQuery catalogueQuery;
     private final OpdsSearchQuery searchQuery;
@@ -98,7 +98,7 @@ public class OpdsFeedService {
                 "All titles"));
         // Additive signpost: a top-level Journal alongside the curated shelves. No schema
         // change - one more OpdsLink in the same navigation array a client already iterates.
-        catalogueItemRepository.findByWorkTypeAndStatus(WorkType.JOURNAL, ItemStatus.PUBLISHED).stream()
+        catalogueItemStore.findByWorkTypeAndStatus(WorkType.JOURNAL, ItemStatus.PUBLISHED).stream()
                 .sorted(Comparator.comparing(CatalogueItem::getSequence, Comparator.nullsLast(Integer::compareTo)))
                 .forEach(journal -> navigation.add(new OpdsLink("subsection",
                         catalogueUrlBuilder.workUrlFor(institutionId, journal.getId()), OPDS_MEDIA_TYPE,
@@ -107,7 +107,7 @@ public class OpdsFeedService {
         String title = settings.map(FeedSettings::getFeedTitle).filter(t -> !t.isBlank())
                 .orElse(institution.getName());
         int numberOfItems = entitlementFilter.countEntitled(
-                catalogueItemRepository.findByStatusAndContentState(ItemStatus.PUBLISHED, ContentState.READY,
+                catalogueItemStore.findByStatusAndContentState(ItemStatus.PUBLISHED, ContentState.READY,
                         Sort.unsorted()),
                 subject);
         OpdsFeedMetadata metadata = new OpdsFeedMetadata(title, numberOfItems, null, null, institution.getUpdatedAt());
@@ -165,7 +165,7 @@ public class OpdsFeedService {
     // an entitlement lookup for an item that could not be shown regardless of the answer.
     private List<CatalogueItem> itemsForShelf(Shelf shelf) {
         List<String> itemIds = shelf.getItemIds() == null ? List.of() : shelf.getItemIds();
-        Map<String, CatalogueItem> byId = catalogueItemRepository.findAllById(itemIds).stream()
+        Map<String, CatalogueItem> byId = catalogueItemStore.findAllById(itemIds).stream()
                 .filter(item -> item.getStatus() == ItemStatus.PUBLISHED && item.getContentState() == ContentState.READY)
                 .collect(Collectors.toMap(CatalogueItem::getId, item -> item));
         return itemIds.stream().map(byId::get).filter(Objects::nonNull).toList();
@@ -180,7 +180,7 @@ public class OpdsFeedService {
     // NOT_FOUND - the three are deliberately indistinguishable per wokay-api.yaml, so the
     // catalogue cannot be mapped by walking identifiers.
     public OpdsPublicationDocument publicationDocument(Institution institution, String itemId, SubjectRef subject) {
-        CatalogueItem item = catalogueItemRepository.findById(itemId)
+        CatalogueItem item = catalogueItemStore.findById(itemId)
                 .filter(candidate -> candidate.getStatus() == ItemStatus.PUBLISHED
                         && candidate.getContentState() == ContentState.READY)
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "No such publication"));
@@ -197,14 +197,14 @@ public class OpdsFeedService {
      * PUBLISHED - same indistinguishable-404 rule the rest of OPDS already uses.
      */
     public Object workFeed(Institution institution, String workId, SubjectRef subject) {
-        CatalogueItem work = catalogueItemRepository.findById(workId)
+        CatalogueItem work = catalogueItemStore.findById(workId)
                 .filter(item -> item.getStatus() == ItemStatus.PUBLISHED)
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "No such work"));
         WorkType workType = work.getWorkType();
         String institutionId = institution.getId();
 
         if (workType == WorkType.JOURNAL || workType == WorkType.VOLUME) {
-            List<CatalogueItem> children = catalogueItemRepository.findByParentId(workId).stream()
+            List<CatalogueItem> children = catalogueItemStore.findByParentId(workId).stream()
                     .filter(child -> child.getStatus() == ItemStatus.PUBLISHED)
                     .sorted(Comparator.comparing(CatalogueItem::getSequence, Comparator.nullsLast(Integer::compareTo)))
                     .toList();
@@ -219,7 +219,7 @@ public class OpdsFeedService {
         }
 
         if (workType == WorkType.ISSUE) {
-            List<CatalogueItem> articles = catalogueItemRepository.findByParentId(workId).stream()
+            List<CatalogueItem> articles = catalogueItemStore.findByParentId(workId).stream()
                     .filter(child -> child.getStatus() == ItemStatus.PUBLISHED
                             && child.getContentState() == ContentState.READY)
                     .sorted(Comparator.comparing(CatalogueItem::getSequence, Comparator.nullsLast(Integer::compareTo)))

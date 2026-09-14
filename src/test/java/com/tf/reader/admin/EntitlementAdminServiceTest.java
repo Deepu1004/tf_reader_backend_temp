@@ -38,8 +38,8 @@ import com.tf.reader.catalogue.entity.Entitlement;
 import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.catalogue.entity.ScopeType;
-import com.tf.reader.catalogue.repository.BookCollectionRepository;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
+import com.tf.reader.catalogue.service.BookCollectionStore;
+import com.tf.reader.catalogue.service.CatalogueItemStore;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
 import com.tf.reader.catalogue.repository.InstitutionRepository;
 import com.tf.reader.catalogue.repository.PublisherRepository;
@@ -56,13 +56,13 @@ class EntitlementAdminServiceTest {
 	private final EntitlementRepository entitlementRepository = mock(EntitlementRepository.class);
 	private final InstitutionRepository institutionRepository = mock(InstitutionRepository.class);
 	private final PublisherRepository publisherRepository = mock(PublisherRepository.class);
-	private final BookCollectionRepository bookCollectionRepository = mock(BookCollectionRepository.class);
-	private final CatalogueItemRepository catalogueItemRepository = mock(CatalogueItemRepository.class);
+	private final BookCollectionStore bookCollectionStore = mock(BookCollectionStore.class);
+	private final CatalogueItemStore catalogueItemStore = mock(CatalogueItemStore.class);
 	private final CatalogueVersionBumper versionBumper = mock(CatalogueVersionBumper.class);
 	private final AdminAuditWriter auditWriter = mock(AdminAuditWriter.class);
 
 	private final EntitlementAdminService service = new EntitlementAdminService(entitlementRepository,
-			institutionRepository, publisherRepository, bookCollectionRepository, catalogueItemRepository,
+			institutionRepository, publisherRepository, bookCollectionStore, catalogueItemStore,
 			versionBumper, auditWriter, new AdminScopeAuthorizer());
 
 	@BeforeEach
@@ -90,10 +90,10 @@ class EntitlementAdminServiceTest {
 	@Test
 	void createsACollectionGrantWithAResolvedItemCount() {
 		when(institutionRepository.existsById("inst_7f3")).thenReturn(true);
-		when(bookCollectionRepository.existsById("col_law2024")).thenReturn(true);
-		when(bookCollectionRepository.findById("col_law2024"))
+		when(bookCollectionStore.existsById("col_law2024")).thenReturn(true);
+		when(bookCollectionStore.findById("col_law2024"))
 				.thenReturn(Optional.of(new BookCollection("col_law2024", "pub_rtlg", "law2024", "Law 2024", null)));
-		when(catalogueItemRepository.countByCollectionIds("col_law2024")).thenReturn(2L);
+		when(catalogueItemStore.countByCollectionIds("col_law2024")).thenReturn(2L);
 		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
 		EntitlementCreate write = new EntitlementCreate(ScopeType.COLLECTION, "col_law2024", 2, null,
@@ -124,7 +124,7 @@ class EntitlementAdminServiceTest {
 	@Test
 	void createWithAnUnknownScopeIdIsValidationFailed() {
 		when(institutionRepository.existsById("inst_7f3")).thenReturn(true);
-		when(bookCollectionRepository.existsById("col_ghost")).thenReturn(false);
+		when(bookCollectionStore.existsById("col_ghost")).thenReturn(false);
 
 		EntitlementCreate write = new EntitlementCreate(ScopeType.COLLECTION, "col_ghost", null, null, null, null,
 				null);
@@ -262,8 +262,8 @@ class EntitlementAdminServiceTest {
 		Entitlement existing = entitlement("ent_5a1", "inst_7f3", ScopeType.COLLECTION, "col_law2024", 2, 3);
 		when(entitlementRepository.findById("ent_5a1")).thenReturn(Optional.of(existing));
 		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-		when(bookCollectionRepository.findById("col_law2024")).thenReturn(Optional.empty());
-		when(catalogueItemRepository.countByCollectionIds("col_law2024")).thenReturn(0L);
+		when(bookCollectionStore.findById("col_law2024")).thenReturn(Optional.empty());
+		when(catalogueItemStore.countByCollectionIds("col_law2024")).thenReturn(0L);
 
 		EntitlementUpdate write = new EntitlementUpdate(5, 30, LocalDate.parse("2026-09-01"),
 				LocalDate.parse("2027-01-31"), 3L);
@@ -299,8 +299,8 @@ class EntitlementAdminServiceTest {
 				EntitlementStatus.PENDING);
 		when(entitlementRepository.findById("ent_5a1")).thenReturn(Optional.of(existing));
 		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-		when(bookCollectionRepository.findById("col_law2024")).thenReturn(Optional.empty());
-		when(catalogueItemRepository.countByCollectionIds("col_law2024")).thenReturn(0L);
+		when(bookCollectionStore.findById("col_law2024")).thenReturn(Optional.empty());
+		when(catalogueItemStore.countByCollectionIds("col_law2024")).thenReturn(0L);
 
 		EntitlementUpdate write = new EntitlementUpdate(5, 30, LocalDate.parse("2026-09-01"),
 				LocalDate.parse("2027-01-31"), 3L);
@@ -317,8 +317,8 @@ class EntitlementAdminServiceTest {
 		Entitlement existing = entitlement("ent_5a1", "inst_7f3", ScopeType.COLLECTION, "col_law2024", 2, 3);
 		when(entitlementRepository.findById("ent_5a1")).thenReturn(Optional.of(existing));
 		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-		when(bookCollectionRepository.findById("col_law2024")).thenReturn(Optional.empty());
-		when(catalogueItemRepository.countByCollectionIds("col_law2024")).thenReturn(0L);
+		when(bookCollectionStore.findById("col_law2024")).thenReturn(Optional.empty());
+		when(catalogueItemStore.countByCollectionIds("col_law2024")).thenReturn(0L);
 
 		EntitlementUpdate write = new EntitlementUpdate(5, 30, LocalDate.parse("2026-09-01"),
 				LocalDate.parse("2027-01-31"), 3L);
@@ -337,8 +337,8 @@ class EntitlementAdminServiceTest {
 		Entitlement existing = entitlement("ent_5a1", "inst_7f3", ScopeType.COLLECTION, "col_law2024", 2, 3);
 		when(entitlementRepository.findById("ent_5a1")).thenReturn(Optional.of(existing));
 		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-		when(bookCollectionRepository.findById("col_law2024")).thenReturn(Optional.empty());
-		when(catalogueItemRepository.countByCollectionIds("col_law2024")).thenReturn(0L);
+		when(bookCollectionStore.findById("col_law2024")).thenReturn(Optional.empty());
+		when(catalogueItemStore.countByCollectionIds("col_law2024")).thenReturn(0L);
 
 		EntitlementUpdate write = new EntitlementUpdate(null, 30, LocalDate.parse("2026-09-01"), null, 3L);
 
@@ -471,7 +471,7 @@ class EntitlementAdminServiceTest {
 		Page<Entitlement> page = new PageImpl<>(List.of(existing));
 		when(entitlementRepository.findByInstitutionId(eq("inst_7f3"), any())).thenReturn(page);
 		when(publisherRepository.findById("pub_rtlg")).thenReturn(Optional.empty());
-		when(catalogueItemRepository.countByPublisherId("pub_rtlg")).thenReturn(7L);
+		when(catalogueItemStore.countByPublisherId("pub_rtlg")).thenReturn(7L);
 
 		var result = service.list("inst_7f3", new PageQuery(0, 20));
 
@@ -493,12 +493,12 @@ class EntitlementAdminServiceTest {
 	@Test
 	void resolvedItemCountForAnItemScopeIsOneOnlyWhenPublished() {
 		when(institutionRepository.existsById("inst_7f3")).thenReturn(true);
-		when(catalogueItemRepository.existsById("item_42")).thenReturn(true);
+		when(catalogueItemStore.existsById("item_42")).thenReturn(true);
 		CatalogueItem published = new CatalogueItem();
 		published.setId("item_42");
 		published.setTitle("Rights for Robots");
 		published.setStatus(ItemStatus.PUBLISHED);
-		when(catalogueItemRepository.findById("item_42")).thenReturn(Optional.of(published));
+		when(catalogueItemStore.findById("item_42")).thenReturn(Optional.of(published));
 		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
 		EntitlementCreate write = new EntitlementCreate(ScopeType.ITEM, "item_42", null, null, null, null, null);
@@ -511,12 +511,12 @@ class EntitlementAdminServiceTest {
 	@Test
 	void resolvedItemCountForAnUnpublishedItemScopeIsZero() {
 		when(institutionRepository.existsById("inst_7f3")).thenReturn(true);
-		when(catalogueItemRepository.existsById("item_42")).thenReturn(true);
+		when(catalogueItemStore.existsById("item_42")).thenReturn(true);
 		CatalogueItem draft = new CatalogueItem();
 		draft.setId("item_42");
 		draft.setTitle("Rights for Robots");
 		draft.setStatus(ItemStatus.DRAFT);
-		when(catalogueItemRepository.findById("item_42")).thenReturn(Optional.of(draft));
+		when(catalogueItemStore.findById("item_42")).thenReturn(Optional.of(draft));
 		when(entitlementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
 		EntitlementCreate write = new EntitlementCreate(ScopeType.ITEM, "item_42", null, null, null, null, null);
