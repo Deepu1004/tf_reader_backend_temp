@@ -14,7 +14,7 @@ import com.tf.reader.catalogue.api.EntitlementDecision;
 import com.tf.reader.catalogue.api.EntitlementQuery;
 import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.ContentState;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
+import com.tf.reader.catalogue.service.CatalogueItemStore;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.content.api.LoanProof;
@@ -48,7 +48,7 @@ class ContentAccessGrantImpl implements ContentAccessGrant {
 
 	private static final Duration URL_TTL = Duration.ofMinutes(15);
 
-	private final CatalogueItemRepository catalogueItemRepository;
+	private final CatalogueItemStore catalogueItemStore;
 	private final BookStorage bookStorage;
 	private final BookEncryptionKeys bookEncryptionKeys;
 	private final EntitlementQuery entitlementQuery;
@@ -65,7 +65,7 @@ class ContentAccessGrantImpl implements ContentAccessGrant {
 			throw new IllegalArgumentException("subject is required");
 		}
 
-		CatalogueItem item = catalogueItemRepository.findById(request.itemId())
+		CatalogueItem item = catalogueItemStore.findById(request.itemId())
 				.orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "No such catalogue item"));
 		if (item.getContentState() != ContentState.READY) {
 			throw new ApiException(ErrorCode.CONTENT_NOT_READY, "This book is not ready to be read yet.");
@@ -102,7 +102,7 @@ class ContentAccessGrantImpl implements ContentAccessGrant {
 
 		Encryption encryption = null;
 		if (asset.isEncrypted()) {
-			String wrappedBek = bookEncryptionKeys.rewrapForDevice(asset.getMasterWrappedBek(),
+			String wrappedBek = bookEncryptionKeys.rewrapForDevice(item.getPublisherId(), asset.getMasterWrappedBek(),
 					request.devicePublicKey());
 			encryption = new Encryption("AES-256-GCM", "nonce(12) || ciphertext || tag(16)", wrappedBek,
 					"RSA-OAEP-256", asset.getKeyId(), fingerprintOf(request.devicePublicKey()));

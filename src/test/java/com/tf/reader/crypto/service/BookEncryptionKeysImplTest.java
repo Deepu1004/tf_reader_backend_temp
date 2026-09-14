@@ -1,5 +1,6 @@
 package com.tf.reader.crypto.service;
 
+import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PrivateKey;
@@ -11,12 +12,14 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.OAEPParameterSpec;
 import javax.crypto.spec.PSource;
+import javax.crypto.spec.SecretKeySpec;
 
 import org.junit.jupiter.api.Test;
 
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.crypto.CryptoProperties;
+import com.tf.reader.crypto.api.KmsClient;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -24,10 +27,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class BookEncryptionKeysImplTest {
 
 	private static final int DEVICE_KEY_MIN_BITS = 2048;
+	private static final String PUBLISHER_ID = "pub_test";
 
+	// A KmsClient stand-in that AESWraps against one fixed key regardless of vaultRef, the same
+	// operation MongoBackedKmsClient performs once it resolves an effective key - this test is
+	// about BookEncryptionKeysImpl's own behaviour (delegation, zeroing, RSA device wrap), not
+	// about key resolution, which PublisherVaultKeyStoreIT/MongoBackedKmsClientTest cover.
 	private final SecretKey masterKey = aesKey();
+	private final KmsClient kmsClient = new FixedKeyKmsClient(masterKey);
 	private final BookEncryptionKeysImpl keys =
-			new BookEncryptionKeysImpl(masterKey, new CryptoProperties(null, null, DEVICE_KEY_MIN_BITS));
+			new BookEncryptionKeysImpl(kmsClient, new CryptoProperties(null, null, DEVICE_KEY_MIN_BITS));
 
 	// Mirrors ContentAccessGrantImplTest's OAEP_SHA256 spec exactly: this is what proves
 	// rewrapForDevice's output is unwrappable by a real client, not just self-consistent.
@@ -64,8 +73,8 @@ class BookEncryptionKeysImplTest {
 	void roundTripsABekThroughTheMasterKey() {
 		SecretKey bek = keys.generate();
 
-		String masterWrappedBek = keys.wrapWithMasterKey(bek);
-		SecretKey unwrapped = keys.unwrapWithMasterKey(masterWrappedBek);
+		String masterWrappedBek = keys.wrapWithMasterKey(PUBLISHER_ID, bek);
+		SecretKey unwrapped = keys.unwrapWithMasterKey(PUBLISHER_ID, masterWrappedBek);
 
 		assertThat(unwrapped.getEncoded()).isEqualTo(bek.getEncoded());
 	}
@@ -73,30 +82,56 @@ class BookEncryptionKeysImplTest {
 	@Test
 	void aDeviceCanUnwrapTheBekItWasWrappedFor() throws Exception {
 		SecretKey bek = keys.generate();
-		String masterWrappedBek = keys.wrapWithMasterKey(bek);
+		String masterWrappedBek = keys.wrapWithMasterKey(PUBLISHER_ID, bek);
 		KeyPair device = rsaKeyPair(DEVICE_KEY_MIN_BITS);
 
-		String wrappedBek = keys.rewrapForDevice(masterWrappedBek, device.getPublic().getEncoded());
+		String wrappedBek = keys.rewrapForDevice(PUBLISHER_ID, masterWrappedBek, device.getPublic().getEncoded());
 
 		assertThat(unwrapOnDevice(wrappedBek, device.getPrivate())).isEqualTo(bek.getEncoded());
 	}
 
 	@Test
 	void rejectsADeviceKeyUnderTheConfiguredMinimum() {
-		String masterWrappedBek = keys.wrapWithMasterKey(keys.generate());
+		String masterWrappedBek = keys.wrapWithMasterKey(PUBLISHER_ID, keys.generate());
 		KeyPair tooSmall = rsaKeyPair(1024);
 
-		assertThatThrownBy(() -> keys.rewrapForDevice(masterWrappedBek, tooSmall.getPublic().getEncoded()))
+		assertThatThrownBy(() -> keys.rewrapForDevice(PUBLISHER_ID, masterWrappedBek, tooSmall.getPublic().getEncoded()))
 				.isInstanceOfSatisfying(ApiException.class,
 						e -> assertThat(e.getCode()).isEqualTo(ErrorCode.INVALID_DEVICE_PUBLIC_KEY));
 	}
 
 	@Test
 	void rejectsADevicePublicKeyThatIsNotValidRsaSpki() {
-		String masterWrappedBek = keys.wrapWithMasterKey(keys.generate());
+		String masterWrappedBek = keys.wrapWithMasterKey(PUBLISHER_ID, keys.generate());
 
-		assertThatThrownBy(() -> keys.rewrapForDevice(masterWrappedBek, new byte[] {1, 2, 3}))
+		assertThatThrownBy(() -> keys.rewrapForDevice(PUBLISHER_ID, masterWrappedBek, new byte[] {1, 2, 3}))
 				.isInstanceOf(ApiException.class);
+	}
+
+	private record FixedKeyKmsClient(SecretKey key) implements KmsClient {
+
+		@Override
+		public String wrapKey(String vaultRef, byte[] plaintextKey) {
+			try {
+				Cipher cipher = Cipher.getInstance("AESWrap");
+				cipher.init(Cipher.WRAP_MODE, key);
+				return Base64.getEncoder().encodeToString(cipher.wrap(new SecretKeySpec(plaintextKey, "AES")));
+			} catch (GeneralSecurityException e) {
+				throw new IllegalStateException(e);
+			}
+		}
+
+		@Override
+		public byte[] unwrapKey(String vaultRef, String wrappedKey) {
+			try {
+				Cipher cipher = Cipher.getInstance("AESWrap");
+				cipher.init(Cipher.UNWRAP_MODE, key);
+				byte[] wrapped = Base64.getDecoder().decode(wrappedKey);
+				return ((SecretKey) cipher.unwrap(wrapped, "AES", Cipher.SECRET_KEY)).getEncoded();
+			} catch (GeneralSecurityException e) {
+				throw new IllegalStateException(e);
+			}
+		}
 	}
 
 }

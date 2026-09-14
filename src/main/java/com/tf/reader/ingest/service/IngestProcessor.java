@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
 import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.ContentType;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
+import com.tf.reader.catalogue.service.CatalogueItemStore;
 import com.tf.reader.catalogue.service.CatalogueVersionBumper;
 import com.tf.reader.ingest.api.BookStorage;
 import com.tf.reader.ingest.api.ObjectNotFoundException;
@@ -50,7 +50,7 @@ public class IngestProcessor {
 
 	private static final Logger log = LoggerFactory.getLogger(IngestProcessor.class);
 
-	private final CatalogueItemRepository catalogueItemRepository;
+	private final CatalogueItemStore catalogueItemStore;
 	private final BookStorage bookStorage;
 	private final AssetLocker assetLocker;
 	private final SearchIndexBuilder searchIndexBuilder;
@@ -58,11 +58,11 @@ public class IngestProcessor {
 	private final Clock clock;
 	private final Duration watchdogTimeout;
 
-	public IngestProcessor(CatalogueItemRepository catalogueItemRepository, BookStorage bookStorage,
+	public IngestProcessor(CatalogueItemStore catalogueItemStore, BookStorage bookStorage,
 			AssetLocker assetLocker, SearchIndexBuilder searchIndexBuilder,
 			CatalogueVersionBumper catalogueVersionBumper, Clock clock,
 			@Value("${tf.ingest.watchdog-timeout:15m}") Duration watchdogTimeout) {
-		this.catalogueItemRepository = catalogueItemRepository;
+		this.catalogueItemStore = catalogueItemStore;
 		this.bookStorage = bookStorage;
 		this.assetLocker = assetLocker;
 		this.searchIndexBuilder = searchIndexBuilder;
@@ -73,7 +73,7 @@ public class IngestProcessor {
 
 	@Scheduled(fixedDelayString = "${tf.ingest.poll-interval:5s}")
 	public void processQueued() {
-		for (CatalogueItem item : catalogueItemRepository.findByContentState(ContentState.QUEUED)) {
+		for (CatalogueItem item : catalogueItemStore.findByContentState(ContentState.QUEUED)) {
 			try {
 				processItem(item);
 			}
@@ -90,7 +90,7 @@ public class IngestProcessor {
 	@Scheduled(fixedDelayString = "${tf.ingest.watchdog-interval:1m}")
 	public void expireStuck() {
 		Instant cutoff = clock.instant().minus(watchdogTimeout);
-		List<CatalogueItem> stuck = catalogueItemRepository
+		List<CatalogueItem> stuck = catalogueItemStore
 				.findByContentStateInAndUpdatedAtBefore(List.of(ContentState.QUEUED, ContentState.PROCESSING), cutoff);
 		for (CatalogueItem item : stuck) {
 			try {
@@ -152,7 +152,7 @@ public class IngestProcessor {
 		Instant queuedAt = part.getUpdatedAt();
 		part.setContentState(ContentState.PROCESSING);
 		part.setUpdatedAt(clock.instant());
-		catalogueItemRepository.save(item);
+		catalogueItemStore.save(item);
 
 		String itemId = item.getId();
 		ContentType format = asset.getFormat();
@@ -171,12 +171,12 @@ public class IngestProcessor {
 			// still fails it if it is genuinely never coming, instead of retrying forever.
 			part.setContentState(ContentState.QUEUED);
 			part.setUpdatedAt(queuedAt);
-			catalogueItemRepository.save(item);
+			catalogueItemStore.save(item);
 			return;
 		}
 
 		if (TierRules.requiresLocking(item.getAccessTier(), format)) {
-			storeLocked(itemId, asset, part, plaintext, uploadedMimeType);
+			storeLocked(itemId, item.getPublisherId(), asset, part, plaintext, uploadedMimeType);
 		}
 		else {
 			storeUnlocked(itemId, asset, part, plaintext, uploadedMimeType);
@@ -185,7 +185,7 @@ public class IngestProcessor {
 		part.setContentState(ContentState.READY);
 		part.setContentError(null);
 		part.setUpdatedAt(clock.instant());
-		catalogueItemRepository.save(item);
+		catalogueItemStore.save(item);
 
 		deleteBestEffort(stagingKey, itemId);
 	}
@@ -219,10 +219,10 @@ public class IngestProcessor {
 		part.setIndexKey(indexKey);
 	}
 
-	private void storeLocked(String itemId, CatalogueItem.Asset asset, CatalogueItem.Part part, byte[] plaintext,
-			String uploadedMimeType) {
+	private void storeLocked(String itemId, String publisherId, CatalogueItem.Asset asset, CatalogueItem.Part part,
+			byte[] plaintext, String uploadedMimeType) {
 		int partNumber = part.getPartNumber();
-		AssetLocker.Result locked = assetLocker.lock(asset, partNumber, itemId, plaintext, uploadedMimeType);
+		AssetLocker.Result locked = assetLocker.lock(asset, partNumber, itemId, publisherId, plaintext, uploadedMimeType);
 
 		String contentKey = StorageKeys.content(itemId, partNumber);
 		bookStorage.store(contentKey, locked.cipherContent(), asset.getMimeType());
@@ -256,7 +256,7 @@ public class IngestProcessor {
 		item.setContentState(after);
 		item.setContentError(after == ContentState.FAILED ? firstFailureReason(parts) : null);
 		item.setUpdatedAt(clock.instant());
-		catalogueItemRepository.save(item);
+		catalogueItemStore.save(item);
 
 		if (after == ContentState.READY && before != ContentState.READY) {
 			catalogueVersionBumper.bump(CatalogueVersionBumper.Scope.ITEM, item.getId());
@@ -314,7 +314,7 @@ public class IngestProcessor {
 		part.setContentState(ContentState.FAILED);
 		part.setContentError(reason);
 		part.setUpdatedAt(clock.instant());
-		catalogueItemRepository.save(item);
+		catalogueItemStore.save(item);
 
 		String itemId = item.getId();
 		ContentType format = asset.getFormat();
@@ -329,7 +329,7 @@ public class IngestProcessor {
 		item.setContentState(ContentState.FAILED);
 		item.setContentError(reason);
 		item.setUpdatedAt(clock.instant());
-		catalogueItemRepository.save(item);
+		catalogueItemStore.save(item);
 	}
 
 	private static String shortReason(RuntimeException e) {

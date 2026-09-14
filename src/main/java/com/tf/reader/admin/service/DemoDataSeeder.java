@@ -420,7 +420,7 @@ public class DemoDataSeeder implements ApplicationRunner {
         item.setUpdatedAt(s.updatedAt());
 
         for (int i = 0; i < assets.size(); i++) {
-            assets.get(i).setMasterWrappedBek(resolveMasterWrappedBek(s.assets().get(i), assets.get(i)));
+            assets.get(i).setMasterWrappedBek(resolveMasterWrappedBek(s.publisherId(), s.assets().get(i), assets.get(i)));
         }
         return item;
     }
@@ -433,14 +433,15 @@ public class DemoDataSeeder implements ApplicationRunner {
      * TF_MASTER_KEY this instance has, rather than a string that only ever unwraps under whoever
      * authored the JSON's key.
      */
-    private String resolveMasterWrappedBek(SeedDataset.SeedAsset seedAsset, CatalogueItem.Asset asset) {
+    private String resolveMasterWrappedBek(String publisherId, SeedDataset.SeedAsset seedAsset,
+            CatalogueItem.Asset asset) {
         boolean isDevFixture = asset.getParts() != null && asset.getParts().stream()
                 .anyMatch(p -> p.getStorageKey() != null && p.getStorageKey().startsWith(DEV_FIXTURE_STORAGE_PREFIX));
         if (!isDevFixture || !seedAsset.encrypted()) {
             return seedAsset.masterWrappedBek();
         }
         SecretKeySpec mockBek = new SecretKeySpec(Base64.getDecoder().decode(MOCK_BEK_BASE64), "AES");
-        return bookEncryptionKeys.wrapWithMasterKey(mockBek);
+        return bookEncryptionKeys.wrapWithMasterKey(publisherId, mockBek);
     }
 
     private CatalogueItem.Asset toAsset(SeedDataset.SeedAsset a) {
