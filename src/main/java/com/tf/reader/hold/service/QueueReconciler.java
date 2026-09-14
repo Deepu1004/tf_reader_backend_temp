@@ -41,12 +41,17 @@ public class QueueReconciler {
 
     @Scheduled(fixedDelayString = "${holds.reconcile-interval:5m}")
     public void reconcile() {
+        reconcileAndCount();
+    }
+
+    /** Same rebuild, returning the number of (scope, itemId) queues touched. */
+    public int reconcileAndCount() {
         Set<QueueKeys.Parsed> items = new HashSet<>();
         holds.findByStatus(HoldStatus.QUEUED)
                 .forEach(h -> items.add(new QueueKeys.Parsed(h.getScope(), h.getItemId())));
         items.addAll(knownQueueItems());
-
         items.forEach(item -> reconcileOne(item.scope(), item.itemId()));
+        return items.size();
     }
 
     private void reconcileOne(String scope, String itemId) {

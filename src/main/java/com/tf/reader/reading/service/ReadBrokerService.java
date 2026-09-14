@@ -150,6 +150,16 @@ public class ReadBrokerService {
 		}
 
 		try {
+			// ── Step 5b: Reject silently-expired ELITE seats ──
+			// create() is idempotent while a loan is ACTIVE, but falls through and mints a fresh
+			// loan when the sweeper has already flipped it to EXPIRED. For ELITE that silently
+			// re-issues a seat the system just reclaimed, defeating the copy limit entirely.
+			// A STREAM re-check is not the same as a fresh borrow: a user whose loan expired
+			// must go through POST /api/v1/loans explicitly to get a new seat.
+			if (copyLimited && userId != null && licences.hasExpiredLoan(userId, request.itemId())) {
+				throw new ApiException(ErrorCode.NO_ENTITLEMENT, "Your loan for this title has expired.");
+			}
+
 			// ── Step 6: Create licence ──
 			LicenceView licence = licences.create(
 					subject,
@@ -161,6 +171,16 @@ public class ReadBrokerService {
 			log.info("read-broker: licence created licenceId={} itemId={} userId={} accessLevel={} canPersist={}",
 					licence.licenceId(), request.itemId(), userId, decision.accessLevel(), licence.canPersist());
 
+			// ── Step 6b: Reject a past-due loan before it reaches wokay ──
+			// create() returns an existing ACTIVE loan even when its dueAt has already passed but
+			// the sweeper hasn't run yet. Passing that stale dueAt to content.grant() produces
+			// NO_ACTIVE_LOAN, which the client treats as fail-open (network-hiccup bucket).
+			// Detecting it here and throwing NO_ENTITLEMENT (fail-closed) is the right boundary:
+			// the loan genuinely expired — this is a confirmed denial, not an uncertain one.
+			if (licence.expiresAt() != null && licence.expiresAt().isBefore(clock.instant())) {
+				throw new ApiException(ErrorCode.NO_ENTITLEMENT, "Your loan for this title has expired.");
+			}
+
 			// ── Step 7: Fetch content grant ──
 			ContentGrant grant = content.grant(new ContentGrantRequest(
 					request.itemId(),
@@ -169,7 +189,8 @@ public class ReadBrokerService {
 					deviceKey,
 					subject,
 					new LoanProof(licence.licenceId(), licence.expiresAt()),
-					request.wantSearchIndex()
+					request.wantSearchIndex(),
+					request.partNumber()
 			));
 			// Never the grant's own payload — it carries signed URLs and encryption info, the
 			// same bearer-capability category as the tokens STYLE forbids logging.
