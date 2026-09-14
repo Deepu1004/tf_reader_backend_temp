@@ -22,9 +22,9 @@ import com.tf.reader.admin.security.AdminScopeAuthorizer;
 import com.tf.reader.catalogue.entity.BookCollection;
 import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.Publisher;
-import com.tf.reader.catalogue.repository.BookCollectionRepository;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.PublisherRepository;
+import com.tf.reader.catalogue.service.BookCollectionStore;
+import com.tf.reader.catalogue.service.CatalogueItemStore;
 import com.tf.reader.catalogue.service.CatalogueVersionBumper;
 import com.tf.reader.common.audit.AdminAuditWriter;
 import com.tf.reader.common.audit.AuditLog;
@@ -40,8 +40,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class CollectionAdminService {
 
-	private final BookCollectionRepository bookCollectionRepository;
-	private final CatalogueItemRepository catalogueItemRepository;
+	private final BookCollectionStore bookCollectionStore;
+	private final CatalogueItemStore catalogueItemStore;
 	private final PublisherRepository publisherRepository;
 	private final CatalogueVersionBumper catalogueVersionBumper;
 	private final AdminAuditWriter auditWriter;
@@ -52,7 +52,7 @@ public class CollectionAdminService {
 	public PageResponse<CollectionView> list(String publisherId, PageQuery pageQuery) {
 		requirePublisher(publisherId);
 
-		Page<BookCollection> page = bookCollectionRepository.findByPublisherId(publisherId,
+		Page<BookCollection> page = bookCollectionStore.findByPublisherId(publisherId,
 				PageRequest.of(pageQuery.page(), pageQuery.size(), Sort.by(Sort.Direction.ASC, "name")));
 
 		List<CollectionView> views = page.getContent().stream().map(this::toView).toList();
@@ -64,7 +64,7 @@ public class CollectionAdminService {
 	public CollectionView create(String publisherId, CollectionWrite write) {
 		requirePublisher(publisherId);
 
-		bookCollectionRepository.findByPublisherIdAndCode(publisherId, write.code()).ifPresent(existing -> {
+		bookCollectionStore.findByPublisherIdAndCode(publisherId, write.code()).ifPresent(existing -> {
 			throw new ApiException(ErrorCode.CODE_TAKEN,
 					"Collection code '" + write.code() + "' is already taken for this publisher");
 		});
@@ -76,7 +76,7 @@ public class CollectionAdminService {
 		collection.setName(write.name());
 		collection.setDescription(write.description());
 
-		collection = bookCollectionRepository.save(collection);
+		collection = bookCollectionStore.save(collection);
 
 		auditWriter.record(adminScope.currentAdminId(), AuditLog.Action.CREATE, "COLLECTION", collection.getId(), null,
 				afterMap(collection));
@@ -87,7 +87,7 @@ public class CollectionAdminService {
 	// ---------------------------------------------------------------- items
 
 	public CollectionItemsResult setItems(String collectionId, CollectionItemsWrite write) {
-		BookCollection collection = bookCollectionRepository.findById(collectionId)
+		BookCollection collection = bookCollectionStore.findById(collectionId)
 				.orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "No such collection"));
 
 		if (!adminScope.canAccessPublisher(collection.getPublisherId())) {
@@ -96,7 +96,7 @@ public class CollectionAdminService {
 
 		Set<String> requestedIds = new LinkedHashSet<>(write.itemIds());
 
-		List<CatalogueItem> requestedItems = catalogueItemRepository.findAllById(requestedIds);
+		List<CatalogueItem> requestedItems = catalogueItemStore.findAllById(requestedIds);
 		if (requestedItems.size() != requestedIds.size()) {
 			Set<String> foundIds = requestedItems.stream().map(CatalogueItem::getId)
 					.collect(Collectors.toCollection(LinkedHashSet::new));
@@ -113,7 +113,7 @@ public class CollectionAdminService {
 					"Items from another publisher: " + wrongPublisher);
 		}
 
-		List<CatalogueItem> currentMembers = catalogueItemRepository.findByCollectionIds(collectionId);
+		List<CatalogueItem> currentMembers = catalogueItemStore.findByCollectionIds(collectionId);
 		List<String> beforeIds = currentMembers.stream().map(CatalogueItem::getId).toList();
 
 		for (CatalogueItem item : requestedItems) {
@@ -122,7 +122,7 @@ public class CollectionAdminService {
 				List<String> updated = new ArrayList<>(collectionIds);
 				updated.add(collectionId);
 				item.setCollectionIds(updated);
-				catalogueItemRepository.save(item);
+				catalogueItemStore.save(item);
 			}
 		}
 
@@ -131,7 +131,7 @@ public class CollectionAdminService {
 				List<String> updated = new ArrayList<>(item.getCollectionIds());
 				updated.remove(collectionId);
 				item.setCollectionIds(updated);
-				catalogueItemRepository.save(item);
+				catalogueItemStore.save(item);
 			}
 		}
 
@@ -160,7 +160,7 @@ public class CollectionAdminService {
 	}
 
 	private CollectionView toView(BookCollection collection) {
-		long itemCount = catalogueItemRepository.countByCollectionIds(collection.getId());
+		long itemCount = catalogueItemStore.countByCollectionIds(collection.getId());
 		return new CollectionView(collection.getId(), collection.getPublisherId(), collection.getCode(),
 				collection.getName(), collection.getDescription(), itemCount);
 	}

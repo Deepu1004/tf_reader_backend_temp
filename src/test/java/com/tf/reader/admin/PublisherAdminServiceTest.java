@@ -10,8 +10,8 @@ import com.tf.reader.catalogue.entity.Entitlement;
 import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.Publisher;
 import com.tf.reader.catalogue.entity.ScopeType;
-import com.tf.reader.catalogue.repository.BookCollectionRepository;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
+import com.tf.reader.catalogue.service.BookCollectionStore;
+import com.tf.reader.catalogue.service.CatalogueItemStore;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
 import com.tf.reader.catalogue.repository.PublisherRepository;
 import com.tf.reader.catalogue.service.CatalogueVersionBumper;
@@ -58,8 +58,8 @@ class PublisherAdminServiceTest {
 	private static final Instant T = Instant.parse("2026-08-10T09:00:00Z");
 
 	private PublisherRepository publisherRepository;
-	private CatalogueItemRepository catalogueItemRepository;
-	private BookCollectionRepository bookCollectionRepository;
+	private CatalogueItemStore catalogueItemStore;
+	private BookCollectionStore bookCollectionStore;
 	private EntitlementRepository entitlementRepository;
 	private CatalogueVersionBumper versionBumper;
 	private AdminAuditWriter auditWriter;
@@ -70,14 +70,14 @@ class PublisherAdminServiceTest {
 	@BeforeEach
 	void setUp() {
 		publisherRepository = mock(PublisherRepository.class);
-		catalogueItemRepository = mock(CatalogueItemRepository.class);
-		bookCollectionRepository = mock(BookCollectionRepository.class);
+		catalogueItemStore = mock(CatalogueItemStore.class);
+		bookCollectionStore = mock(BookCollectionStore.class);
 		entitlementRepository = mock(EntitlementRepository.class);
 		versionBumper = mock(CatalogueVersionBumper.class);
 		auditWriter = mock(AdminAuditWriter.class);
 		mongo = mock(MongoTemplate.class);
 
-		service = new PublisherAdminService(publisherRepository, catalogueItemRepository, bookCollectionRepository,
+		service = new PublisherAdminService(publisherRepository, catalogueItemStore, bookCollectionStore,
 				entitlementRepository, versionBumper, auditWriter, mongo, new AdminScopeAuthorizer());
 
 		actingAs(AdminRole.SUPER_ADMIN, null);
@@ -136,8 +136,8 @@ class PublisherAdminServiceTest {
 	void createSavesAndAudits() {
 		when(publisherRepository.findByCode("ROUTLEDGE")).thenReturn(Optional.empty());
 		when(publisherRepository.save(any())).thenReturn(routledge());
-		when(catalogueItemRepository.countByPublisherId(any())).thenReturn(0L);
-		when(bookCollectionRepository.countByPublisherId(any())).thenReturn(0L);
+		when(catalogueItemStore.countByPublisherId(any())).thenReturn(0L);
+		when(bookCollectionStore.countByPublisherId(any())).thenReturn(0L);
 
 		PublisherWrite write = new PublisherWrite("routledge", "Routledge", "Academic imprint",
 				"https://cdn.tf/logos/routledge.png");
@@ -193,8 +193,8 @@ class PublisherAdminServiceTest {
 	@DisplayName("get returns derived counts from the two repositories")
 	void getDerivedCounts() {
 		when(publisherRepository.findById("pub_r1")).thenReturn(Optional.of(routledge()));
-		when(catalogueItemRepository.countByPublisherId("pub_r1")).thenReturn(17L);
-		when(bookCollectionRepository.countByPublisherId("pub_r1")).thenReturn(4L);
+		when(catalogueItemStore.countByPublisherId("pub_r1")).thenReturn(17L);
+		when(bookCollectionStore.countByPublisherId("pub_r1")).thenReturn(4L);
 
 		PublisherView view = service.get("pub_r1");
 
@@ -210,8 +210,8 @@ class PublisherAdminServiceTest {
 		Publisher existing = routledge();
 		when(publisherRepository.findById("pub_r1")).thenReturn(Optional.of(existing));
 		when(publisherRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-		when(catalogueItemRepository.countByPublisherId(any())).thenReturn(0L);
-		when(bookCollectionRepository.countByPublisherId(any())).thenReturn(0L);
+		when(catalogueItemStore.countByPublisherId(any())).thenReturn(0L);
+		when(bookCollectionStore.countByPublisherId(any())).thenReturn(0L);
 
 		PublisherWrite write = new PublisherWrite("routledge", "Routledge Ltd", null, null);
 		PublisherView view = service.update("pub_r1", write);
@@ -228,8 +228,8 @@ class PublisherAdminServiceTest {
 	void changeStatusSuspendedAuditsAndBumps() {
 		when(publisherRepository.findById("pub_r1")).thenReturn(Optional.of(routledge()));
 		when(publisherRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-		when(catalogueItemRepository.countByPublisherId(any())).thenReturn(0L);
-		when(bookCollectionRepository.countByPublisherId(any())).thenReturn(0L);
+		when(catalogueItemStore.countByPublisherId(any())).thenReturn(0L);
+		when(bookCollectionStore.countByPublisherId(any())).thenReturn(0L);
 
 		service.changeStatus("pub_r1", new StatusChange(RecordStatus.SUSPENDED, "contract under review"));
 
@@ -246,8 +246,8 @@ class PublisherAdminServiceTest {
 	void changeStatusRetiredDoesNotBump() {
 		when(publisherRepository.findById("pub_r1")).thenReturn(Optional.of(routledge()));
 		when(publisherRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-		when(catalogueItemRepository.countByPublisherId(any())).thenReturn(0L);
-		when(bookCollectionRepository.countByPublisherId(any())).thenReturn(0L);
+		when(catalogueItemStore.countByPublisherId(any())).thenReturn(0L);
+		when(bookCollectionStore.countByPublisherId(any())).thenReturn(0L);
 
 		service.changeStatus("pub_r1", new StatusChange(RecordStatus.RETIRED, null));
 
@@ -261,8 +261,8 @@ class PublisherAdminServiceTest {
 		suspended.setStatus(RecordStatus.SUSPENDED);
 		when(publisherRepository.findById("pub_r1")).thenReturn(Optional.of(suspended));
 		when(publisherRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-		when(catalogueItemRepository.countByPublisherId(any())).thenReturn(0L);
-		when(bookCollectionRepository.countByPublisherId(any())).thenReturn(0L);
+		when(catalogueItemStore.countByPublisherId(any())).thenReturn(0L);
+		when(bookCollectionStore.countByPublisherId(any())).thenReturn(0L);
 
 		service.changeStatus("pub_r1", new StatusChange(RecordStatus.ACTIVE, null));
 

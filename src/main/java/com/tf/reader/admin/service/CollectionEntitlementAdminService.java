@@ -16,8 +16,8 @@ import com.tf.reader.admin.security.AdminScopeAuthorizer;
 import com.tf.reader.catalogue.entity.BookCollection;
 import com.tf.reader.catalogue.entity.Entitlement;
 import com.tf.reader.catalogue.entity.EntitlementStatus;
-import com.tf.reader.catalogue.repository.BookCollectionRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
+import com.tf.reader.catalogue.service.BookCollectionStore;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.common.page.PageResponse;
@@ -41,7 +41,7 @@ public class CollectionEntitlementAdminService {
 	private static final List<EntitlementStatus> STATUS_RANK = List.of(EntitlementStatus.REVOKED,
 			EntitlementStatus.SUSPENDED, EntitlementStatus.PENDING, EntitlementStatus.ACTIVE);
 
-	private final BookCollectionRepository bookCollectionRepository;
+	private final BookCollectionStore bookCollectionStore;
 	private final EntitlementRepository entitlementRepository;
 	private final AdminScopeAuthorizer adminScope;
 
@@ -80,8 +80,8 @@ public class CollectionEntitlementAdminService {
 		};
 
 		Pageable pageable = PageRequest.of(resolvedPage, resolvedSize, Sort.by(Sort.Direction.ASC, "name"));
-		Page<BookCollection> results = resolvedPublisherId == null ? bookCollectionRepository.findAll(pageable)
-				: bookCollectionRepository.findByPublisherId(resolvedPublisherId, pageable);
+		Page<BookCollection> results = resolvedPublisherId == null ? bookCollectionStore.findAll(pageable)
+				: bookCollectionStore.findByPublisherId(resolvedPublisherId, pageable);
 
 		Map<String, EntitlementStatus> statusByCollectionId = resolveEntitlementStatuses(resolvedInstitutionId,
 				results.getContent());
