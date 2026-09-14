@@ -33,6 +33,18 @@ public class Publisher {
 	private Instant createdAt;
 	private Instant updatedAt;
 
+	// Which external key vault this publisher's books are locked with, and whether T&F can
+	// currently reach it. Null/NOT_CONFIGURED for every publisher until KMS integration exists;
+	// set only through the new Tenants admin surface, never through PublisherWrite.
+	private String vaultRef;
+	private VaultConnectionHealth connectionHealth = VaultConnectionHealth.NOT_CONFIGURED;
+
+	// The publisher's own MongoDB connection string. Null means "use T&F's shared database" -
+	// opt-in per publisher, set only through the Tenants admin surface, never through
+	// PublisherWrite. When set, this publisher's catalogueItems/collections live here instead of
+	// the shared database; nothing else (institutions, entitlements, admin data) ever moves.
+	private String mongoUri;
+
 	public Publisher(String id, String code, String name, String description, String logoUrl,
 			RecordStatus status, Instant createdAt, Instant updatedAt) {
 		this.id = id;
