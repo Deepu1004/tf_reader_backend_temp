@@ -17,6 +17,13 @@ public final class TokenClaims {
 	/** Carries {@code AdminUser.institutionId}. Absent means no access, never global access. */
 	public static final String SCOPE_INSTITUTION_ID = "scopeInstitutionId";
 
+	/**
+	 * Which physical database this admin's data lives in. Filled in from {@code scopePublisherId}
+	 * for now, since there is no separate tenant registry yet. Absent means no publisher scope, same
+	 * as {@link #SCOPE_PUBLISHER_ID}.
+	 */
+	public static final String TENANT_ID = "tenantId";
+
 	public static final String USE_ACCESS = "access";
 
 	private TokenClaims() {
