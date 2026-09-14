@@ -1373,6 +1373,111 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /api/admin/v1/tenants:
+    get:
+      tags: [Admin · tenants]
+      operationId: listTenants
+      summary: List tenants
+      description: >-
+        T&F's own infrastructure view of every publisher: which vault it uses and whether
+        that vault is reachable, as opposed to `/publishers`' business-data view. SUPER_ADMIN
+        only - a publisher's own admin has no need to see platform plumbing.
+      x-stability: DRAFT
+      x-called-by: [wokay]
+      security: [{ adminToken: [] }]
+      responses:
+        '200':
+          description: Every publisher's tenant record.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Tenant' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/admin/v1/tenants/{publisherId}:
+    parameters:
+      - $ref: '#/components/parameters/PublisherId'
+    get:
+      tags: [Admin · tenants]
+      operationId: getTenant
+      summary: One tenant
+      x-stability: DRAFT
+      x-called-by: [wokay]
+      security: [{ adminToken: [] }]
+      responses:
+        '200':
+          description: The tenant record
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Tenant' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/admin/v1/tenants/{publisherId}/database:
+    parameters:
+      - $ref: '#/components/parameters/PublisherId'
+    put:
+      tags: [Admin · tenants]
+      operationId: setTenantDatabase
+      summary: Set or clear a publisher's own MongoDB connection
+      description: >-
+        Opt-in, self-service: that publisher's own PUBLISHER_ADMIN may call this for their own
+        `publisherId`, not only a SUPER_ADMIN - the switch a publisher can flip themselves,
+        without T&F's help. A null `mongoUri` reverts to T&F's shared database. Does not
+        migrate existing data.
+      x-stability: DRAFT
+      x-called-by: [wokay]
+      security: [{ adminToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DatabaseWrite' }
+            example: { mongoUri: "mongodb://root:secret@localhost:27018/pub01?authSource=admin" }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Tenant' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/admin/v1/tenants/{publisherId}/vault-key:
+    parameters:
+      - $ref: '#/components/parameters/PublisherId'
+    put:
+      tags: [Admin · tenants]
+      operationId: setTenantVaultKey
+      summary: Set or clear a publisher's own vault key
+      description: >-
+        Opt-in, self-service, same guard as the database endpoint above. `keyBase64` must decode
+        to exactly 32 bytes (AES-256). A null value reverts to T&F's shared master key. The key is
+        write-only: no endpoint, including this one's own response, ever echoes it back.
+      x-stability: DRAFT
+      x-called-by: [wokay]
+      security: [{ adminToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VaultKeyWrite' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Tenant' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /api/admin/v1/publishers/{publisherId}/collections:
     parameters:
       - $ref: '#/components/parameters/PublisherId'
@@ -3508,6 +3613,14 @@ components:
         itemCount: { type: integer }
         collectionCount: { type: integer }
         createdAt: { type: string, format: date-time }
+        vaultRef:
+          type: [string, 'null']
+          description: >-
+            Opaque reference to the external key vault this publisher's books are locked
+            with. Null until KMS integration exists; ignore if absent - nothing in this
+            contract depends on it yet.
+        connectionHealth:
+          $ref: '#/components/schemas/VaultConnectionHealth'
         entitlementStatus:
           type: [string, 'null']
           enum: [NONE, PENDING, ACTIVE, SUSPENDED, REVOKED, null]
@@ -3542,6 +3655,49 @@ components:
             items:
               type: array
               items: { $ref: '#/components/schemas/Publisher' }
+
+    VaultConnectionHealth:
+      type: string
+      description: >-
+        Whether T&F can currently reach the vault named in a publisher's `vaultRef`.
+        Every publisher reads `NOT_CONFIGURED` until KMS integration exists - nothing
+        computes `HEALTHY` or `UNREACHABLE` yet.
+      enum: [NOT_CONFIGURED, HEALTHY, UNREACHABLE]
+
+    Tenant:
+      type: object
+      description: >-
+        T&F's own infrastructure view of a publisher: which database and vault it uses,
+        and whether that vault is healthy. Not the publisher's business data - see
+        `Publisher` for that. Listing every tenant is SUPER_ADMIN only; a publisher's own
+        PUBLISHER_ADMIN may still set their own database/vault key and gets their own Tenant
+        record back in that response.
+      required: [id, code, name, connectionHealth]
+      properties:
+        id: { type: string }
+        code: { type: string }
+        name: { type: string }
+        vaultRef: { type: [string, 'null'] }
+        connectionHealth:
+          $ref: '#/components/schemas/VaultConnectionHealth'
+
+    DatabaseWrite:
+      type: object
+      description: >-
+        A publisher's own MongoDB connection string, or null to revert to T&F's shared
+        database. Does not migrate existing data - only affects where reads/writes for this
+        publisher land from this point on.
+      properties:
+        mongoUri: { type: [string, 'null'] }
+
+    VaultKeyWrite:
+      type: object
+      description: >-
+        A publisher's own AES-256 vault key, base64-encoded (44 characters, decodes to exactly
+        32 bytes), or null to revert to T&F's shared master key. Write-only: never echoed back
+        by any endpoint.
+      properties:
+        keyBase64: { type: [string, 'null'] }
 
     Collection:
       type: object
