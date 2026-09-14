@@ -61,7 +61,7 @@ public class LibraryAssembler {
 		ChangeCursor cursor = changeFeed.currentCursor(reader.userId());
 
 		List<LibraryLoan> loans = loansFor(reader);
-		List<LibraryHold> holds = holdsFor(reader);
+		List<LibraryHold> holds = holdsWithoutFailingTheShelf(reader);
 
 		return new LibraryResponse(loans, holds, cursor.value(), serverTime());
 	}
@@ -116,6 +116,27 @@ public class LibraryAssembler {
 				+ "reader={} loan={} item={} status={}",
 				reader.userId(), loan.loanId(), loan.itemId(), loan.status());
 		return false;
+	}
+
+	/**
+	 * Holds are additive, so losing them under-shows rather than misleads — the safe direction per §2.
+	 * A thrown hold seam therefore degrades to an empty list and a loud log, whereas a thrown loan seam
+	 * is deliberately left to fail the whole request: loans ARE the shelf, and an empty-loan shelf reads
+	 * as "you returned everything", a lie the reader acts on.
+	 *
+	 * <p>No per-port timeout: these are in-process calls and nothing here is measurably slow, so wrapping
+	 * them in an executor would add async machinery the team should not carry until there is a measured
+	 * need (STYLE). If a port ever hangs, that is the trigger to revisit.
+	 */
+	private List<LibraryHold> holdsWithoutFailingTheShelf(ReaderIdentity reader) {
+		try {
+			return holdsFor(reader);
+		}
+		catch (RuntimeException holdsUnavailable) {
+			log.error("HoldSnapshotQuery failed; shelf served without holds. reader={}",
+					reader.userId(), holdsUnavailable);
+			return List.of();
+		}
 	}
 
 	/**

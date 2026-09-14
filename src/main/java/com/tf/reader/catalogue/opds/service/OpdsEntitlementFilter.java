@@ -36,9 +36,12 @@ class OpdsEntitlementFilter {
                 .findAllById(items.stream().map(CatalogueItem::getPublisherId).distinct().toList()).stream()
                 .collect(Collectors.toMap(Publisher::getId, p -> p));
 
+        Map<String, EntitlementDecision> decisions = entitlementQuery.checkAll(subject,
+                items.stream().map(CatalogueItem::getId).toList());
+
         List<OpdsPublication> result = new ArrayList<>();
         for (CatalogueItem item : items) {
-            EntitlementDecision decision = entitlementQuery.check(subject, item.getId());
+            EntitlementDecision decision = decisions.get(item.getId());
             if (decision.entitled()) {
                 result.add(publicationMapper.toPublication(item, decision, institutionId, publishersById));
             }
@@ -63,9 +66,11 @@ class OpdsEntitlementFilter {
     // Same entitlement pass as mapEntitled, without the publisher lookup or the mapping -
     // for the root feed's metadata.numberOfItems, which needs only a count.
     int countEntitled(List<CatalogueItem> items, SubjectRef subject) {
+        Map<String, EntitlementDecision> decisions = entitlementQuery.checkAll(subject,
+                items.stream().map(CatalogueItem::getId).toList());
         int count = 0;
-        for (CatalogueItem item : items) {
-            if (entitlementQuery.check(subject, item.getId()).entitled()) {
+        for (EntitlementDecision decision : decisions.values()) {
+            if (decision.entitled()) {
                 count++;
             }
         }

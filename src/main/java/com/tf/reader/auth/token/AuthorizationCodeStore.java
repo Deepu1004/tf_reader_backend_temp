@@ -29,6 +29,15 @@ import com.tf.reader.auth.dto.TokenResponse;
 @Component
 public class AuthorizationCodeStore {
 
+	/**
+	 * Where the browser is sent once a sign-in is done, success or failure, whichever protocol it
+	 * went through. Lives here rather than on either leg's own success handler because it is
+	 * exactly the kind of thing both legs share below themselves - see
+	 * {@code SecurityArchitectureTest.theTwoAuthenticationMechanismsDoNotDependOnEachOther}, which
+	 * is what a constant defined on one leg and imported by the other would break.
+	 */
+	public static final String DEEP_LINK_CALLBACK = "tfreader://auth/callback";
+
 	/** Long enough for the OS to hand the deep link to the app, short enough to be useless later. */
 	static final Duration LIFETIME = Duration.ofSeconds(60);
 
@@ -53,6 +62,11 @@ public class AuthorizationCodeStore {
 		String code = newCode();
 		codes.put(code, new IssuedCode(tokens, now.plus(LIFETIME)));
 		return code;
+	}
+
+	/** How long an issued code lives, for a caller that needs to report its own expiry. */
+	public Duration lifetime() {
+		return LIFETIME;
 	}
 
 	/**

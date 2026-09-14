@@ -1,5 +1,7 @@
 package com.tf.reader.reading.controller;
 
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,6 +24,7 @@ import jakarta.validation.Valid;
  * <p>Deliberately thin: reads identity once from the authenticated token principal and passes
  * {@link SubjectRef} down as a parameter. No business logic or entitlement decisions live here.
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/reading-sessions")
 public class ReadingSessionController {
@@ -42,6 +45,11 @@ public class ReadingSessionController {
 		String institutionId = caller != null ? caller.institutionId() : null;
 		SubjectRef subject = new SubjectRef(userId, institutionId);
 
-		return broker.open(subject, request);
+		log.info("POST /reading-sessions itemId={} userId={} institutionId={}", request.itemId(), userId,
+				institutionId);
+		ReadingSessionResponse response = broker.open(subject, request);
+		log.info("POST /reading-sessions -> sessionId={} itemId={} userId={} accessLevel={} holdCreatedAt={}",
+				response.sessionId(), request.itemId(), userId, response.accessLevel(), response.holdCreatedAt());
+		return response;
 	}
 }

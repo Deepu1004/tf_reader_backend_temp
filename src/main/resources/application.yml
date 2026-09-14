@@ -36,7 +36,9 @@ spring:
             assertingparty:
               entity-id: saml-mock
               singlesignon:
-                url: ${SAML_URL}
+                # acs_url is NOT included here — UserSecurityConfig appends it dynamically
+                # from the actual request so it works on localhost and Render alike.
+                url: ${SAML_MOCK_IDP_URL}
                 binding: redirect
                 sign-request: false
               verification:
@@ -45,6 +47,9 @@ spring:
 
 server:
   port: ${SERVER_PORT}
+  # Trust X-Forwarded-Proto/Host from Render's reverse proxy so {baseUrl} in SAML
+  # ACS location resolves to https:// instead of http://.
+  forward-headers-strategy: native
 
 tf:
   catalogue:
@@ -75,19 +80,28 @@ tf:
 
 tnf:
   seed:
+    # False by default: DemoDataSeeder is also gated on @Profile("local") and its own
+    # refuseIfNotLocal() host check, but this was the one property that, on its own, defaulted to
+    # "on" regardless of profile - fixed here instead of relying on the other two rails alone.
+    enabled: false
+  # TempDevAuthController's /dev-token mints a token for anyone with no check at all. Off unless a
+  # developer's own application-local.yml turns it on, same as mock-oidc.enabled below.
+  dev-auth:
     enabled: true
   auth:
     jwt:
       secret: ${TNF_JWT_SECRET}
       ttl: 1h
+    # The individual, no-institution sign-in flow: the reader's own username and password go
+    # straight to whichever IdP is configured (Azure AD B2C or otherwise) via the password grant.
+    # Swapping the four values below is the entire migration - there is no redirect uri to
+    # register because there is no browser redirect in this flow.
     oidc:
       client-id: ${OIDC_CLIENT_ID}
       client-secret: ${OIDC_CLIENT_SECRET}
       issuer: ${OIDC_ISSUER}
-      authorization-uri: ${OIDC_AUTHORIZATION_URI}
       token-uri: ${OIDC_TOKEN_URI}
       jwk-set-uri: ${OIDC_JWK_SET_URI}
-      redirect-uri: ${OIDC_REDIRECT_URI}
 
 springdoc:
   api-docs:
@@ -103,7 +117,14 @@ management:
 
 mock-oidc:
   enabled: false
-  
+
+# Same reasoning as mock-oidc above: SamlMockController mints a token for anyone claiming to be
+# john.doe@example.com. Explicit here rather than left as an absent property, so this is asserted
+# by SecurityArchitectureTest instead of relying on @ConditionalOnProperty's default-missing
+# behaviour going unnoticed if it ever changed.
+saml-mock:
+  enabled: false
+
 ---
 spring:
   config:

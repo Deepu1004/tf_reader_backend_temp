@@ -8,13 +8,9 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * All seven collections now map to a real entity 
+ * All seven collections now map to a real entity
  * few fields differ slightly (nesting, field count, types) — see the seeder for specifics.
  * AuditLog isn't seeded deliberately, so it is not represented here. The seed does not write to it
- *
- * One deliberate mismatch: {@code SeedAsset.cipherLength}/{@code indexTerms} stay
- * nullable here even though fields are primitives, since "not encrypted" and "zero
- * bytes" are different facts. {@link DemoDataSeeder} maps null to 0 on the way in.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record SeedDataset(
@@ -98,6 +94,10 @@ public record SeedDataset(
             @JsonProperty("_id") String id,
             String publisherId,
             List<String> collectionIds,
+            // Absent means BOOK, same default the entity itself applies.
+            String workType,
+            String parentId,
+            Integer sequence,
             String title,
             String subtitle,
             List<String> authors,
@@ -109,15 +109,14 @@ public record SeedDataset(
             List<String> subjects,
             LocalDate publishedAt,
             String coverUrl,
+            String coverKey,
+            String coverMimeType,
             String contentType,
             String accessTier,
             String status,
             String contentState,
             String contentError,
             List<SeedAsset> assets,
-            String storageKey,
-            String indexKey,
-            String wrappedBek,
             Instant createdAt,
             Instant updatedAt) {
 
@@ -127,18 +126,35 @@ public record SeedDataset(
         }
     }
 
-    
+    /** {@code masterWrappedBek} is shared by every part of this asset, wrapped once. */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record SeedAsset(
             String format,
             String mimeType,
+            boolean encrypted,
+            String keyId,
+            String masterWrappedBek,
+            List<SeedPart> parts) {}
+
+    /**
+     * One deliberate mismatch: {@code cipherLength}/{@code indexTerms} stay nullable here even
+     * though the entity fields are primitives, since "not encrypted" and "zero bytes" are
+     * different facts. {@link DemoDataSeeder} maps null to 0 on the way in.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record SeedPart(
+            int partNumber,
+            String title,
             long sizeBytes,
             Long cipherLength,
-            boolean encrypted,
             boolean hasSearchIndex,
             Integer indexTerms,
             String indexSkipReason,
-            String keyId) {}
+            String storageKey,
+            String indexKey,
+            String contentState,
+            String contentError,
+            Instant updatedAt) {}
 
     
     @JsonIgnoreProperties(ignoreUnknown = true)

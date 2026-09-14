@@ -58,11 +58,16 @@ class AuthorizationCoverageTest {
 			"POST /api/v1/auth/saml/start",
 			"POST /api/v1/auth/dev-token",
 			"POST /api/v1/auth/oidc/start",
-			"GET /api/v1/auth/oidc/callback",
-			// A one-time code, and an opaque refresh token, authenticate these - neither is a
+			// Reader sign-up and login are how an individual reader obtains a token in the
+			// first place.
+			"POST /api/v1/auth/signup",
+			"POST /api/v1/auth/login",
+			// A one-time id, and an opaque refresh token, authenticate these - neither is a
 			// bearer JWT, so there is nothing for this chain to check before the controller runs.
+			"POST /api/v1/auth/oidc/token",
 			"POST /api/v1/auth/token",
 			"POST /api/v1/auth/refresh",
+			"POST /api/v1/auth/logout",
 			// The mock OIDC provider and mock SAML IdP: dev-only fixtures pretending to be an
 			// external party, never enabled outside a local profile. We do not authenticate
 			// against ourselves before answering as the identity provider we are pretending to be.

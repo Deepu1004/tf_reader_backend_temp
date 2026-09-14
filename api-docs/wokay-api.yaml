@@ -444,6 +444,51 @@ paths:
         '403': { $ref: '#/components/responses/InstitutionMismatch' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /opds/v1/institutions/{institutionId}/works/{workId}:
+    get:
+      tags: [Catalogue feed]
+      operationId: getWorkFeed
+      summary: A Journal/Volume's children, or an Issue's Articles
+      description: |
+        Additive, new endpoint - `groups/{groupId}` above is unchanged and unaffected.
+
+        `workId` is a `CatalogueItem` whose `workType` is `JOURNAL`, `VOLUME` or `ISSUE`.
+
+        | `workType` | Returns |
+        |---|---|
+        | `JOURNAL`, `VOLUME` | `OpdsNavigationFeed` - one link per child, ordered by `sequence` |
+        | `ISSUE` | `OpdsPublicationFeed` - its `ARTICLE` children, same shape a shelf returns |
+
+        Navigation is not entitlement-filtered - it is structure, not acquisition. Each
+        article's own acquisition link still enforces entitlement exactly like a book's,
+        same as the discovery/public feeds already do for a non-entitled title.
+
+        `404` if `workId` doesn't resolve, resolves to a `BOOK`/`ARTICLE` (leaves, not valid
+        here), or resolves to something not `PUBLISHED` - same indistinguishable-404 rule
+        every other OPDS route follows.
+      x-stability: DRAFT
+      x-called-by: [team1]
+      security: [{ appToken: [] }]
+      parameters:
+        - $ref: '#/components/parameters/InstitutionId'
+        - name: workId
+          in: path
+          required: true
+          schema: { type: string }
+          example: journal_1
+      responses:
+        '200':
+          description: Navigation (Journal/Volume) or a publication feed (Issue)
+          content:
+            application/opds+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/OpdsNavigationFeed'
+                  - $ref: '#/components/schemas/OpdsPublicationFeed'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/InstitutionMismatch' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /opds/v1/institutions/{institutionId}/search:
     get:
       tags: [Catalogue feed]
@@ -1213,11 +1258,21 @@ paths:
       parameters:
         - { name: q, in: query, schema: { type: string } }
         - { name: status, in: query, schema: { $ref: '#/components/schemas/RecordStatus' } }
+        - name: institutionId
+          in: query
+          schema: { type: string }
+          description: >-
+            View the list as this institution, populating `entitlementStatus` on every row.
+            SUPER_ADMIN only. An INSTITUTION_ADMIN always sees their own institution and this
+            parameter is ignored for them; a PUBLISHER_ADMIN has no institution view at all.
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Size'
       responses:
         '200':
-          description: A page of publishers
+          description: >-
+            A page of publishers. Open to all three admin roles: a PUBLISHER_ADMIN is scoped to
+            their own publisher and sees exactly one row, so a scoped admin still cannot
+            enumerate publishers.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PublisherPage' }
@@ -1601,6 +1656,12 @@ paths:
         locked file is decrypted whole on the device.
 
         Open access titles and all audio are stored as they are, with no lock.
+
+        A book may be uploaded as one file (omit `partNumber`, defaults to `1`) or as several
+        chapter files, one `POST` per chapter with its own `partNumber` and optional `partTitle`.
+        Every part of one asset shares one encryption key; each gets its own nonce. Only `BOOK`
+        and `ARTICLE` items accept content - a container (`JOURNAL`/`VOLUME`/`ISSUE`) is
+        `400 VALIDATION_FAILED`.
       x-stability: DRAFT
       security: [{ adminToken: [] }]
       parameters:
@@ -1618,6 +1679,14 @@ paths:
                   format: binary
                 format:
                   $ref: '#/components/schemas/AssetFormat'
+                partNumber:
+                  type: integer
+                  minimum: 1
+                  default: 1
+                  description: 1-based chapter number. Omit for a plain, single-file book.
+                partTitle:
+                  type: string
+                  description: Optional chapter title, e.g. "Introduction".
       responses:
         '202':
           description: Accepted. Processing has been queued.
@@ -1627,6 +1696,7 @@ paths:
               example:
                 itemId: item_42
                 format: PDF
+                partNumber: 1
                 contentState: QUEUED
                 contentError: null
                 updatedAt: '2026-08-10T09:00:00Z'
@@ -1647,6 +1717,55 @@ paths:
                 path: /api/admin/v1/catalogue-items/item_42/content
                 traceId: b7c1f2a9
 
+  /api/admin/v1/catalogue-items/{itemId}/cover:
+    post:
+      tags: [Admin · catalogue items]
+      operationId: uploadCover
+      summary: Upload a book's cover image
+      description: |
+        Synchronous - there is no ingest queue for a cover, so the response already carries the
+        item with its new `coverUrl` set. Never encrypted: a cover is never a secret.
+
+        Stored through the same private-bucket/signed-URL path as the book file itself, so
+        `coverUrl` is a presigned link and is re-issued on every upload. Upload limit 5 MB.
+      x-stability: DRAFT
+      security: [{ adminToken: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ItemId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: The book, with coverUrl set to the newly uploaded image.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CatalogueItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413':
+          description: File too large
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                timestamp: '2026-09-04T14:00:00Z'
+                status: 413
+                code: VALIDATION_FAILED
+                message: A cover image may not exceed 5 MB
+                path: /api/admin/v1/catalogue-items/item_42/cover
+                traceId: c8d2e3b0
+
   /api/admin/v1/catalogue-items/{itemId}/ingest-status:
     get:
       tags: [Admin · catalogue items]
@@ -1658,10 +1777,17 @@ paths:
         A book that is not `READY` never appears in any feed, so failures must be
         visible to the operator. Anything stuck for more than fifteen minutes is moved
         to `FAILED` by a watchdog.
+
+        `contentState`/`contentError` describe the one chapter named by `partNumber` (default
+        `1`), not the item's own aggregate state.
       x-stability: DRAFT
       security: [{ adminToken: [] }]
       parameters:
         - $ref: '#/components/parameters/ItemId'
+        - name: partNumber
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
       responses:
         '200':
           description: Current state
@@ -1852,6 +1978,18 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: An active, pending or suspended grant already exists for this institution and scope
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                timestamp: '2026-09-08T14:00:00Z'
+                status: 409
+                code: CODE_TAKEN
+                message: An active grant already exists for this institution and scope.
+                path: /api/admin/v1/institutions/inst_9c2/entitlements
+                traceId: a3f1c9e2
   /api/admin/v1/entitlements/{entitlementId}:
     parameters:
       - name: entitlementId
@@ -3036,6 +3174,15 @@ components:
           description: >-
             Set false to skip signing an index URL. Saves a signature when the caller only
             wants to stream. When false, `ContentGrant.index` comes back null.
+        partNumber:
+          type: [integer, 'null']
+          minimum: 1
+          default: 1
+          description: >-
+            Which chapter to grant. Null/absent defaults to 1, so a non-chaptered item (one
+            part) behaves exactly as before this field existed. A part that is not itself
+            `READY` is `CONTENT_NOT_READY`, even when the item's own aggregate state is
+            `READY`.
 
     SubjectRef:
       type: object
@@ -3361,6 +3508,18 @@ components:
         itemCount: { type: integer }
         collectionCount: { type: integer }
         createdAt: { type: string, format: date-time }
+        entitlementStatus:
+          type: [string, 'null']
+          enum: [NONE, PENDING, ACTIVE, SUSPENDED, REVOKED, null]
+          description: >-
+            Only present when the caller is viewing as an institution (an
+            INSTITUTION_ADMIN, or a SUPER_ADMIN who passed `institutionId`): `NONE`,
+            `PENDING`, `ACTIVE`, `SUSPENDED` or `REVOKED`, resolved from that institution's
+            PUBLISHER-scoped entitlements only - a COLLECTION- or ITEM-scoped entitlement is
+            never considered, since a grant on one book says nothing about access to the
+            publisher as a package. Null for any other caller (a PUBLISHER_ADMIN, or a
+            SUPER_ADMIN with no `institutionId`) - not the same as `NONE`, which means the
+            institution has zero matching PUBLISHER entitlements for this publisher.
 
     PublisherWrite:
       type: object
@@ -3439,14 +3598,14 @@ components:
         description: { type: string }
         entitlementStatus:
           type: [string, 'null']
-          enum: [none, pending, active, suspended, revoked, null]
+          enum: [NONE, PENDING, ACTIVE, SUSPENDED, REVOKED, null]
           description: >-
             Only present when the caller is viewing as an institution (an
-            INSTITUTION_ADMIN, or a SUPER_ADMIN who passed `institutionId`): `none`,
-            `pending`, `active`, `suspended` or `revoked`, resolved from that institution's
+            INSTITUTION_ADMIN, or a SUPER_ADMIN who passed `institutionId`): `NONE`,
+            `PENDING`, `ACTIVE`, `SUSPENDED` or `REVOKED`, resolved from that institution's
             COLLECTION- and PUBLISHER-scoped entitlements only - an ITEM-scoped entitlement
             is never considered. Null for any other caller (a PUBLISHER_ADMIN, or a
-            SUPER_ADMIN with no `institutionId`) - not the same as `none`, which means the
+            SUPER_ADMIN with no `institutionId`) - not the same as `NONE`, which means the
             institution has zero matching COLLECTION or PUBLISHER entitlements for this
             collection.
 
@@ -3463,26 +3622,61 @@ components:
     Asset:
       type: object
       description: |
-        What the operator sees about a file. `storageKey`, `indexKey` and `masterWrappedBek`
-        are internal and are never returned to any client.
+        What the operator sees about one format of a book. `masterWrappedBek` is internal and
+        is never returned to any client - it is shared by every part of this asset, wrapped
+        once, reused as-is for each later chapter.
       properties:
         format: { $ref: '#/components/schemas/AssetFormat' }
         mimeType: { type: string }
-        sizeBytes: { type: integer, minimum: 1 }
-        cipherLength: { type: [integer, 'null'], minimum: 1 }
         encrypted:
           type: boolean
           description: False for every open access title, whatever the format. True for SUBSCRIPTION/ELITE, including audio.
+        parts:
+          type: array
+          description: >-
+            Ordered chapters. A plain, single-file book has exactly one, `partNumber` 1. Each
+            part is ingested, encrypted and indexed independently, though every part of one
+            asset shares this asset's own key.
+          items: { $ref: '#/components/schemas/AssetPart' }
+
+    AssetPart:
+      type: object
+      description: |
+        One chapter's own file. `storageKey` and `indexKey` are internal and are never
+        returned to any client.
+      required: [partNumber, contentState]
+      properties:
+        partNumber:
+          type: integer
+          minimum: 1
+          description: 1-based, unique within an Asset. Not an array index - re-ingesting one chapter never renumbers another.
+        title:
+          type: [string, 'null']
+          description: Optional operator-supplied chapter title, e.g. "Introduction".
+        sizeBytes: { type: integer, minimum: 1 }
+        cipherLength: { type: [integer, 'null'], minimum: 1 }
         hasSearchIndex: { type: boolean }
         indexSkipReason:
           type: [string, 'null']
           maxLength: 300
-          description: Set when text extraction failed. The book is still READY, just not searchable.
+          description: Set when text extraction failed. The chapter is still READY, just not searchable.
         indexTerms: { type: [integer, 'null'], minimum: 0 }
+        contentState: { $ref: '#/components/schemas/ContentState' }
+        contentError: { type: [string, 'null'] }
+        updatedAt: { type: string, format: date-time }
+
+    WorkType:
+      type: string
+      enum: [BOOK, JOURNAL, VOLUME, ISSUE, ARTICLE]
+      description: >-
+        Defaults to `BOOK` when absent, so every item that predates this field is a
+        standalone book, unaffected without a migration. Only `BOOK` and `ARTICLE` are
+        leaves - they carry `contentType`/`accessTier`/`assets` and go through ingest.
+        `JOURNAL`/`VOLUME`/`ISSUE` are pure containers with no content of their own.
 
     CatalogueItem:
       type: object
-      required: [id, publisherId, title, contentType, accessTier, status, contentState]
+      required: [id, publisherId, title, status, contentState]
       properties:
         id: { type: string }
         publisherId: { type: string }
@@ -3493,6 +3687,16 @@ components:
             Where collection membership is stored. A `Collection` carries no matching
             `itemIds` array, so this is the only copy of the relationship.
           items: { type: string }
+        workType: { $ref: '#/components/schemas/WorkType' }
+        parentId:
+          type: [string, 'null']
+          description: >-
+            The parent's id, or null for a standalone `BOOK`/`JOURNAL`. A container carries
+            no `childIds` array back - the child points up, same rule as collection
+            membership.
+        sequence:
+          type: [integer, 'null']
+          description: Ordering among the children of one parent. Absent items sort last.
         title: { type: string }
         subtitle: { type: string }
         authors:
@@ -3511,8 +3715,16 @@ components:
           oneOf:
             - $ref: '#/components/schemas/Isbn'
             - type: 'null'
-        contentType: { $ref: '#/components/schemas/ContentType' }
-        accessTier: { $ref: '#/components/schemas/AccessTier' }
+        contentType:
+          description: Leaf only (`BOOK`/`ARTICLE`). Null for a container.
+          oneOf:
+            - $ref: '#/components/schemas/ContentType'
+            - type: 'null'
+        accessTier:
+          description: Leaf only (`BOOK`/`ARTICLE`). Null for a container.
+          oneOf:
+            - $ref: '#/components/schemas/AccessTier'
+            - type: 'null'
         subjects:
           type: array
           items: { type: string }
@@ -3544,19 +3756,23 @@ components:
           description: Touched by every write, including ingest state changes. `IngestStatus` returns it.
         entitlementStatus:
           type: [string, 'null']
-          enum: [none, pending, active, suspended, revoked, null]
+          enum: [NONE, PENDING, ACTIVE, SUSPENDED, REVOKED, null]
           description: >-
             Only present when the caller is viewing as an institution (an
-            INSTITUTION_ADMIN, or a SUPER_ADMIN who passed `institutionId`): `none`,
-            `pending`, `active`, `suspended` or `revoked`, resolved against that
+            INSTITUTION_ADMIN, or a SUPER_ADMIN who passed `institutionId`): `NONE`,
+            `PENDING`, `ACTIVE`, `SUSPENDED` or `REVOKED`, resolved against that
             institution's entitlements. Null for any other caller (a PUBLISHER_ADMIN, or a
-            SUPER_ADMIN with no `institutionId`) - not the same as `none`, which means the
+            SUPER_ADMIN with no `institutionId`) - not the same as `NONE`, which means the
             institution
             has zero matching entitlements for this item.
 
     CatalogueItemWrite:
       type: object
-      required: [publisherId, title, contentType, accessTier]
+      required: [publisherId, title]
+      description: >-
+        `contentType` and `accessTier` are required when `workType` is `BOOK` (the default) or
+        `ARTICLE`, and must be absent for `JOURNAL`/`VOLUME`/`ISSUE` - enforced server-side
+        since the rule depends on `workType`, not statically in this schema.
       properties:
         publisherId: { type: string }
         collectionIds:
@@ -3567,6 +3783,14 @@ components:
             `itemIds` array of its own, so this is the only place the relationship is
             stored. Indexed.
           items: { type: string }
+        workType: { $ref: '#/components/schemas/WorkType' }
+        parentId:
+          type: [string, 'null']
+          description: >-
+            Validated on write against a fixed parent chain: a `VOLUME`'s parent must be a
+            `JOURNAL`, an `ISSUE`'s a `VOLUME`, an `ARTICLE`'s an `ISSUE` or none (standalone),
+            `JOURNAL`/`BOOK` must have none. Anything else is `400 VALIDATION_FAILED`.
+        sequence: { type: [integer, 'null'] }
         title: { type: string, minLength: 1, maxLength: 300 }
         subtitle: { type: string, maxLength: 300 }
         authors:
@@ -3610,10 +3834,14 @@ components:
 
     IngestStatus:
       type: object
-      required: [itemId, contentState]
+      required: [itemId, partNumber, contentState]
       properties:
         itemId: { type: string }
         format: { $ref: '#/components/schemas/AssetFormat' }
+        partNumber:
+          type: integer
+          minimum: 1
+          description: Which chapter this status describes. 1 for a plain, single-file book.
         contentState: { $ref: '#/components/schemas/ContentState' }
         contentError: { type: [string, 'null'] }
         updatedAt: { type: string, format: date-time }
@@ -3767,15 +3995,25 @@ components:
     EntitlementUpdate:
       type: object
       description: >-
-        Amends the **terms** of a grant. `scopeType` and `scopeId` are not here: to
-        re-point a grant, revoke it and create a new one. `version` is required. Status is
-        not here either: use `PATCH .../status` to approve or reject a pending request.
-      required: [version]
+        Amends the **terms** of a grant. This is a full replace, not a patch: send every
+        field every time. `scopeType` and `scopeId` are not here: to re-point a grant,
+        revoke it and create a new one. Status is not here either: use
+        `PATCH .../status` to approve or reject a pending request.
+      required: [loanPeriodDays, validFrom, version]
       properties:
-        copies: { type: [integer, 'null'], minimum: 1 }
+        copies:
+          type: [integer, 'null']
+          minimum: 1
+          description: >-
+            Null means UNLIMITED. Always send this field - null and "not present" are
+            different things to a partial client but the same thing to this API, since a
+            missing field here is treated as null, not as "leave it alone".
         loanPeriodDays: { type: integer, minimum: 1 }
         validFrom: { type: string, format: date }
-        validTo: { type: [string, 'null'], format: date }
+        validTo:
+          type: [string, 'null']
+          format: date
+          description: Null means open ended. Always send this field, same reasoning as copies.
         version:
           type: integer
           minimum: 0

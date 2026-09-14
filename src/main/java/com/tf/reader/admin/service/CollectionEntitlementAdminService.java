@@ -28,7 +28,7 @@ import lombok.RequiredArgsConstructor;
  * Every collection across every publisher, each tagged with the current institution's
  * entitlementStatus - the collection counterpart of {@link CatalogueItemAdminService#list}, one
  * scope level up. Built the same way: same pagination bounds, same scope resolution, same
- * lowercase status labels.
+ * status labels.
  */
 @Service
 @RequiredArgsConstructor
@@ -128,7 +128,7 @@ public class CollectionEntitlementAdminService {
 
 	private CollectionEntitlementView toView(BookCollection collection, boolean institutionView,
 			EntitlementStatus status) {
-		String entitlementStatusLabel = !institutionView ? null : (status == null ? "none" : status.name().toLowerCase());
+		String entitlementStatusLabel = !institutionView ? null : (status == null ? "NONE" : status.name());
 		return new CollectionEntitlementView(collection.getId(), collection.getPublisherId(), collection.getCode(),
 				collection.getName(), collection.getDescription(), entitlementStatusLabel);
 	}

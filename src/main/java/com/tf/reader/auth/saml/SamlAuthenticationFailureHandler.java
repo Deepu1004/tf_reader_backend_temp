@@ -9,6 +9,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.stereotype.Component;
 
+import com.tf.reader.auth.token.AuthorizationCodeStore;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.common.error.TraceIds;
 
@@ -18,7 +19,7 @@ import com.tf.reader.common.error.TraceIds;
  * <p>Spring Security's own default redirects to an error page; a JSON body, which is what this
  * class wrote before the deep-link callback existed, is just as useless here - the browser is
  * mid-redirect from the IdP, not a fetch call that could read one. Either way the only thing that
- * can act on the refusal is the app itself, at {@link SamlAuthenticationSuccessHandler#DEEP_LINK_CALLBACK}.
+ * can act on the refusal is the app itself, at {@link AuthorizationCodeStore#DEEP_LINK_CALLBACK}.
  *
  * <p>The reason is logged but never returned. A caller learns that sign-in failed, not which
  * check failed - "signature did not verify" and "audience did not match" are useful to an
@@ -36,7 +37,7 @@ public class SamlAuthenticationFailureHandler implements AuthenticationFailureHa
 		String traceId = TraceIds.newTraceId();
 		log.warn("SAML authentication rejected [traceId={}]: {}", traceId, exception.getMessage());
 
-		response.sendRedirect(SamlAuthenticationSuccessHandler.DEEP_LINK_CALLBACK
+		response.sendRedirect(AuthorizationCodeStore.DEEP_LINK_CALLBACK
 				+ "?error=" + ErrorCode.SAML_AUTHENTICATION_FAILED.name());
 	}
 }

@@ -24,7 +24,6 @@ public class CryptoConfig {
 	@Bean
 	SecretKey masterKey(CryptoProperties properties) {
 		String base64 = properties.masterKey();
-		System.out.println("======> CryptoConfig loaded masterKey: " + base64);
 		if (base64 == null || base64.isBlank()) {
 			throw new IllegalStateException(
 					"tf.crypto.master-key is not configured. Set the TF_MASTER_KEY environment "

@@ -22,6 +22,7 @@ import com.tf.reader.loan.api.ActiveLoanQuery;
 import com.tf.reader.loan.api.ActiveLoanView;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -111,6 +112,32 @@ class LibraryAssemblerTest {
 		// Failing the whole request would replace one wrong row with an empty screen, which is worse
 		// for a reader who has nine other books. The drop is logged at error instead.
 		assertThat(assembler.assemble(READER).loans()).hasSize(1);
+	}
+
+	@Test
+	@DisplayName("a thrown hold seam serves the shelf without holds, never blank")
+	void holdsFailureDegradesToEmptyHolds() {
+		givenCursor(ChangeCursor.of(4L));
+		givenLoans(loan("loan_ok", "item_42", "ACTIVE"));
+		when(holdSnapshots.holdsFor(anyString())).thenThrow(new RuntimeException("holds down"));
+
+		LibraryResponse response = assembler.assemble(READER);
+
+		// Holds are additive; under-showing is the safe direction (§2). The loan the reader holds
+		// must still reach the screen rather than being lost to a hold-seam failure.
+		assertThat(response.holds()).isNotNull().isEmpty();
+		assertThat(response.loans()).extracting("itemId").containsExactly("item_42");
+	}
+
+	@Test
+	@DisplayName("a thrown loan seam fails the request rather than lying that the shelf is empty")
+	void loansFailureFailsTheRequest() {
+		givenCursor(ChangeCursor.of(4L));
+		when(activeLoans.findAllFor(anyString())).thenThrow(new RuntimeException("loans down"));
+
+		// Loans ARE the shelf: an empty-loan shelf reads as "you returned everything", a lie the
+		// reader acts on. Better no answer than a wrong one.
+		assertThatThrownBy(() -> assembler.assemble(READER)).isInstanceOf(RuntimeException.class);
 	}
 
 	@Test

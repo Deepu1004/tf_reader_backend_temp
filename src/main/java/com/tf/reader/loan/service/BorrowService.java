@@ -12,6 +12,9 @@ import com.tf.reader.catalogue.api.EntitlementQuery;
 import com.tf.reader.catalogue.api.SubjectRef;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
+import com.tf.reader.library.api.ChangeLog;
+import com.tf.reader.library.api.ChangeReason;
+import com.tf.reader.library.api.ChangeRecord;
 import com.tf.reader.loan.api.LicenceCommand;
 import com.tf.reader.loan.api.LicenceView;
 import com.tf.reader.loan.dto.BorrowResponse;
@@ -21,22 +24,28 @@ import com.tf.reader.loan.entity.LoanStatus;
 import com.tf.reader.loan.repository.LoanRepository;
 import com.tf.reader.reading.api.CopyLease;
 import com.tf.reader.reading.api.LeaseHandle;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 public class BorrowService implements LicenceCommand {
 
 	private final LoanRepository loanRepository;
 	private final EntitlementQuery entitlement;
 	private final CopyLease copyLease;
+	private final ChangeLog changeLog;
 	private final Clock clock;
 
-	// Four collaborators: the repo, the two other-team ports the borrow flow calls, and the clock.
+	// Five collaborators: the repo, the two other-team ports the borrow flow calls, the change-feed
+	// port (create() is the single loan-birth chokepoint, so LOAN_CREATED belongs here — D-029), and
+	// the clock. Above the 3-param guideline, but each is a distinct capability this job needs.
 	public BorrowService(LoanRepository loanRepository, EntitlementQuery entitlement,
-			CopyLease copyLease, Clock clock) {
+			CopyLease copyLease, ChangeLog changeLog, Clock clock) {
 		this.loanRepository = loanRepository;
 		this.entitlement = entitlement;
 		this.copyLease = copyLease;
+		this.changeLog = changeLog;
 		this.clock = clock;
 	}
 
@@ -50,8 +59,11 @@ public class BorrowService implements LicenceCommand {
 	 * lease if the save fails. Coexists with the read broker's create; idempotency keeps them apart.
 	 */
 	public BorrowResult borrow(SubjectRef subject, String itemId) {
+		log.info("borrow: request itemId={} userId={} institutionId={}", itemId, subject.userId(),
+				subject.institutionId());
 		EntitlementDecision decision = entitlement.check(subject, itemId);
 		if (!decision.entitled()) {
+			log.info("borrow: denied itemId={} userId={} reason={}", itemId, subject.userId(), decision.reason());
 			throw new ApiException(mapDeny(decision.reason()), "You cannot borrow this title.");
 		}
 
@@ -59,6 +71,8 @@ public class BorrowService implements LicenceCommand {
 		Optional<Loan> existing =
 				loanRepository.findByUserIdAndItemIdAndStatus(subject.userId(), itemId, LoanStatus.ACTIVE);
 		if (existing.isPresent()) {
+			log.info("borrow: already held loanId={} itemId={} userId={}", existing.get().getLoanId(), itemId,
+					subject.userId());
 			return new BorrowResult(toBody(existing.get(), subject), false);
 		}
 
@@ -66,16 +80,22 @@ public class BorrowService implements LicenceCommand {
 		if (decision.accessLevel() == AccessLevel.ENTITLED_CONCURRENT) {
 			int copies = decision.copies() != null ? decision.copies() : 1;
 			held = copyLease.claim(subject.institutionId(), itemId, copies)
-					.orElseThrow(() -> new ApiException(ErrorCode.NO_COPIES_AVAILABLE,
-							"No copies available right now."));
+					.orElseThrow(() -> {
+						log.info("borrow: no copies available itemId={} userId={}", itemId, subject.userId());
+						return new ApiException(ErrorCode.NO_COPIES_AVAILABLE, "No copies available right now.");
+					});
 		}
 
 		try {
 			LicenceView view = create(subject, itemId, decision.accessLevel(), decision.loanPeriodDays(),
 					held == null ? null : held.token());
+			log.info("borrow: granted loanId={} itemId={} userId={} accessLevel={}", view.licenceId(), itemId,
+					subject.userId(), decision.accessLevel());
 			return new BorrowResult(toBody(view, decision.accessLevel(), subject), true);
 		} catch (RuntimeException e) {
 			if (held != null) {
+				log.warn("borrow: failed after claiming a copy itemId={} userId={}, releasing it", itemId,
+						subject.userId(), e);
 				copyLease.release(held.token());   // never strand a slot
 			}
 			throw e;
@@ -148,7 +168,10 @@ public class BorrowService implements LicenceCommand {
 
 		boolean canPersist = (accessLevel != AccessLevel.ENTITLED_CONCURRENT);
 		Instant now = clock.instant();
-		Instant dueAt = (accessLevel == AccessLevel.ENTITLED_CONCURRENT && loanPeriodDays > 0)
+		// dueAt = borrowedAt + loanPeriodDays for anything but OPEN_ACCESS (which never expires),
+		// per the Loan contract. loanPeriodDays <= 0 means the entitlement is unlimited, so the loan
+		// stays open-ended (null) — a Subscription can be either windowed or open-ended (D-030).
+		Instant dueAt = (accessLevel != AccessLevel.OPEN_ACCESS && loanPeriodDays > 0)
 				? now.plus(java.time.Duration.ofDays(loanPeriodDays))
 				: null;
 
@@ -185,6 +208,17 @@ public class BorrowService implements LicenceCommand {
 			}
 			throw e;
 		}
+
+		// Only here — a genuinely new loan was saved. The two idempotent branches above return an
+		// existing loan without saving, so they must NOT record: the port is not idempotent, and a
+		// re-borrow (or Read tap) of a held title would otherwise write a phantom LOAN_CREATED (D-029).
+		// After the state write, per the ChangeLog contract; it never throws, so no try/catch.
+		if (userId != null) {
+			changeLog.record(ChangeRecord.forLoan(userId, ChangeReason.LOAN_CREATED, itemId,
+					loan.getLoanId(), now));
+		}
+		log.info("loan: created loanId={} itemId={} userId={} accessLevel={} dueAt={}", loan.getLoanId(), itemId,
+				userId, accessLevel, dueAt);
 
 		return new LicenceView(
 				loan.getLoanId(),

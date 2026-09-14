@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -48,6 +49,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * skipped, never as passing.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+// Spring Boot 4 no longer auto-registers TestRestTemplate for a RANDOM_PORT test - it now needs
+// this annotation explicitly, the same way MockMvc needs @AutoConfigureMockMvc.
+@AutoConfigureTestRestTemplate
 @ActiveProfiles("local")
 @Testcontainers
 class InstitutionApiIT {
@@ -142,7 +146,11 @@ class InstitutionApiIT {
     @DisplayName("search is case insensitive and trimmed")
     void searchIsCaseInsensitiveAndTrimmed() {
         assertThat(get("/api/v1/institutions?q=IMPE").getBody().get("total").asInt()).isEqualTo(1);
-        assertThat(get("/api/v1/institutions?q=%20%20impe%20%20").getBody().get("total").asInt())
+
+        // A literal space here, not a pre-encoded "%20": TestRestTemplate treats the whole path as
+        // needing exactly one pass of encoding, so a pre-encoded "%20" comes out "%2520" on the
+        // wire and the server decodes it back to the literal text "%20", never a real space.
+        assertThat(get("/api/v1/institutions?q=  impe  ").getBody().get("total").asInt())
                 .isEqualTo(1);
     }
 

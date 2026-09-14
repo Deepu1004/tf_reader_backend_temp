@@ -12,6 +12,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -56,6 +57,16 @@ public class HoldDevDataSeeder implements ApplicationRunner {
 
 	@Override
 	public void run(ApplicationArguments args) throws IOException {
+	// A dev fixture must never be able to fail application startup. A QUEUED hold needs its
+	// Mongo row and its Redis ZSET member written together (see class javadoc), so if Redis
+	// isn't reachable the whole pass is skipped, not just the Redis half.
+		try {
+			redis.opsForValue().get("flambeau:hold:seed:probe");
+		}
+		catch (RedisConnectionFailureException e) {
+			log.warn("flambeau hold seed: Redis unavailable, skipping ({})", e.getMessage());
+			return;
+		}
 		List<SeedHold> seeds;
 		try (InputStream in = new ClassPathResource(DATASET_PATH).getInputStream()) {
 			JsonNode root = mapper.readTree(in);

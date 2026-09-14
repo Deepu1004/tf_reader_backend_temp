@@ -13,9 +13,10 @@ import com.tf.reader.sync.model.Locator;
  * {@link EpubCfiGenerator}. Correctness is the conformance golden, not this prose — see
  * {@code JAVA_CFI_SPEC.md}.
  *
- * <p>TODO(vaishnavi, 2026-08-24): port the xhtml-vs-html parse-mode divergence guard (spec §3.3). It
- * needs an HTML5 parser (a new dependency, awaiting sign-off like PDFBox); until then only
- * parse-unambiguous EPUBs are safe.
+ * <p>Chapters with {@code media-type="text/html"} are skipped: the XML parser cannot handle
+ * them safely, and epub.js's HTML5 parse mode produces a different DOM (different CFI steps).
+ * T&amp;F's catalogue is primarily XHTML, so skipping is the right trade-off for now. If
+ * HTML EPUBs become significant, validate an HTML5 path against the epub.js oracle first.
  */
 final class EpubIndexExtractor {
 

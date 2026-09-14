@@ -1,6 +1,7 @@
 package com.tf.reader.auth.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -29,6 +30,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.tf.reader.auth.dto.TokenResponse;
 import com.tf.reader.auth.entity.ReaderSession;
 import com.tf.reader.auth.model.UserType;
+import com.tf.reader.auth.service.ReaderAuthService;
 import com.tf.reader.auth.service.ReaderSessionService;
 import com.tf.reader.auth.service.ReaderSessionService.IssuedRefreshToken;
 import com.tf.reader.auth.token.AuthorizationCodeStore;
@@ -38,6 +40,7 @@ import com.tf.reader.auth.transaction.AuthTransactionStore;
 import com.tf.reader.catalogue.api.InstitutionLookup;
 import com.tf.reader.catalogue.api.InstitutionRef;
 import com.tf.reader.common.error.GlobalExceptionHandler;
+import com.tf.reader.hold.api.HoldQueueExit;
 
 /**
  * Slice test of the endpoint that starts SAML. Spring Security's SAML filters are not in this
@@ -66,6 +69,15 @@ class AuthControllerTest {
 
 	@MockitoBean
 	private AuthorizationCodeStore authorizationCodes;
+
+	// signup/login live on this controller too; neither is exercised by this slice's tests - the
+	// bean only needs to exist for the controller to be constructed.
+	@MockitoBean
+	private ReaderAuthService readerAuth;
+
+	// logout's best-effort hold-queue cleanup calls this; only exercised by the logout tests.
+	@MockitoBean
+	private HoldQueueExit holdQueueExit;
 
 	@TestConfiguration
 	static class FixedClockConfig {
@@ -229,5 +241,39 @@ class AuthControllerTest {
 						.content("{ \"refreshToken\": \"stale-refresh\" }"))
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.code").value("TOKEN_EXPIRED"));
+	}
+
+	@Test
+	void logoutRevokesTheSessionAndAnswersWithNoContent() throws Exception {
+		mockMvc.perform(post("/api/v1/auth/logout")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{ \"refreshToken\": \"some-refresh\" }"))
+				.andExpect(status().isNoContent())
+				.andExpect(jsonPath("$.code").doesNotExist());
+
+		verify(readerSessions).revoke("some-refresh");
+	}
+
+	@Test
+	void logoutDropsTheRevokedSessionOutOfEveryHoldQueueItWasWaitingIn() throws Exception {
+		ReaderSession revoked = new ReaderSession();
+		revoked.setUserId("dev_abc123");
+		when(readerSessions.revoke("some-refresh")).thenReturn(Optional.of(revoked));
+
+		mockMvc.perform(post("/api/v1/auth/logout")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{ \"refreshToken\": \"some-refresh\" }"))
+				.andExpect(status().isNoContent());
+
+		verify(holdQueueExit).leaveAll("dev_abc123");
+	}
+
+	@Test
+	void logoutOfAnUnknownRefreshTokenStillAnswersWithNoContent() throws Exception {
+		// Idempotent by design - see ReaderSessionService.revoke.
+		mockMvc.perform(post("/api/v1/auth/logout")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{ \"refreshToken\": \"never-issued\" }"))
+				.andExpect(status().isNoContent());
 	}
 }

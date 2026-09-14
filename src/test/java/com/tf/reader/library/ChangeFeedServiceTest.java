@@ -165,11 +165,11 @@ class ChangeFeedServiceTest {
 	void pageSizeBounds() {
 		assertThat(ChangeFeedService.requirePageSize(null)).isEqualTo(ChangeFeedService.DEFAULT_SIZE);
 		assertThat(ChangeFeedService.requirePageSize(1)).isEqualTo(1);
-		assertThat(ChangeFeedService.requirePageSize(100)).isEqualTo(100);
+		assertThat(ChangeFeedService.requirePageSize(200)).isEqualTo(200);
 
-		// A client that asked for 500 and silently got 100 reads the short page as "that is
+		// A client that asked for 500 and silently got 200 reads the short page as "that is
 		// everything" and stops paging with changes still unread.
-		assertThatThrownBy(() -> ChangeFeedService.requirePageSize(101))
+		assertThatThrownBy(() -> ChangeFeedService.requirePageSize(201))
 				.isInstanceOf(IllegalArgumentException.class);
 		assertThatThrownBy(() -> ChangeFeedService.requirePageSize(0))
 				.isInstanceOf(IllegalArgumentException.class);

@@ -14,11 +14,13 @@ import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
@@ -37,12 +39,13 @@ import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.tf.reader.TestcontainersConfiguration;
 import com.tf.reader.auth.AuthTestInstitutions;
 import com.tf.reader.auth.authorization.AuthorizationService;
+import com.tf.reader.auth.entity.ReaderSession;
 import com.tf.reader.auth.model.CurrentUser;
 import com.tf.reader.auth.model.Role;
 import com.tf.reader.auth.model.UserType;
+import com.tf.reader.auth.repository.ReaderSessionRepository;
 import com.tf.reader.auth.saml.SamlAuthenticationService;
 import com.tf.reader.auth.saml.SamlAuthenticationService.SamlLoginResult;
-import com.tf.reader.auth.token.JwtProperties;
 import com.tf.reader.auth.token.JwtTokenService;
 import com.tf.reader.auth.transaction.AuthTransaction;
 import com.tf.reader.auth.transaction.AuthTransactionStore;
@@ -53,11 +56,12 @@ import com.tf.reader.common.error.ErrorCode;
 /**
  * Steps 1–7 as <b>one</b> flow, not seven independently-passing units.
  *
- * <p>The chain proved here: a SAML assertion the framework has validated → the institution the
- * backend chose for that sign-in → the mapped TnfUser → a real signed JWT → that JWT presented
+ * <p>The chain proved here: a validated SAML authentication → the institution the backend chose
+ * for that sign-in → a device id, minted or reclaimed → a real signed JWT → that JWT presented
  * over HTTP through the real filter chain → the CurrentUser it produces → the authorization
  * decisions taken from it. Every hop uses the application's own beans; nothing is stubbed except
- * the assertion, which is the one thing only the external IdP can produce.
+ * the assertion, which is the one thing only the external IdP can produce - and, unlike before
+ * this redesign, nothing is read from it either.
  */
 @SpringBootTest(properties = {"tf.security.jwt.secret=" + EndToEndAuthFlowTest.SECRET, "tf.security.jwt.access-token-ttl=1h"})
 @AutoConfigureMockMvc
@@ -66,7 +70,7 @@ class EndToEndAuthFlowTest {
 
 	static final String SECRET = "a-test-only-signing-secret-of-sufficient-length-0123456789";
 
-	/** The claim the mock IdP asserts the email in. A wire contract, so stated literally. */
+	/** No claim in the assertion is read any more, but a stub still needs to carry something. */
 	private static final String EMAIL_CLAIM =
 			"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress";
 
@@ -85,6 +89,12 @@ class EndToEndAuthFlowTest {
 	@Autowired
 	private InstitutionRepository institutions;
 
+	@Autowired
+	private ReaderSessionRepository readerSessionRepository;
+
+	@Value("${tnf.auth.max-concurrent-sessions-per-institution:50}")
+	private int maxSeatsPerInstitution;
+
 	@BeforeEach
 	void seedInstitutions() {
 		AuthTestInstitutions.seed(institutions);
@@ -95,14 +105,13 @@ class EndToEndAuthFlowTest {
 	@Test
 	void aSamlIdentityBecomesAJwtBecomesACurrentUserWithoutDrifting() throws Exception {
 		// STEP 1 — the backend records which institution this sign-in is for.
-		AuthTransaction transaction = transactions.open("inst_7f3");
+		AuthTransaction transaction = transactions.open(AuthTestInstitutions.IMPERIAL);
 
 		// STEP 2+3 — a validated assertion plus that transaction produce a TnfUser and a token.
-		SamlLoginResult login =
-				samlAuthentication.complete(samlAuthentication("john.doe@example.com"), transaction.id());
+		SamlLoginResult login = samlAuthentication.complete(samlAuthentication(), transaction.id());
 
-		assertThat(login.user().userId()).isEqualTo("usr_6712ab");
-		assertThat(login.user().institutionId()).isEqualTo("inst_7f3");
+		assertThat(login.user().userId()).startsWith("dev_");
+		assertThat(login.user().institutionId()).isEqualTo(AuthTestInstitutions.IMPERIAL);
 		assertThat(login.token()).isNotBlank();
 
 		// STEP 4+5 — the same token, over HTTP, through the real filter chain to a controller.
@@ -115,42 +124,53 @@ class EndToEndAuthFlowTest {
 				.andExpect(jsonPath("$.type").value(login.user().type().name()))
 				.andExpect(jsonPath("$.institutionId").value(login.user().institutionId()))
 				.andExpect(jsonPath("$.roles[0]").value(login.user().roles().get(0)))
-				.andExpect(jsonPath("$.collections[0]").value(login.user().collections().get(0)))
 				.andReturn().getResponse().getContentAsString();
 
 		// STEP 6 — the authorization decisions that identity supports.
 		CurrentUser asRequested = new CurrentUser(login.user().userId(), login.user().type(),
 				login.user().institutionId(), login.user().roles(), login.user().collections());
 		authorization.requireRole(asRequested, Role.MEMBER);
-		authorization.requireSameInstitution(asRequested, "inst_7f3");
+		authorization.requireSameInstitution(asRequested, AuthTestInstitutions.IMPERIAL);
 		assertThatThrownBy(() -> authorization.requireRole(asRequested, Role.ADMIN))
 				.isInstanceOf(ApiException.class);
-		assertThatThrownBy(() -> authorization.requireSameInstitution(asRequested, "inst_ucl"))
+		assertThatThrownBy(() -> authorization.requireSameInstitution(asRequested, AuthTestInstitutions.UCL))
 				.isInstanceOf(ApiException.class);
 
-		// STEP 7 — the token handed back is usable, and the secret never appears in a response.
+		// STEP 7 — the token handed back is usable, and the secret never appears in a response,
+		// and neither does any username or email - there is none behind this identity.
 		assertThat(body).doesNotContain(SECRET);
+		assertThat(body).doesNotContain("@");
 	}
 
 	@Test
-	void oneIdPServesTwoInstitutionsAndTheTokensDoNotCross() throws Exception {
-		// The architecture's headline claim, end to end: identical assertion, two transactions,
-		// two different users, and each token reports only its own institution.
-		Authentication sameIdentity = samlAuthentication("john.doe@example.com");
-
+	void twoSeparateSignInsNeverShareAnIdentityAndTokensDoNotCross() throws Exception {
+		// No directory, no email, no username: two sign-ins that present no deviceId of their own
+		// are simply two different devices, whichever institution each is for.
 		SamlLoginResult imperial =
-				samlAuthentication.complete(sameIdentity, transactions.open("inst_7f3").id());
-		SamlLoginResult dsu =
-				samlAuthentication.complete(sameIdentity, transactions.open("inst_ucl").id());
+				samlAuthentication.complete(samlAuthentication(), transactions.open(AuthTestInstitutions.IMPERIAL).id());
+		SamlLoginResult ucl =
+				samlAuthentication.complete(samlAuthentication(), transactions.open(AuthTestInstitutions.UCL).id());
 
-		assertThat(imperial.user().userId()).isNotEqualTo(dsu.user().userId());
+		assertThat(imperial.user().userId()).isNotEqualTo(ucl.user().userId());
 
 		mockMvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + imperial.token()))
-				.andExpect(jsonPath("$.userId").value("usr_6712ab"))
-				.andExpect(jsonPath("$.institutionId").value("inst_7f3"));
-		mockMvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + dsu.token()))
-				.andExpect(jsonPath("$.userId").value("usr_8c14de"))
-				.andExpect(jsonPath("$.institutionId").value("inst_ucl"));
+				.andExpect(jsonPath("$.userId").value(imperial.user().userId()))
+				.andExpect(jsonPath("$.institutionId").value(AuthTestInstitutions.IMPERIAL));
+		mockMvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + ucl.token()))
+				.andExpect(jsonPath("$.userId").value(ucl.user().userId()))
+				.andExpect(jsonPath("$.institutionId").value(AuthTestInstitutions.UCL));
+	}
+
+	@Test
+	void aDeviceThatPresentsItsOwnIdReclaimsItInsteadOfBecomingSomebodyNew() throws Exception {
+		AuthTransaction first = transactions.open(AuthTestInstitutions.IMPERIAL);
+		SamlLoginResult firstLogin = samlAuthentication.complete(samlAuthentication(), first.id());
+
+		// The same device, signing in again, presents the id it was given last time.
+		AuthTransaction second = transactions.open(AuthTestInstitutions.IMPERIAL, null, firstLogin.user().userId());
+		SamlLoginResult secondLogin = samlAuthentication.complete(samlAuthentication(), second.id());
+
+		assertThat(secondLogin.user().userId()).isEqualTo(firstLogin.user().userId());
 	}
 
 	// ───────────────────────────── the failure matrix ─────────────────────────────
@@ -166,15 +186,18 @@ class EndToEndAuthFlowTest {
 		}
 
 		@Test
-		void case3_anIdentityWithNoMembershipGetsNoToken() {
-			// Authenticated by the IdP is not provisioned by us: no token is minted at all.
-			String relayState = transactions.open("inst_7f3").id();
+		void case3_aNewDeviceGetsNoTokenWhenTheInstitutionHasNoSeatFree() {
+			// A dedicated institution, so this never competes with any other test's own sign-ins
+			// for the same seat pool.
+			for (int i = 0; i < maxSeatsPerInstitution; i++) {
+				readerSessionRepository.save(liveSessionFor(AuthTestInstitutions.LEEDS));
+			}
+			String relayState = transactions.open(AuthTestInstitutions.LEEDS).id();
 
-			assertThatThrownBy(() -> samlAuthentication.complete(
-					samlAuthentication("stranger@example.com"), relayState))
+			assertThatThrownBy(() -> samlAuthentication.complete(samlAuthentication(), relayState))
 					.isInstanceOf(ApiException.class)
 					.extracting(thrown -> ((ApiException) thrown).getCode())
-					.isEqualTo(ErrorCode.USER_NOT_PROVISIONED);
+					.isEqualTo(ErrorCode.SEAT_LIMIT_REACHED);
 		}
 
 		@Test
@@ -189,12 +212,12 @@ class EndToEndAuthFlowTest {
 
 		@Test
 		void case8and9_roleAndInstitutionRefusalsAreDistinguishable() {
-			CurrentUser member = new CurrentUser("usr_6712ab", UserType.INSTITUTION, "inst_7f3",
-					List.of("MEMBER"), List.of("col_medicine"));
+			CurrentUser member = new CurrentUser("dev_test1", UserType.INSTITUTION, AuthTestInstitutions.IMPERIAL,
+					List.of("MEMBER"), List.of());
 
 			assertThatThrownBy(() -> authorization.requireRole(member, Role.ADMIN))
 					.extracting(t -> ((ApiException) t).getCode()).isEqualTo(ErrorCode.FORBIDDEN_ROLE);
-			assertThatThrownBy(() -> authorization.requireSameInstitution(member, "inst_ucl"))
+			assertThatThrownBy(() -> authorization.requireSameInstitution(member, AuthTestInstitutions.UCL))
 					.extracting(t -> ((ApiException) t).getCode()).isEqualTo(ErrorCode.WRONG_INSTITUTION);
 		}
 
@@ -204,7 +227,7 @@ class EndToEndAuthFlowTest {
 					List.of("SUBSCRIBER"), List.of("col_open"));
 
 			// Including against an unscoped resource, where null == null would have said yes.
-			for (String resource : List.of("inst_7f3", "inst_ucl", "inst_xyz")) {
+			for (String resource : List.of(AuthTestInstitutions.IMPERIAL, AuthTestInstitutions.UCL, "inst_xyz")) {
 				assertThatThrownBy(() -> authorization.requireSameInstitution(individual, resource))
 						.extracting(t -> ((ApiException) t).getCode())
 						.isEqualTo(ErrorCode.WRONG_INSTITUTION);
@@ -215,27 +238,27 @@ class EndToEndAuthFlowTest {
 
 		@Test
 		void case11to14_noRequestInputCanRewriteTheIdentity() throws Exception {
-			String token = validToken();
+			SamlLoginResult login = samlAuthentication.complete(samlAuthentication(),
+					transactions.open(AuthTestInstitutions.IMPERIAL).id());
 
 			mockMvc.perform(get("/api/v1/auth/me")
-							.header("Authorization", "Bearer " + token)
+							.header("Authorization", "Bearer " + login.token())
 							.queryParam("userId", "usr_admin")
-							.queryParam("institutionId", "inst_ucl")
+							.queryParam("institutionId", AuthTestInstitutions.UCL)
 							.queryParam("roles", "ADMIN")
 							.queryParam("collections", "col_everything")
 							.header("X-User-Id", "usr_admin")
-							.header("X-Institution-Id", "inst_ucl")
+							.header("X-Institution-Id", AuthTestInstitutions.UCL)
 							.header("X-Roles", "ADMIN")
 							.contentType(MediaType.APPLICATION_JSON)
 							.content("""
 									{"userId":"usr_admin","institutionId":"inst_ucl",
 									 "roles":["ADMIN"],"collections":["col_everything"]}"""))
 					.andExpect(status().isOk())
-					.andExpect(jsonPath("$.userId").value("usr_6712ab"))
-					.andExpect(jsonPath("$.institutionId").value("inst_7f3"))
+					.andExpect(jsonPath("$.userId").value(login.user().userId()))
+					.andExpect(jsonPath("$.institutionId").value(AuthTestInstitutions.IMPERIAL))
 					.andExpect(jsonPath("$.roles[0]").value("MEMBER"))
-					.andExpect(jsonPath("$.roles", org.hamcrest.Matchers.hasSize(1)))
-					.andExpect(jsonPath("$.collections[0]").value("col_medicine"));
+					.andExpect(jsonPath("$.roles", org.hamcrest.Matchers.hasSize(1)));
 		}
 	}
 
@@ -246,8 +269,8 @@ class EndToEndAuthFlowTest {
 
 		@Test
 		void aTransactionCannotBeCompletedTwice() {
-			AuthTransaction transaction = transactions.open("inst_7f3");
-			Authentication identity = samlAuthentication("john.doe@example.com");
+			AuthTransaction transaction = transactions.open(AuthTestInstitutions.IMPERIAL);
+			Authentication identity = samlAuthentication();
 			samlAuthentication.complete(identity, transaction.id());
 
 			assertThatThrownBy(() -> samlAuthentication.complete(identity, transaction.id()))
@@ -257,7 +280,7 @@ class EndToEndAuthFlowTest {
 
 		@Test
 		void anUnknownOrMissingRelayStateIsRefused() {
-			Authentication identity = samlAuthentication("john.doe@example.com");
+			Authentication identity = samlAuthentication();
 
 			for (String relayState : List.of("authTxn_invented", "", "   ")) {
 				assertThatThrownBy(() -> samlAuthentication.complete(identity, relayState))
@@ -270,13 +293,13 @@ class EndToEndAuthFlowTest {
 
 		@Test
 		void aTransactionForOneInstitutionCannotYieldAnother() {
-			// The institution is read from the transaction, so a DSU transaction can only ever
-			// produce the DSU membership - there is no input through which to ask for another.
+			// The institution is read from the transaction, so a UCL transaction can only ever
+			// produce the UCL membership - there is no input through which to ask for another.
 			SamlLoginResult login = samlAuthentication.complete(
-					samlAuthentication("john.doe@example.com"), transactions.open("inst_ucl").id());
+					samlAuthentication(), transactions.open(AuthTestInstitutions.UCL).id());
 
-			assertThat(login.institution().institutionId()).isEqualTo("inst_ucl");
-			assertThat(login.user().institutionId()).isEqualTo("inst_ucl");
+			assertThat(login.institution().institutionId()).isEqualTo(AuthTestInstitutions.UCL);
+			assertThat(login.user().institutionId()).isEqualTo(AuthTestInstitutions.UCL);
 		}
 
 	}
@@ -311,10 +334,10 @@ class EndToEndAuthFlowTest {
 			// requireSameInstitution for that institution, because CurrentUser reads membership
 			// from the id alone.
 			assertRefusal(signed(Map.of("userId", "usr_9f01cd", "type", "INDIVIDUAL",
-					"institutionId", "inst_7f3", "roles", List.of("SUBSCRIBER"),
+					"institutionId", AuthTestInstitutions.IMPERIAL, "roles", List.of("SUBSCRIBER"),
 					"collections", List.of("col_open"))), "TOKEN_INVALID");
-			assertRefusal(signed(Map.of("userId", "usr_6712ab", "type", "INSTITUTION",
-					"roles", List.of("MEMBER"), "collections", List.of("col_medicine"))),
+			assertRefusal(signed(Map.of("userId", "dev_test2", "type", "INSTITUTION",
+					"roles", List.of("MEMBER"), "collections", List.of())),
 					"TOKEN_INVALID");
 		}
 
@@ -365,31 +388,34 @@ class EndToEndAuthFlowTest {
 	}
 
 	private String validToken() {
-		return samlAuthentication.complete(samlAuthentication("john.doe@example.com"),
-				transactions.open("inst_7f3").id()).token();
+		return samlAuthentication.complete(samlAuthentication(),
+				transactions.open(AuthTestInstitutions.IMPERIAL).id()).token();
 	}
 
 	private String expiredToken() {
 		return JwtTokenService.forTest(SECRET, Duration.ofHours(1),
 				Clock.fixed(Instant.now().minus(Duration.ofHours(3)), ZoneOffset.UTC))
-				.issue(new com.tf.reader.auth.model.TnfUser("usr_6712ab", UserType.INSTITUTION,
-						"inst_7f3", List.of("MEMBER"), List.of("col_medicine")))
+				.issue(new com.tf.reader.auth.model.TnfUser("dev_test3", UserType.INSTITUTION,
+						AuthTestInstitutions.IMPERIAL, List.of("MEMBER"), List.of()))
 				.token();
 	}
 
 	private String foreignlySignedToken() {
 		return JwtTokenService.forTest("a-different-secret-of-sufficient-length-9876543210abc",
 				Duration.ofHours(1), Clock.systemUTC())
-				.issue(new com.tf.reader.auth.model.TnfUser("usr_6712ab", UserType.INSTITUTION,
-						"inst_7f3", List.of("MEMBER"), List.of("col_medicine")))
+				.issue(new com.tf.reader.auth.model.TnfUser("dev_test4", UserType.INSTITUTION,
+						AuthTestInstitutions.IMPERIAL, List.of("MEMBER"), List.of()))
 				.token();
 	}
 
 	private String tamperedToken() {
 		String[] parts = validToken().split("\\.");
 		String payload = new String(Base64.getUrlDecoder().decode(parts[1]));
+		// Regex, not a literal substring: the userId minted here is a random dev_ id, not a
+		// fixed fixture value, so the tamper has to target the claim by name.
+		String tampered = payload.replaceFirst("\"userId\":\"[^\"]*\"", "\"userId\":\"usr_admin1\"");
 		return parts[0] + "." + Base64.getUrlEncoder().withoutPadding().encodeToString(
-				payload.replace("usr_6712ab", "usr_admin1").getBytes()) + "." + parts[2];
+				tampered.getBytes()) + "." + parts[2];
 	}
 
 	/** A token signed with the real secret but carrying arbitrary claims. */
@@ -405,13 +431,28 @@ class EndToEndAuthFlowTest {
 				JwsHeader.with(MacAlgorithm.HS256).build(), builder.build())).getTokenValue();
 	}
 
-	private Authentication samlAuthentication(String email) {
-		Saml2ResponseAssertionAccessor assertion = new StubAssertion(email,
-				Map.of(EMAIL_CLAIM, List.of(email)));
+	private Authentication samlAuthentication() {
+		Saml2ResponseAssertionAccessor assertion = new StubAssertion("irrelevant-subject",
+				Map.of(EMAIL_CLAIM, List.of("irrelevant@example.com")));
 		return new Saml2AssertionAuthentication(assertion, List.of(), "tf-reader");
 	}
 
-	/** The one thing only the external IdP can produce; everything else here is the real bean. */
+	private ReaderSession liveSessionFor(String institutionId) {
+		ReaderSession session = new ReaderSession();
+		session.setId("rsess_" + UUID.randomUUID());
+		session.setUserId("dev_" + UUID.randomUUID());
+		session.setType(UserType.INSTITUTION);
+		session.setInstitutionId(institutionId);
+		session.setRoles(List.of("MEMBER"));
+		session.setCollections(List.of());
+		session.setRefreshTokenHash("hash_" + UUID.randomUUID());
+		Instant now = Instant.now();
+		session.setIssuedAt(now);
+		session.setExpiresAt(now.plusSeconds(3600));
+		return session;
+	}
+
+	/** The one thing only the external IdP can produce; its content is never read any more. */
 	private record StubAssertion(String nameId, Map<String, List<Object>> attributes)
 			implements Saml2ResponseAssertionAccessor {
 

@@ -83,25 +83,42 @@ public class EntitlementAdminService {
 					"No " + write.scopeType().name().toLowerCase() + " exists with id '" + write.scopeId() + "'");
 		}
 
+		// A REVOKED row still occupies the {institutionId, scopeType, scopeId} unique index, so a
+		// re-request for the same scope must reuse and reopen that row rather than insert a
+		// second one and hit a duplicate key error.
+		Entitlement revoked = entitlementRepository
+				.findByInstitutionIdAndScopeTypeAndScopeId(institutionId, write.scopeType(), write.scopeId())
+				.filter(existing -> existing.getStatus() == EntitlementStatus.REVOKED)
+				.orElse(null);
+
 		Instant now = Instant.now();
-		Entitlement entitlement = new Entitlement();
-		entitlement.setId(newId());
-		entitlement.setInstitutionId(institutionId);
-		entitlement.setScopeType(write.scopeType());
-		entitlement.setScopeId(write.scopeId());
+		Entitlement entitlement = revoked != null ? revoked : new Entitlement();
+		// Full snapshot, not just status: a re-request silently overwrites the prior grant's
+		// terms (copies, loan period, validity), and those are exactly what the audit trail
+		// needs to show were replaced.
+		Map<String, Object> before = revoked != null ? afterMap(revoked) : null;
+		if (revoked == null) {
+			entitlement.setId(newId());
+			entitlement.setInstitutionId(institutionId);
+			entitlement.setScopeType(write.scopeType());
+			entitlement.setScopeId(write.scopeId());
+			entitlement.setVersion(0);
+			entitlement.setCreatedAt(now);
+		}
+		else {
+			entitlement.setVersion(entitlement.getVersion() + 1);
+		}
 		entitlement.setCopies(write.copies());
 		entitlement.setLoanPeriodDays(write.loanPeriodDays() != null ? write.loanPeriodDays() : DEFAULT_LOAN_PERIOD_DAYS);
 		entitlement.setValidFrom(write.validFrom() != null ? write.validFrom() : LocalDate.now());
 		entitlement.setValidTo(write.validTo());
 		entitlement.setStatus(resolveCreateStatus(write.status()));
-		entitlement.setVersion(0);
-		entitlement.setCreatedAt(now);
 		entitlement.setUpdatedAt(now);
 
 		entitlement = entitlementRepository.save(entitlement);
 
 		auditWriter.record(adminScope.currentAdminId(), AuditLog.Action.CREATE, "ENTITLEMENT", entitlement.getId(),
-				null, creationMap(entitlement));
+				before, creationMap(entitlement));
 		catalogueVersionBumper.bump(CatalogueVersionBumper.Scope.INSTITUTION, institutionId);
 
 		return toView(entitlement);
@@ -117,9 +134,21 @@ public class EntitlementAdminService {
 
 	// update
 
+	/**
+	 * A non-super-admin may still amend a grant while it is PENDING - nothing is live yet, so
+	 * there is nothing to disrupt. Once a super admin has approved it, only a super admin may
+	 * touch its terms; unlike {@link #resolveCreateStatus}, this never silently reopens approval
+	 * by changing status, because an ACTIVE grant already has readers depending on it and demoting
+	 * it out from under them would revoke access as a side effect of an unrelated edit.
+	 */
 	public EntitlementView update(String entitlementId, EntitlementUpdate write) {
 		Entitlement entitlement = findOrThrow(entitlementId);
 		requireInstitutionAccess(entitlement.getInstitutionId());
+
+		if (!adminScope.isSuperAdmin() && entitlement.getStatus() != EntitlementStatus.PENDING) {
+			throw new ApiException(ErrorCode.FORBIDDEN_ROLE,
+					"Only a super admin may amend a grant that is not PENDING.");
+		}
 
 		if (entitlement.getVersion() != write.version()) {
 			throw new ApiException(ErrorCode.STALE_VERSION,

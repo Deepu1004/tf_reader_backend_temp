@@ -5,6 +5,8 @@ import java.util.Locale;
 
 import jakarta.validation.Valid;
 
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -43,6 +45,7 @@ import com.tf.reader.loan.service.ReturnService;
  * chain resolves from the verified token (invariant #5); we never read a userId from a query
  * param or body. The business rules live in the services.
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/loans")
 public class LoanController {
@@ -74,10 +77,13 @@ public class LoanController {
 		if (idempotencyKey != null) {
 			var cached = borrowIdempotency.get(caller.userId(), idempotencyKey);
 			if (cached.isPresent()) {
+				log.info("POST /loans idempotency hit userId={} idempotencyKey={}", caller.userId(), idempotencyKey);
 				return ResponseEntity.ok(cached.get());
 			}
 		}
 
+		log.info("POST /loans itemId={} userId={} institutionId={}", request.itemId(), caller.userId(),
+				caller.institutionId());
 		SubjectRef subject = new SubjectRef(caller.userId(), caller.institutionId());
 		BorrowResult result = borrowService.borrow(subject, request.itemId());
 		if (idempotencyKey != null) {
@@ -107,10 +113,13 @@ public class LoanController {
 		if (idempotencyKey != null) {
 			var cached = returnIdempotency.get(caller.userId(), idempotencyKey);
 			if (cached.isPresent()) {
+				log.info("POST /loans/{}/return idempotency hit userId={} idempotencyKey={}", loanId,
+						caller.userId(), idempotencyKey);
 				return cached.get();
 			}
 		}
 
+		log.info("POST /loans/{}/return userId={}", loanId, caller.userId());
 		ReturnResponse response = returnService.returnLoan(caller.userId(), loanId);
 		if (idempotencyKey != null) {
 			returnIdempotency.put(caller.userId(), idempotencyKey, response);

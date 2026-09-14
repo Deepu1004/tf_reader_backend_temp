@@ -35,6 +35,6 @@ public class AvailabilityController {
         } catch (RuntimeException e) {
             copies = null; // unknown, not unlimited — but the response is identical either way
         }
-        return availability.forItem(me.institutionId(), itemId, copies);
+        return availability.forItem(me.institutionId(), itemId, copies, me.userId());
     }
 }

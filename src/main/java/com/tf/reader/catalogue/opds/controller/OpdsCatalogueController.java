@@ -87,6 +87,21 @@ public class OpdsCatalogueController {
         return ok(feed, etag);
     }
 
+    // DRAFT, additive: a Journal/Volume's children (navigation) or an Issue's Article children
+    // (a publication feed) - see team1-notice.md. Not cached with an ETag like the root/group
+    // feeds are yet, since this is new and not on the FROZEN path those two are held to.
+    @GetMapping(value = "/works/{workId}", produces = OPDS_MEDIA_TYPE)
+    public ResponseEntity<Object> workFeed(
+            @PathVariable String institutionId,
+            @PathVariable String workId,
+            @AuthenticationPrincipal CurrentUser caller) {
+
+        requireMatchingInstitution(caller, institutionId);
+        Institution institution = feedService.loadInstitution(institutionId);
+        SubjectRef subject = new SubjectRef(caller.userId(), institutionId);
+        return ResponseEntity.ok(feedService.workFeed(institution, workId, subject));
+    }
+
     @GetMapping(value = "/search", produces = OPDS_MEDIA_TYPE)
     public ResponseEntity<OpdsPublicationFeed> search(
             @PathVariable String institutionId,

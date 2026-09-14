@@ -64,12 +64,16 @@ class OpdsFeedServiceIT extends ContainerisedInfrastructure {
 	@Autowired private EntitlementRepository entitlementRepository;
 
 	private Institution newInstitution(String code) {
+		return newInstitution(code, RecordStatus.ACTIVE);
+	}
+
+	private Institution newInstitution(String code, RecordStatus status) {
 		Institution institution = new Institution();
 		institution.setCode(code);
 		institution.setName(code + " Institution");
 		institution.setType(InstitutionType.ACADEMIC);
 		institution.setCountry("UK");
-		institution.setStatus(RecordStatus.ACTIVE);
+		institution.setStatus(status);
 		institution.setCatalogueVersion(1L);
 		institution.setUpdatedAt(Instant.parse("2026-08-10T09:00:00Z"));
 		return institutionRepository.save(institution);
@@ -142,6 +146,22 @@ class OpdsFeedServiceIT extends ContainerisedInfrastructure {
 				.satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.NOT_FOUND));
 	}
 
+	/**
+	 * NOT_FOUND, not a 403: a suspended institution has to be indistinguishable from one that was
+	 * never there, or anyone who can type an id into a feed URL learns which institutions exist.
+	 * Asserting the code rather than the message is the point of the test - a 403 here would be
+	 * the disclosure this gate exists to prevent, and would still "pass" a status-only assertion.
+	 */
+	@ParameterizedTest
+	@ValueSource(strings = { "SUSPENDED", "RETIRED" })
+	void loadInstitutionIs404WhenTheInstitutionIsNotActive(String status) {
+		Institution inactive = newInstitution("OPDS-LOAD-" + status, RecordStatus.valueOf(status));
+
+		assertThatThrownBy(() -> feedService.loadInstitution(inactive.getId()))
+				.isInstanceOf(ApiException.class)
+				.satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.NOT_FOUND));
+	}
+
 	// -------------------------------------------------------------------------------- root feed
 
 	@Test
@@ -207,7 +227,10 @@ class OpdsFeedServiceIT extends ContainerisedInfrastructure {
 		OpdsNavigationFeed feed = feedService.rootFeed(institution, subjectFor(institution));
 
 		assertThat(feed.groups()).isNull();
-		assertThat(feed.navigation()).extracting(l -> l.title()).containsExactly("All titles");
+		// "All titles" plus whatever JOURNAL signposts already exist in this shared, never-reset
+		// container from other tests - journals are global, not scoped to one institution, so
+		// this cannot assert an exactly-closed list the way it could before journals existed.
+		assertThat(feed.navigation()).extracting(l -> l.title()).contains("All titles");
 	}
 
 	// ---------------------------------------------------------------------------- curated shelf
@@ -502,6 +525,70 @@ class OpdsFeedServiceIT extends ContainerisedInfrastructure {
 
 		assertThatThrownBy(() -> feedService.publicationDocument(institution, "does-not-exist",
 				subjectFor(institution)))
+				.isInstanceOf(ApiException.class)
+				.satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.NOT_FOUND));
+	}
+
+	// ------------------------------------------------------------------------------ workFeed
+
+	private CatalogueItem newContainer(String publisherId, com.tf.reader.catalogue.entity.WorkType workType,
+			String parentId, String title) {
+		CatalogueItem item = new CatalogueItem();
+		item.setPublisherId(publisherId);
+		item.setWorkType(workType);
+		item.setParentId(parentId);
+		item.setTitle(title);
+		item.setStatus(ItemStatus.PUBLISHED);
+		item.setUpdatedAt(Instant.parse("2026-08-10T09:00:00Z"));
+		return catalogueItemRepository.save(item);
+	}
+
+	@Test
+	void aJournalReturnsNavigationToItsVolumes() {
+		Institution institution = newInstitution("OPDS-WORK-JOURNAL");
+		Publisher publisher = newPublisher("OPDS-WORK-JOURNAL-PUB");
+		CatalogueItem journal = newContainer(publisher.getId(), com.tf.reader.catalogue.entity.WorkType.JOURNAL, null,
+				"Journal of X");
+		newContainer(publisher.getId(), com.tf.reader.catalogue.entity.WorkType.VOLUME, journal.getId(), "Volume 12");
+
+		Object feed = feedService.workFeed(institution, journal.getId(), subjectFor(institution));
+
+		assertThat(feed).isInstanceOf(OpdsNavigationFeed.class);
+		OpdsNavigationFeed navFeed = (OpdsNavigationFeed) feed;
+		assertThat(navFeed.metadata().title()).isEqualTo("Journal of X");
+		assertThat(navFeed.navigation()).hasSize(1);
+		assertThat(navFeed.navigation().get(0).title()).isEqualTo("Volume 12");
+	}
+
+	@Test
+	void anIssueReturnsAPublicationFeedOfItsArticles() {
+		Institution institution = newInstitution("OPDS-WORK-ISSUE");
+		Publisher publisher = newPublisher("OPDS-WORK-ISSUE-PUB");
+		CatalogueItem issue = newContainer(publisher.getId(), com.tf.reader.catalogue.entity.WorkType.ISSUE, null,
+				"Issue 3");
+		CatalogueItem article = newItem(publisher.getId(), "Paper A", AccessTier.OPEN_ACCESS);
+		article.setWorkType(com.tf.reader.catalogue.entity.WorkType.ARTICLE);
+		article.setParentId(issue.getId());
+		catalogueItemRepository.save(article);
+
+		Object feed = feedService.workFeed(institution, issue.getId(), subjectFor(institution));
+
+		assertThat(feed).isInstanceOf(OpdsPublicationFeed.class);
+		OpdsPublicationFeed pubFeed = (OpdsPublicationFeed) feed;
+		assertThat(pubFeed.publications()).hasSize(1);
+		assertThat(pubFeed.publications().get(0).metadata().title()).isEqualTo("Paper A");
+	}
+
+	@Test
+	void anUnpublishedWorkIs404() {
+		Institution institution = newInstitution("OPDS-WORK-404");
+		Publisher publisher = newPublisher("OPDS-WORK-404-PUB");
+		CatalogueItem journal = newContainer(publisher.getId(), com.tf.reader.catalogue.entity.WorkType.JOURNAL, null,
+				"Draft Journal");
+		journal.setStatus(ItemStatus.DRAFT);
+		catalogueItemRepository.save(journal);
+
+		assertThatThrownBy(() -> feedService.workFeed(institution, journal.getId(), subjectFor(institution)))
 				.isInstanceOf(ApiException.class)
 				.satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo(ErrorCode.NOT_FOUND));
 	}

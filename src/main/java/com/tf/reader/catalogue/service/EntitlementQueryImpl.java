@@ -3,8 +3,12 @@ package com.tf.reader.catalogue.service;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
@@ -12,6 +16,7 @@ import com.tf.reader.catalogue.api.AccessLevel;
 import com.tf.reader.catalogue.api.DenyReason;
 import com.tf.reader.catalogue.api.EntitlementDecision;
 import com.tf.reader.catalogue.api.EntitlementQuery;
+import com.tf.reader.catalogue.api.InstitutionLookup;
 import com.tf.reader.catalogue.api.SubjectRef;
 import com.tf.reader.catalogue.entity.AccessTier;
 import com.tf.reader.catalogue.entity.CatalogueItem;
@@ -19,9 +24,12 @@ import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.Entitlement;
 import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.ItemStatus;
+import com.tf.reader.catalogue.entity.Publisher;
 import com.tf.reader.catalogue.entity.ScopeType;
 import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
+import com.tf.reader.catalogue.repository.PublisherRepository;
+import com.tf.reader.common.model.RecordStatus;
 
 import lombok.RequiredArgsConstructor;
 
@@ -31,6 +39,8 @@ class EntitlementQueryImpl implements EntitlementQuery {
 
     private final CatalogueItemRepository catalogueItemRepository;
     private final EntitlementRepository entitlementRepository;
+    private final PublisherRepository publisherRepository;
+    private final InstitutionLookup institutionLookup;
 
     @Override
     public EntitlementDecision check(SubjectRef subject, String itemId) {
@@ -38,14 +48,71 @@ class EntitlementQueryImpl implements EntitlementQuery {
             throw new IllegalArgumentException("itemId is required");
         }
 
-        Optional<CatalogueItem> maybeItem = catalogueItemRepository.findById(itemId);
-        if (maybeItem.isEmpty()) {
+        // A suspended institution must read exactly like an unknown one, same reason
+        // InstitutionLookup itself collapses the two - so this is NOT_FOUND, not a distinct
+        // reason that would disclose the institution's existence or status.
+        if (institutionLookup.find(subject.institutionId()).isEmpty()) {
             return denied(DenyReason.NOT_FOUND);
         }
 
-        CatalogueItem item = maybeItem.get();
+        CatalogueItem item = catalogueItemRepository.findById(itemId).orElse(null);
+        Map<String, Publisher> publishersById = item == null ? Map.of()
+                : publisherRepository.findById(item.getPublisherId())
+                        .map(publisher -> Map.of(publisher.getId(), publisher)).orElse(Map.of());
+
+        return decide(subject, item, publishersById);
+    }
+
+    @Override
+    public Map<String, EntitlementDecision> checkAll(SubjectRef subject, List<String> itemIds) {
+        if (itemIds.isEmpty()) {
+            return Map.of();
+        }
+
+        // A suspended institution must read exactly like an unknown one, same reason
+        // InstitutionLookup itself collapses the two - so this is NOT_FOUND, not a distinct
+        // reason that would disclose the institution's existence or status. Looked up once for
+        // the whole batch: every item in one call shares the same subject and institution.
+        if (institutionLookup.find(subject.institutionId()).isEmpty()) {
+            Map<String, EntitlementDecision> denied = new LinkedHashMap<>();
+            for (String itemId : itemIds) {
+                denied.put(itemId, denied(DenyReason.NOT_FOUND));
+            }
+            return denied;
+        }
+
+        Map<String, CatalogueItem> itemsById = catalogueItemRepository.findAllById(itemIds).stream()
+                .collect(Collectors.toMap(CatalogueItem::getId, Function.identity()));
+
+        List<String> publisherIds = itemsById.values().stream().map(CatalogueItem::getPublisherId).distinct()
+                .toList();
+        Map<String, Publisher> publishersById = publisherRepository.findAllById(publisherIds).stream()
+                .collect(Collectors.toMap(Publisher::getId, Function.identity()));
+
+        Map<String, EntitlementDecision> result = new LinkedHashMap<>();
+        for (String itemId : itemIds) {
+            result.put(itemId, decide(subject, itemsById.get(itemId), publishersById));
+        }
+        return result;
+    }
+
+    private EntitlementDecision decide(SubjectRef subject, CatalogueItem item, Map<String, Publisher> publishersById) {
+        if (item == null) {
+            return denied(DenyReason.NOT_FOUND);
+        }
         if (item.getStatus() != ItemStatus.PUBLISHED || item.getContentState() != ContentState.READY) {
             return denied(DenyReason.CONTENT_NOT_READY);
+        }
+
+        // A suspended (or retired) publisher's catalogue disappears whole, including its open
+        // access titles - checked before the OPEN_ACCESS bypass below, or a suspended publisher's
+        // open access book would keep granting itself regardless. Reuses NO_ENTITLEMENT rather
+        // than a new DenyReason: the three callers that switch on DenyReason
+        // (ReadBrokerService, BorrowService, QueueService) are flambeau's, and to a caller a
+        // suspended publisher's book is indistinguishable from never having had a grant at all.
+        Publisher publisher = publishersById.get(item.getPublisherId());
+        if (publisher == null || publisher.getStatus() != RecordStatus.ACTIVE) {
+            return denied(DenyReason.NO_ENTITLEMENT);
         }
 
         // Open access was never something an institution had to buy, so it needs no grant at

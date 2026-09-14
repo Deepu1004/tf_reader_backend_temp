@@ -2,8 +2,6 @@ package com.tf.reader.auth.saml.mock.controller;
 
 import java.net.URI;
 
-import jakarta.servlet.http.HttpServletRequest;
-
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
@@ -19,6 +17,10 @@ import org.springframework.web.client.RestClient;
 
 import com.tf.reader.auth.saml.mock.service.SamlMockResponse;
 import com.tf.reader.auth.saml.mock.service.SamlMockResponseBuilder;
+import com.tf.reader.auth.transaction.AuthTransaction;
+import com.tf.reader.auth.transaction.AuthTransactionStore;
+
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * The local mock SAML IdP's one endpoint - the local equivalent of {@code https://samlmock.dev/idp}.
@@ -36,9 +38,12 @@ import com.tf.reader.auth.saml.mock.service.SamlMockResponseBuilder;
  * off the incoming request and forwarded explicitly - this is the one thing this class does that
  * a real IdP, on a different origin, structurally could not.
  *
- * <p>No login page and no consent step: unlike the OIDC mock, there is only ever one identity to
- * authenticate as, configured in {@code saml-mock.user} - a page asking "sign in as the
- * pre-populated user?" would be theatre with no decision behind it.
+ * <p>No login page and no consent step: unlike the OIDC mock, there is no form here for a human to
+ * fill in. Which identity to assert - {@code saml-mock.user}'s configured default, or a different
+ * seeded one - is instead decided before the redirect even happens, at
+ * {@code POST /auth/saml/start}'s optional {@code username} parameter, carried here via
+ * {@link AuthTransactionStore#peek(String)} on the RelayState. See
+ * {@code AuthTransaction#usernameHint()} for why this can only ever be a local-mock capability.
  *
  * <p><b>Never enabled by default</b>, for the same reason the OIDC mock is not: a mock identity
  * provider is a machine for minting identities for arbitrary users.
@@ -53,14 +58,16 @@ public class SamlMockController {
 	public static final String SSO_PATH = "/saml-mock/sso";
 
 	private final SamlMockResponseBuilder responses;
+	private final AuthTransactionStore transactions;
 	private final RestClient restClient;
 
-	public SamlMockController(SamlMockResponseBuilder responses) {
+	public SamlMockController(SamlMockResponseBuilder responses, AuthTransactionStore transactions) {
 		this.responses = responses;
-		// Redirects disabled: on success the ACS answers with a 302 to tfreader://auth/callback,
-		// not JSON - the default client tries to follow it and fails, because that scheme is not
-		// one an HTTP client can route to. The 3xx and its Location header are what this endpoint
-		// hands back instead.
+		this.transactions = transactions;
+		// Redirects disabled: the ACS itself now answers with a 302 to tfreader://auth/callback
+		// on both success and failure. A client that followed that redirect would try to route
+		// an unroutable custom scheme and blow up with a ClientProtocolException; this class's
+		// whole job is to hand that response back untouched, not to chase it.
 		this.restClient = RestClient.builder()
 				.requestFactory(new HttpComponentsClientHttpRequestFactory(
 						HttpClients.custom().disableRedirectHandling().build()))
@@ -69,8 +76,27 @@ public class SamlMockController {
 
 	/**
 	 * Redirect-binding SSO: decode the AuthnRequest, sign a Response answering it, then post the
-	 * result to the ACS ourselves and hand back whatever the ACS answered - the token envelope on
-	 * success, or the application's own refusal shape on failure.
+	 * result to the ACS ourselves and hand back whatever the ACS answered - a
+	 * {@code tfreader://auth/callback} redirect, on either success or failure, now that the ACS
+	 * itself no longer returns a JSON body.
+	 *
+	 * <p><b>Every header the ACS set is forwarded, not just content type.</b> The redirect this
+	 * hands back to Postman lives entirely in {@code Location}; copying only content type would
+	 * answer 302 with no way to see where to.
+	 * result to the ACS ourselves and hand back whatever the ACS answered - a
+	 * {@code tfreader://auth/callback} redirect, on either success or failure, now that the ACS
+	 * itself no longer returns a JSON body.
+	 *
+	 * <p><b>Every header the ACS set is forwarded, not just content type.</b> The redirect this
+	 * hands back to Postman lives entirely in {@code Location}; copying only content type would
+	 * answer 302 with no way to see where to.
+	 * result to the ACS ourselves and hand back whatever the ACS answered - a
+	 * {@code tfreader://auth/callback} redirect, on either success or failure, now that the ACS
+	 * itself no longer returns a JSON body.
+	 *
+	 * <p><b>Every header the ACS set is forwarded, not just content type.</b> The redirect this
+	 * hands back to Postman lives entirely in {@code Location}; copying only content type would
+	 * answer 302 with no way to see where to.
 	 */
 	@GetMapping(SSO_PATH)
 	public ResponseEntity<byte[]> sso(
@@ -78,7 +104,13 @@ public class SamlMockController {
 			@RequestParam(name = "RelayState", required = false) String relayState,
 			HttpServletRequest request) throws java.io.IOException {
 
-		SamlMockResponse response = responses.build(samlRequest);
+		// Peek, never consume: this transaction still has to be consumed for real at the ACS, by
+		// SamlAuthenticationService, once our own signed response reaches it below. Consuming it
+		// here would spend it before that happens.
+		String nameIdOverride = transactions.peek(relayState)
+				.map(AuthTransaction::usernameHint)
+				.orElse(null);
+		SamlMockResponse response = responses.build(samlRequest, nameIdOverride);
 
 		MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
 		body.add("SAMLResponse", response.value());
@@ -92,17 +124,17 @@ public class SamlMockController {
 				.contentType(MediaType.APPLICATION_FORM_URLENCODED)
 				.body(body)
 				.exchange((acsRequest, acsResponse) -> {
-					ResponseEntity.BodyBuilder responseBuilder =
-							ResponseEntity.status(acsResponse.getStatusCode());
-					String location = acsResponse.getHeaders().getFirst(HttpHeaders.LOCATION);
-					if (location != null) {
-						responseBuilder.header(HttpHeaders.LOCATION, location);
-					}
-					MediaType contentType = acsResponse.getHeaders().getContentType();
-					if (contentType != null) {
-						responseBuilder.contentType(contentType);
-					}
-					return responseBuilder.body(acsResponse.getBody().readAllBytes());
+					HttpHeaders forwarded = new HttpHeaders();
+					forwarded.addAll(acsResponse.getHeaders());
+					// Recomputed from the body actually sent below, not copied: forwarding the
+					// ACS's own framing headers would fight with whatever length this response's
+					// byte[] body ends up being written with.
+					forwarded.remove(HttpHeaders.CONTENT_LENGTH);
+					forwarded.remove(HttpHeaders.TRANSFER_ENCODING);
+
+					return ResponseEntity.status(acsResponse.getStatusCode())
+							.headers(forwarded)
+							.body(acsResponse.getBody().readAllBytes());
 				});
 	}
 }

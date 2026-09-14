@@ -28,7 +28,7 @@ class AvailabilityControllerTest {
         when(entitlements.check(any(), eq("item_1")))
                 .thenReturn(new EntitlementDecision(true, AccessLevel.ENTITLED_CONCURRENT, "ent_1", 2, 14, null, null));
         var snapshot = new AvailabilitySnapshot(1, 3, null, Instant.now());
-        when(availability.forItem("inst_1", "item_1", 2)).thenReturn(snapshot);
+        when(availability.forItem("inst_1", "item_1", 2, "user_a")).thenReturn(snapshot);
 
         assertThat(controller.forItem(me, "item_1")).isSameAs(snapshot);
     }
@@ -37,11 +37,11 @@ class AvailabilityControllerTest {
     void anEntitlementFailureBecomesANullCopyCountNeverA500() {
         when(entitlements.check(any(), any())).thenThrow(new RuntimeException("catalogue unreachable"));
         var unknown = AvailabilitySnapshot.unknown(Instant.now());
-        when(availability.forItem("inst_1", "item_1", null)).thenReturn(unknown);
+        when(availability.forItem("inst_1", "item_1", null, "user_a")).thenReturn(unknown);
 
         var result = controller.forItem(me, "item_1");
 
         assertThat(result).isSameAs(unknown);
-        verify(availability).forItem("inst_1", "item_1", null);
+        verify(availability).forItem("inst_1", "item_1", null, "user_a");
     }
 }

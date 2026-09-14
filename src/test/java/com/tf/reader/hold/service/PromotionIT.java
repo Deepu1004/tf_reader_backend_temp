@@ -1,7 +1,9 @@
 package com.tf.reader.hold.service;
 
 import com.tf.reader.auth.model.CurrentUser;
+import com.tf.reader.auth.model.TnfUser;
 import com.tf.reader.auth.model.UserType;
+import com.tf.reader.auth.token.JwtTokenService;
 import com.tf.reader.hold.HoldContainerTest;
 import com.tf.reader.hold.entity.Hold;
 import com.tf.reader.hold.entity.HoldStatus;
@@ -11,17 +13,23 @@ import com.tf.reader.hold.repository.HoldWrites;
 import com.tf.reader.library.api.ChangeReason;
 import com.tf.reader.library.repository.ChangeLogRepository;
 import com.tf.reader.reading.api.CopyLease;
+import com.jayway.jsonpath.JsonPath;
 import org.bson.Document;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -32,6 +40,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 // join() runs through the real EntitlementQuery, which needs a real
 // catalogue item and a 2-copy entitlement seeded for it - seeded via
@@ -39,11 +49,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 // classes (hold may only depend on catalogue's api/ package, even from a
 // test). oneItemsResultDoesNotBlockAnother uses its own item ids and never
 // calls join(), so it needs none of this.
+@AutoConfigureMockMvc
 class PromotionIT extends HoldContainerTest {
 
     private static final String SCOPE = "inst_1";
     private static final String ITEM = "item_1";
     private static final String COLLECTION = "col_promotion_it";
+    private static final String PUBLISHER = "pub_promotion_it";
 
     @Autowired
     QueueService queue;
@@ -63,18 +75,40 @@ class PromotionIT extends HoldContainerTest {
     MongoTemplate mongo;
     @Autowired
     ChangeLogRepository changeLog;
+    @Autowired
+    MockMvc mockMvc;
 
     @BeforeEach
     void seedCatalogueAndEntitlement() {
         mongo.remove(Query.query(Criteria.where("_id").is(ITEM)), "catalogueItems");
         mongo.remove(Query.query(Criteria.where("institutionId").is(SCOPE)), "entitlements");
+        mongo.remove(Query.query(Criteria.where("_id").is(SCOPE)), "institutions");
+        mongo.remove(Query.query(Criteria.where("_id").is(PUBLISHER)), "publishers");
+
+        // EntitlementQueryImpl.check() looks the institution up first and reads a suspended one
+        // exactly like an unknown one - so without this row, borrow() would fail NOT_FOUND before
+        // ever reaching the entitlement this test seeds. code must be non-null: it's uniquely
+        // indexed, and a second null would collide with any other seeded institution.
+        mongo.save(new Document()
+                .append("_id", SCOPE)
+                .append("code", "PROMOTION_IT")
+                .append("name", "Promotion IT institution")
+                .append("status", "ACTIVE"), "institutions");
+
+        // check() also denies NO_ENTITLEMENT for a book whose publisher isn't ACTIVE, checked
+        // before any grant lookup - so the publisher has to exist and be active too.
+        mongo.save(new Document()
+                .append("_id", PUBLISHER)
+                .append("code", "PROMOTION_IT")
+                .append("name", "Promotion IT publisher")
+                .append("status", "ACTIVE"), "publishers");
 
         mongo.save(new Document()
                 .append("_id", ITEM)
                 .append("status", "PUBLISHED")
                 .append("contentState", "READY")
                 .append("accessTier", "ELITE")
-                .append("publisherId", "pub_promotion_it")
+                .append("publisherId", PUBLISHER)
                 .append("collectionIds", List.of(COLLECTION)), "catalogueItems");
 
         mongo.save(new Document()
@@ -95,10 +129,20 @@ class PromotionIT extends HoldContainerTest {
         redisConnectionFactory.getConnection().serverCommands().flushAll();
         mongo.remove(Query.query(Criteria.where("_id").is(ITEM)), "catalogueItems");
         mongo.remove(Query.query(Criteria.where("institutionId").is(SCOPE)), "entitlements");
+        mongo.remove(Query.query(Criteria.where("_id").is(SCOPE)), "institutions");
+        mongo.remove(Query.query(Criteria.where("_id").is(PUBLISHER)), "publishers");
     }
 
     private static CurrentUser user(String suffix) {
         return new CurrentUser("user_" + suffix, UserType.INSTITUTION, SCOPE, List.of(), List.of());
+    }
+
+    // A real, signed app-audience token for a real borrow()/return() call over HTTP — the JWT
+    // secret here is the suite-wide test value already set in src/test/resources/application.properties.
+    private static String token(String userId) {
+        TnfUser caller = new TnfUser(userId, UserType.INSTITUTION, SCOPE, List.of("MEMBER"), List.of(COLLECTION));
+        return JwtTokenService.forTest(com.tf.reader.ContainerisedInfrastructure.JWT_SECRET, Duration.ofHours(1), Clock.systemUTC())
+                .issue(caller).token();
     }
 
     @Test
@@ -123,6 +167,150 @@ class PromotionIT extends HoldContainerTest {
                 .isEqualTo(ChangeReason.HOLD_PROMOTED);
         assertThat(changeLog.findFirstByUserIdOrderBySequenceDesc("user_b").orElseThrow().getReason())
                 .isEqualTo(ChangeReason.HOLD_PROMOTED);
+    }
+
+    @Test
+    @DisplayName("two real loans returning through the real HTTP path promote two different queued readers")
+    void twoCopiesReachTwoDifferentReadersThroughARealLoanReturn() throws Exception {
+        // Both copies taken for real, through the actual borrow endpoint — not a
+        // Hold, not a directly-saved Loan document.
+        String loanX = borrow("user_x");
+        String loanY = borrow("user_y");
+
+        // Distinct from the "a"/"b"/"c"/"d" ids used elsewhere in this file: this class's
+        // Testcontainers Mongo is shared for the whole JVM run and changeLog is never cleared
+        // between tests, so reusing an id could let a stale entry from another test pass this
+        // assertion even if this test's own promotion silently failed to write anything.
+        queue.join(user("ra"), ITEM);
+        queue.join(user("rb"), ITEM);
+        queue.join(user("rc"), ITEM);
+
+        // Each return goes through the real ReturnService HTTP path, which calls the real,
+        // published HoldPromotion.promote() — the actual cross-module trigger this test
+        // exists to prove, not PromotionService.promoteNext() called directly.
+        returnLoan(loanX, "user_x");
+        returnLoan(loanY, "user_y");
+
+        List<Hold> offered = holds.findByScopeAndItemIdAndStatusOrderByTicketAsc(SCOPE, ITEM, HoldStatus.OFFERED);
+        assertThat(offered).hasSize(2);
+        assertThat(offered).extracting(Hold::getUserId).containsExactly("user_ra", "user_rb");
+        assertThat(queue.holdsFor("user_rc").get(0).status()).isEqualTo("QUEUED");
+
+        assertThat(changeLog.findFirstByUserIdOrderBySequenceDesc("user_ra").orElseThrow().getReason())
+                .isEqualTo(ChangeReason.HOLD_PROMOTED);
+        assertThat(changeLog.findFirstByUserIdOrderBySequenceDesc("user_rb").orElseThrow().getReason())
+                .isEqualTo(ChangeReason.HOLD_PROMOTED);
+    }
+
+    @Test
+    @DisplayName("a return in one institution never promotes another institution's queue for the same item")
+    void aReturnInOneInstitutionNeverPromotesAnotherInstitutionsQueue() throws Exception {
+        String item = "item_two_inst";
+        String scopeX = "inst_two_x";
+        String scopeY = "inst_two_y";
+        String colX = "col_two_inst_x";
+        String colY = "col_two_inst_y";
+
+        String publisher = "pub_two_inst";
+        mongo.remove(Query.query(Criteria.where("_id").is(item)), "catalogueItems");
+        mongo.remove(Query.query(Criteria.where("institutionId").in(scopeX, scopeY)), "entitlements");
+        mongo.remove(Query.query(Criteria.where("_id").in(scopeX, scopeY)), "institutions");
+        mongo.remove(Query.query(Criteria.where("_id").is(publisher)), "publishers");
+        mongo.save(new Document()
+                .append("_id", item)
+                .append("status", "PUBLISHED")
+                .append("contentState", "READY")
+                .append("accessTier", "ELITE")
+                .append("publisherId", publisher)
+                .append("collectionIds", List.of(colX, colY)), "catalogueItems");
+        mongo.save(twoInstEntitlement(scopeX, colX), "entitlements");
+        mongo.save(twoInstEntitlement(scopeY, colY), "entitlements");
+        // code must be non-null: it's uniquely indexed, and a second null would collide with any
+        // other seeded institution.
+        mongo.save(new Document().append("_id", scopeX).append("code", scopeX).append("name", scopeX).append("status", "ACTIVE"), "institutions");
+        mongo.save(new Document().append("_id", scopeY).append("code", scopeY).append("name", scopeY).append("status", "ACTIVE"), "institutions");
+        // check() also denies NO_ENTITLEMENT for a book whose publisher isn't ACTIVE, checked
+        // before any grant lookup - so the publisher has to exist and be active too.
+        mongo.save(new Document().append("_id", publisher).append("code", publisher).append("name", publisher).append("status", "ACTIVE"), "publishers");
+
+        try {
+            // usr_two_x0 takes inst_two_x's only copy for real; inst_two_y's own copy is never
+            // borrowed, so it sits free for the whole test — exactly the condition that let the
+            // old scan-every-scope HoldPromotionImpl incorrectly promote it too.
+            String loanX0 = borrowFor("usr_two_x0", scopeX, item);
+            queue.join(userIn("usr_two_xa", scopeX), item);
+            queue.join(userIn("usr_two_ya", scopeY), item);
+
+            returnLoanFor(loanX0, "usr_two_x0", scopeX);
+
+            assertThat(queue.holdsFor("usr_two_xa").get(0).status())
+                    .as("inst_two_x's own return promotes inst_two_x's own queue")
+                    .isEqualTo("OFFERED");
+            assertThat(queue.holdsFor("usr_two_ya").get(0).status())
+                    .as("inst_two_y's queue must be untouched by inst_two_x's return, even though "
+                            + "inst_two_y's own copy was free the entire time")
+                    .isEqualTo("QUEUED");
+        } finally {
+            mongo.remove(Query.query(Criteria.where("_id").is(item)), "catalogueItems");
+            mongo.remove(Query.query(Criteria.where("institutionId").in(scopeX, scopeY)), "entitlements");
+            mongo.remove(Query.query(Criteria.where("_id").in(scopeX, scopeY)), "institutions");
+            mongo.remove(Query.query(Criteria.where("_id").is(publisher)), "publishers");
+        }
+    }
+
+    private static Document twoInstEntitlement(String institutionId, String collectionId) {
+        return new Document()
+                .append("institutionId", institutionId)
+                .append("scopeType", "COLLECTION")
+                .append("scopeId", collectionId)
+                .append("copies", 1)
+                .append("loanPeriodDays", 14)
+                .append("validFrom", LocalDate.now().minusDays(1))
+                .append("validTo", LocalDate.now().plusDays(30))
+                .append("status", "ACTIVE")
+                .append("version", 0L);
+    }
+
+    private static CurrentUser userIn(String userId, String scope) {
+        return new CurrentUser(userId, UserType.INSTITUTION, scope, List.of(), List.of());
+    }
+
+    private static String tokenFor(String userId, String institutionId) {
+        TnfUser caller = new TnfUser(userId, UserType.INSTITUTION, institutionId, List.of("MEMBER"), List.of());
+        return JwtTokenService.forTest(com.tf.reader.ContainerisedInfrastructure.JWT_SECRET, Duration.ofHours(1), Clock.systemUTC())
+                .issue(caller).token();
+    }
+
+    private String borrowFor(String userId, String institutionId, String itemId) throws Exception {
+        String body = mockMvc.perform(post("/api/v1/loans")
+                        .header("Authorization", "Bearer " + tokenFor(userId, institutionId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"itemId\":\"" + itemId + "\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return JsonPath.read(body, "$.loanId");
+    }
+
+    private void returnLoanFor(String loanId, String userId, String institutionId) throws Exception {
+        mockMvc.perform(post("/api/v1/loans/" + loanId + "/return")
+                        .header("Authorization", "Bearer " + tokenFor(userId, institutionId)))
+                .andExpect(status().isOk());
+    }
+
+    private String borrow(String userId) throws Exception {
+        String body = mockMvc.perform(post("/api/v1/loans")
+                        .header("Authorization", "Bearer " + token(userId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"itemId\":\"" + ITEM + "\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return JsonPath.read(body, "$.loanId");
+    }
+
+    private void returnLoan(String loanId, String userId) throws Exception {
+        mockMvc.perform(post("/api/v1/loans/" + loanId + "/return")
+                        .header("Authorization", "Bearer " + token(userId)))
+                .andExpect(status().isOk());
     }
 
     @Test
