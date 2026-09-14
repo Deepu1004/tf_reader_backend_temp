@@ -24,7 +24,7 @@ import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.ContentType;
 import com.tf.reader.catalogue.entity.WorkType;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
+import com.tf.reader.catalogue.service.CatalogueItemStore;
 import com.tf.reader.common.audit.AdminAuditWriter;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
@@ -37,7 +37,7 @@ class IngestServiceTest {
 	private static final Instant NOW = Instant.parse("2026-08-26T10:00:00Z");
 	private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
 
-	private final CatalogueItemRepository items = mock(CatalogueItemRepository.class);
+	private final CatalogueItemStore items = mock(CatalogueItemStore.class);
 	private final AdminScopeAuthorizer adminScope = mock(AdminScopeAuthorizer.class);
 	private final AdminAuditWriter auditWriter = mock(AdminAuditWriter.class);
 	private final BookStorage bookStorage = mock(BookStorage.class);

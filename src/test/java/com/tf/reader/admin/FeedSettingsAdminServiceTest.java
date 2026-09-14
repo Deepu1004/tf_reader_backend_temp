@@ -3,7 +3,7 @@ package com.tf.reader.admin;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyIterable;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -33,7 +33,7 @@ import com.tf.reader.catalogue.api.EntitlementQuery;
 import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.FeedSettings;
 import com.tf.reader.catalogue.entity.Institution;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
+import com.tf.reader.catalogue.service.CatalogueItemStore;
 import com.tf.reader.catalogue.repository.FeedSettingsRepository;
 import com.tf.reader.catalogue.repository.InstitutionRepository;
 import com.tf.reader.catalogue.service.CatalogueVersionBumper;
@@ -52,7 +52,7 @@ class FeedSettingsAdminServiceTest {
 
 	private FeedSettingsRepository feedSettingsRepository;
 	private InstitutionRepository institutionRepository;
-	private CatalogueItemRepository catalogueItemRepository;
+	private CatalogueItemStore catalogueItemStore;
 	private EntitlementQuery entitlementQuery;
 	private CatalogueVersionBumper versionBumper;
 	private AdminAuditWriter auditWriter;
@@ -62,7 +62,7 @@ class FeedSettingsAdminServiceTest {
 	void setUp() {
 		feedSettingsRepository = mock(FeedSettingsRepository.class);
 		institutionRepository = mock(InstitutionRepository.class);
-		catalogueItemRepository = mock(CatalogueItemRepository.class);
+		catalogueItemStore = mock(CatalogueItemStore.class);
 		entitlementQuery = mock(EntitlementQuery.class);
 		versionBumper = mock(CatalogueVersionBumper.class);
 		auditWriter = mock(AdminAuditWriter.class);
@@ -72,7 +72,7 @@ class FeedSettingsAdminServiceTest {
 		when(feedSettingsRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
 		service = new FeedSettingsAdminService(feedSettingsRepository, institutionRepository,
-				catalogueItemRepository, entitlementQuery, versionBumper, auditWriter, new AdminScopeAuthorizer());
+				catalogueItemStore, entitlementQuery, versionBumper, auditWriter, new AdminScopeAuthorizer());
 
 		actingAs(AdminRole.SUPER_ADMIN, null);
 	}
@@ -163,7 +163,7 @@ class FeedSettingsAdminServiceTest {
 	@DisplayName("save with 3 valid, entitled shelves bumps catalogueVersion and increments version")
 	void happyPathSaves() {
 		when(feedSettingsRepository.findByInstitutionId("inst_7f3")).thenReturn(Optional.empty());
-		when(catalogueItemRepository.findAllById(anyIterable()))
+		when(catalogueItemStore.findAllById(anyCollection()))
 				.thenReturn(List.of(item("item_42", "pub_rtlg", List.of())));
 		when(entitlementQuery.check(any(), any())).thenReturn(entitledDecision());
 
@@ -240,7 +240,7 @@ class FeedSettingsAdminServiceTest {
 	@DisplayName("save with an unknown item id throws VALIDATION_FAILED naming the id, without asking EntitlementQuery")
 	void unknownItemIdThrows() {
 		when(feedSettingsRepository.findByInstitutionId("inst_7f3")).thenReturn(Optional.empty());
-		when(catalogueItemRepository.findAllById(anyIterable())).thenReturn(List.of());
+		when(catalogueItemStore.findAllById(anyCollection())).thenReturn(List.of());
 
 		FeedSettingsWrite write = new FeedSettingsWrite("Title", 20, null, validShelves(List.of("item_bogus")), 0L);
 
@@ -256,7 +256,7 @@ class FeedSettingsAdminServiceTest {
 	@DisplayName("save with an item EntitlementQuery denies as NO_ENTITLEMENT throws, naming the id")
 	void notEntitledItemThrows() {
 		when(feedSettingsRepository.findByInstitutionId("inst_7f3")).thenReturn(Optional.empty());
-		when(catalogueItemRepository.findAllById(anyIterable()))
+		when(catalogueItemStore.findAllById(anyCollection()))
 				.thenReturn(List.of(item("item_42", "pub_rtlg", List.of())));
 		when(entitlementQuery.check(any(), any())).thenReturn(deniedDecision(DenyReason.NO_ENTITLEMENT));
 
@@ -273,7 +273,7 @@ class FeedSettingsAdminServiceTest {
 	@DisplayName("save with an item EntitlementQuery denies as ENTITLEMENT_EXPIRED throws")
 	void expiredEntitlementThrows() {
 		when(feedSettingsRepository.findByInstitutionId("inst_7f3")).thenReturn(Optional.empty());
-		when(catalogueItemRepository.findAllById(anyIterable()))
+		when(catalogueItemStore.findAllById(anyCollection()))
 				.thenReturn(List.of(item("item_42", "pub_rtlg", List.of())));
 		when(entitlementQuery.check(any(), any())).thenReturn(deniedDecision(DenyReason.ENTITLEMENT_EXPIRED));
 
@@ -287,7 +287,7 @@ class FeedSettingsAdminServiceTest {
 	@DisplayName("save with an item EntitlementQuery denies as CONTENT_NOT_READY also throws - per Abhishek, blocked the same as a real deny")
 	void contentNotReadyThrows() {
 		when(feedSettingsRepository.findByInstitutionId("inst_7f3")).thenReturn(Optional.empty());
-		when(catalogueItemRepository.findAllById(anyIterable()))
+		when(catalogueItemStore.findAllById(anyCollection()))
 				.thenReturn(List.of(item("item_42", "pub_rtlg", List.of())));
 		when(entitlementQuery.check(any(), any())).thenReturn(deniedDecision(DenyReason.CONTENT_NOT_READY));
 
