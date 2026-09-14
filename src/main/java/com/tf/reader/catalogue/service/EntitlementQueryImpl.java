@@ -26,7 +26,6 @@ import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.catalogue.entity.Publisher;
 import com.tf.reader.catalogue.entity.ScopeType;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
 import com.tf.reader.catalogue.repository.PublisherRepository;
 import com.tf.reader.common.model.RecordStatus;
@@ -37,7 +36,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 class EntitlementQueryImpl implements EntitlementQuery {
 
-    private final CatalogueItemRepository catalogueItemRepository;
+    private final CatalogueItemStore catalogueItemStore;
     private final EntitlementRepository entitlementRepository;
     private final PublisherRepository publisherRepository;
     private final InstitutionLookup institutionLookup;
@@ -55,7 +54,7 @@ class EntitlementQueryImpl implements EntitlementQuery {
             return denied(DenyReason.NOT_FOUND);
         }
 
-        CatalogueItem item = catalogueItemRepository.findById(itemId).orElse(null);
+        CatalogueItem item = catalogueItemStore.findById(itemId).orElse(null);
         Map<String, Publisher> publishersById = item == null ? Map.of()
                 : publisherRepository.findById(item.getPublisherId())
                         .map(publisher -> Map.of(publisher.getId(), publisher)).orElse(Map.of());
@@ -81,7 +80,12 @@ class EntitlementQueryImpl implements EntitlementQuery {
             return denied;
         }
 
-        Map<String, CatalogueItem> itemsById = catalogueItemRepository.findAllById(itemIds).stream()
+        // One lookup per item rather than a single findAllById: different items can belong to
+        // different publishers, each possibly routed to their own database, so there is no single
+        // query that could answer this batch across all of them anyway.
+        Map<String, CatalogueItem> itemsById = itemIds.stream()
+                .map(catalogueItemStore::findById)
+                .flatMap(Optional::stream)
                 .collect(Collectors.toMap(CatalogueItem::getId, Function.identity()));
 
         List<String> publisherIds = itemsById.values().stream().map(CatalogueItem::getPublisherId).distinct()

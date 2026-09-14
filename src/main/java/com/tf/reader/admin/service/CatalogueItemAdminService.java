@@ -25,11 +25,11 @@ import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.catalogue.entity.Publisher;
 import com.tf.reader.catalogue.entity.WorkType;
-import com.tf.reader.catalogue.repository.BookCollectionRepository;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
+import com.tf.reader.catalogue.service.BookCollectionStore;
 import com.tf.reader.catalogue.repository.CatalogueItemSearchRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
 import com.tf.reader.catalogue.repository.PublisherRepository;
+import com.tf.reader.catalogue.service.CatalogueItemStore;
 import com.tf.reader.catalogue.service.CatalogueVersionBumper;
 import com.tf.reader.common.audit.AdminAuditWriter;
 import com.tf.reader.common.audit.AuditLog;
@@ -49,10 +49,10 @@ public class CatalogueItemAdminService {
 	private static final int MIN_SIZE = 1;
 	private static final int MAX_SIZE = 100;
 
-	private final CatalogueItemRepository catalogueItemRepository;
+	private final CatalogueItemStore catalogueItemStore;
 	private final CatalogueItemSearchRepository searchRepository;
 	private final PublisherRepository publisherRepository;
-	private final BookCollectionRepository bookCollectionRepository;
+	private final BookCollectionStore bookCollectionStore;
 	private final EntitlementRepository entitlementRepository;
 	private final CatalogueVersionBumper catalogueVersionBumper;
 	private final AdminAuditWriter auditWriter;
@@ -215,7 +215,7 @@ public class CatalogueItemAdminService {
 
 
 	private CatalogueItem findOrThrow(String itemId) {
-		return catalogueItemRepository.findById(itemId)
+		return catalogueItemStore.findById(itemId)
 				.orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "No such catalogue item"));
 	}
 
@@ -248,7 +248,7 @@ public class CatalogueItemAdminService {
 
 	private CatalogueItem save(CatalogueItem item) {
 		try {
-			return catalogueItemRepository.save(item);
+			return catalogueItemStore.save(item);
 		}
 		catch (IllegalArgumentException ex) {
 			throw new ApiException(ErrorCode.VALIDATION_FAILED, ex.getMessage());
@@ -265,7 +265,7 @@ public class CatalogueItemAdminService {
 		if (collectionIds == null || collectionIds.isEmpty()) {
 			return;
 		}
-		List<BookCollection> found = bookCollectionRepository.findAllById(collectionIds);
+		List<BookCollection> found = bookCollectionStore.findAllById(collectionIds);
 		Map<String, BookCollection> byId = new HashMap<>();
 		for (BookCollection collection : found) {
 			byId.put(collection.getId(), collection);
@@ -347,7 +347,7 @@ public class CatalogueItemAdminService {
 		}
 
 		WorkType expected = workType == WorkType.ARTICLE ? WorkType.ISSUE : requiredParentType;
-		CatalogueItem parent = catalogueItemRepository.findById(parentId)
+		CatalogueItem parent = catalogueItemStore.findById(parentId)
 				.orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_FAILED, "parentId does not exist: " + parentId));
 		WorkType parentWorkType = parent.getWorkType() == null ? WorkType.BOOK : parent.getWorkType();
 		if (parentWorkType != expected) {
@@ -373,7 +373,7 @@ public class CatalogueItemAdminService {
 		if (isbn == null || isbn.isBlank()) {
 			return;
 		}
-		catalogueItemRepository.findByIsbn(isbn)
+		catalogueItemStore.findByIsbn(isbn)
 				.filter(existing -> !existing.getId().equals(editingItemId))
 				.ifPresent(existing -> {
 					throw new ApiException(ErrorCode.CODE_TAKEN, duplicateIsbnMessage(existing));
