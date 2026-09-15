@@ -36,24 +36,19 @@ services:
       retries: 10
       start_period: 5s
 
-  app:
-    container_name: tf_reader_backend
-    build: .
-    restart: unless-stopped
-    ports:
-      - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
-    env_file:
-      - .env
-    environment:
-      # IMPORTANT: containers communicate using Compose service names
-      MONGODB_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/tnfreader?authSource=admin
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      # No B2_ENDPOINT override here. BookStorageConfig.java uses this ONE property for both the
-      # internal S3Client AND the S3Presigner, and a presigned URL bakes the endpoint straight into
-      # its SigV4 signature — a docker-only hostname would break every asset fetch from the
-      # phone/simulator/device (ASSET_FETCH_FAILED). .env's B2_ENDPOINT already points at the real
-      # Backblaze B2 bucket every real client needs, so env_file's value is left to apply as-is.
+ app:
+   container_name: tf_reader_backend
+   build: .
+   restart: unless-stopped
+   ports:
+     - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
+   env_file:
+     - .env
+   environment:
+     # IMPORTANT: containers communicate using Compose service names
+     MONGODB_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/tnfreader?authSource=admin
+     REDIS_HOST: redis
+     REDIS_PORT: 6379
 
     depends_on:
       mongo:

@@ -136,7 +136,18 @@ public class PromotionService {
                 log.info("promotion: fresh claim failed scope={} itemId={} userId={}", scope, itemId, nextUserId);
                 return false; // couldn't actually get the copy this time
             }
-            newToken = claimed.get().token();
+            // Extend to cover the full offer window before writing the Mongo offer.
+            // claim() only gives a 30-second CLAIM_TTL; without this extend the Redis
+            // reservation vanishes while the offer is still "valid", and the reader gets
+            // SESSION_FETCH_FAILED when they accept at any normal reaction time.
+            LeaseHandle handle = claimed.get();
+            if (!lease.extend(handle, until)) {
+                log.warn("promotion: extend failed after fresh claim scope={} itemId={} userId={}, releasing",
+                        scope, itemId, nextUserId);
+                lease.release(handle);
+                return false;
+            }
+            newToken = handle.token();
         } else {
             // Reassign, never release-then-acquire — a release opens a
             // window, and a passing reader takes a copy somebody waited

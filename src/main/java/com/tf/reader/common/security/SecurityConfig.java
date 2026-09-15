@@ -186,13 +186,13 @@ public class SecurityConfig {
 		return stateless(http).build();
 	}
 
-	/** Admin API. Requires a valid, session-backed {@code tf-admin} access token. */
+	/** Admin API and ops. Requires a valid, session-backed {@code tf-admin} access token. */
 	@Bean
 	@Order(4)
 	SecurityFilterChain adminApiFilterChain(HttpSecurity http,
 			@Qualifier(JwtConfig.ADMIN_ACCESS_TOKEN_DECODER) JwtDecoder adminAccessTokenDecoder) throws Exception {
 
-		http.securityMatcher("/api/admin/**")
+		http.securityMatcher("/api/admin/**", "/api/v1/ops/**")
 				.authorizeHttpRequests(authorize -> authorize
 						.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
 						.anyRequest().authenticated())
