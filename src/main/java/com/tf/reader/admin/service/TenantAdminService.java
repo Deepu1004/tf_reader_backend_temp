@@ -49,8 +49,15 @@ public class TenantAdminService {
 		return publisherRepository.findAll().stream().map(TenantAdminService::toView).toList();
 	}
 
+	/**
+	 * Self-service, same guard as {@link #setDatabase}/{@link #setVaultKey}: that publisher's own
+	 * PUBLISHER_ADMIN may read their own tenant record, not only a SUPER_ADMIN - a publisher asking
+	 * "is my database/key currently set?" shouldn't need a super admin to answer it for them.
+	 * {@link #list()} stays SUPER_ADMIN only; enumerating every publisher is a platform-wide view,
+	 * not a self-service one.
+	 */
 	public TenantView get(String publisherId) {
-		adminScope.requireSuperAdmin();
+		requireAccess(publisherId);
 		return publisherRepository.findById(publisherId).map(TenantAdminService::toView)
 				.orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "No such publisher"));
 	}

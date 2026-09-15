@@ -1403,6 +1403,9 @@ paths:
       tags: [Admin · tenants]
       operationId: getTenant
       summary: One tenant
+      description: >-
+        Self-service: that publisher's own PUBLISHER_ADMIN may read their own tenant record, not
+        only a SUPER_ADMIN - unlike listing every tenant, which stays SUPER_ADMIN only.
       x-stability: DRAFT
       x-called-by: [wokay]
       security: [{ adminToken: [] }]
@@ -3670,8 +3673,8 @@ components:
         T&F's own infrastructure view of a publisher: which database and vault it uses,
         and whether that vault is healthy. Not the publisher's business data - see
         `Publisher` for that. Listing every tenant is SUPER_ADMIN only; a publisher's own
-        PUBLISHER_ADMIN may still set their own database/vault key and gets their own Tenant
-        record back in that response.
+        PUBLISHER_ADMIN may still read and set their own tenant record (database, vault key)
+        without needing a super admin.
       required: [id, code, name, connectionHealth]
       properties:
         id: { type: string }

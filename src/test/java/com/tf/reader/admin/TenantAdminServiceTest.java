@@ -94,6 +94,26 @@ class TenantAdminServiceTest {
 	}
 
 	@Test
+	void aPublisherAdminCanReadTheirOwnTenantStatus() {
+		actingAs(AdminRole.PUBLISHER_ADMIN, "pub_r1");
+		when(publisherRepository.findById("pub_r1")).thenReturn(Optional.of(routledge()));
+
+		TenantView view = service.get("pub_r1");
+
+		assertThat(view.id()).isEqualTo("pub_r1");
+	}
+
+	@Test
+	void aPublisherAdminCannotReadAnotherPublishersTenantStatus() {
+		actingAs(AdminRole.PUBLISHER_ADMIN, "pub_r1");
+
+		assertThatThrownBy(() -> service.get("pub_other"))
+				.isInstanceOf(ApiException.class)
+				.extracting(ex -> ((ApiException) ex).getCode())
+				.isEqualTo(ErrorCode.FORBIDDEN_ROLE);
+	}
+
+	@Test
 	void aPublisherAdminCanSetTheirOwnMongoConnection() {
 		actingAs(AdminRole.PUBLISHER_ADMIN, "pub_r1");
 		when(publisherRepository.findById("pub_r1")).thenReturn(Optional.of(routledge()));
