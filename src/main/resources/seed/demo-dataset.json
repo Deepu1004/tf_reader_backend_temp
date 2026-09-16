@@ -204,8 +204,6 @@
       "status": "PUBLISHED",
       "contentState": "READY",
       "contentError": null,
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z",
       "assets": [
         {
           "format": "EPUB",
@@ -226,11 +224,13 @@
               "indexKey": "items/dev-sample-epub/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:51:25.589Z"
             }
           ]
         }
-      ]
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-09-16T11:51:25.908Z"
     },
     {
       "_seedWhy": "Real PDF, ingested from Professional Competence And Higher Education_26_08_26_15_22_02-ELITE.pdf. ELITE, so it needs its own grant: pub_crc has no publisher/collection-level entitlement to inst_7f3, so ent_dev_elite (ITEM scope, copies:2) exists specifically for this book.",
@@ -263,8 +263,6 @@
       "status": "PUBLISHED",
       "contentState": "READY",
       "contentError": null,
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z",
       "assets": [
         {
           "format": "PDF",
@@ -285,11 +283,13 @@
               "indexKey": "items/dev-sample-pdf/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:53:26.070Z"
             }
           ]
         }
-      ]
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-09-16T11:53:26.387Z"
     },
     {
       "_seedWhy": "Real audio, ingested from doctor_dolittle_02_lofting_64kb-OPEN_ACCESS.mp3 (public-domain Hugh Lofting). OPEN_ACCESS, so no entitlement needed. Unencrypted, per both the OPEN_ACCESS rule and the audio-is-never-encrypted rule agreeing for once.",
@@ -325,8 +325,6 @@
       "status": "PUBLISHED",
       "contentState": "READY",
       "contentError": null,
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z",
       "assets": [
         {
           "format": "AUDIO",
@@ -341,17 +339,19 @@
               "sizeBytes": 6312497,
               "cipherLength": null,
               "hasSearchIndex": false,
-              "indexTerms": null,
+              "indexTerms": 0,
               "indexSkipReason": "AudioNotIndexable",
               "storageKey": "items/dev-sample-audio/content",
               "indexKey": null,
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:49:23.151Z"
             }
           ]
         }
-      ]
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-09-16T11:49:23.414Z"
     },
     {
       "_seedWhy": "Real audio, ingested from doctor_dolittle_01_lofting_64kb-ELITE.mp3. ELITE, so encrypted like any other locked asset - audio is not exempt above OPEN_ACCESS. Every ELITE item carries a real copy limit, so this one has its own ITEM-scope grant (ent_dev_elite_audio, copies:2) rather than riding pub_rtlg's UNLIMITED publisher grant (ent_imp2), which would otherwise win by scope but leave an ELITE title with no limit and no queue.",
@@ -387,8 +387,6 @@
       "status": "PUBLISHED",
       "contentState": "READY",
       "contentError": null,
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z",
       "assets": [
         {
           "format": "AUDIO",
@@ -403,17 +401,19 @@
               "sizeBytes": 2966528,
               "cipherLength": 2966556,
               "hasSearchIndex": false,
-              "indexTerms": null,
-              "indexSkipReason": "AudioNotIndexable",
+              "indexTerms": 0,
+              "indexSkipReason": null,
               "storageKey": "items/dev-sample-audio-encrypted/content",
               "indexKey": null,
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:49:37.815Z"
             }
           ]
         }
-      ]
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-09-16T11:49:38.127Z"
     },
     {
       "_seedWhy": "Real EPUB, ingested from The Politics of Coalition in Korea_26_08_26_15_21_48-ELITE.epub. ELITE, and deliberately placed in col_law2024 so the COLLECTION grant (ent_imp1, copies:2) beats the PUBLISHER grant (ent_imp2, UNLIMITED) on the same book - the same scope-precedence demonstration item_42 used to carry.",
@@ -448,8 +448,6 @@
       "status": "PUBLISHED",
       "contentState": "READY",
       "contentError": null,
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z",
       "assets": [
         {
           "format": "EPUB",
@@ -470,11 +468,13 @@
               "indexKey": "items/dev-fixture-epub/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:54:24.003Z"
             }
           ]
         }
-      ]
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-09-16T11:54:24.296Z"
     },
     {
       "_seedWhy": "Real PDF, ingested from Playful Identities_26_08_26_14_47_56.pdf. SUBSCRIPTION, pub_rtlg, so it rides ent_imp2 (PUBLISHER scope, UNLIMITED); no new entitlement needed. In no collection, so it is reached through the PUBLISHER grant, not a narrower one.",
@@ -510,8 +510,6 @@
       "status": "PUBLISHED",
       "contentState": "READY",
       "contentError": null,
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z",
       "assets": [
         {
           "format": "PDF",
@@ -532,11 +530,13 @@
               "indexKey": "items/dev-fixture-pdf/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:52:56.327Z"
             }
           ]
         }
-      ]
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-09-16T11:52:56.734Z"
     },
     {
       "_seedWhy": "Real EPUB, ingested from Contract Law in the Construction Industry Context_26_08_26_14_48_19.epub. Added alongside the six kept dev fixtures rather than replacing one - SUBSCRIPTION, pub_rtlg, rides ent_imp2 (PUBLISHER scope, UNLIMITED). Its subject fits the Imperial 'Law essentials' shelf.",
@@ -570,8 +570,6 @@
       "status": "PUBLISHED",
       "contentState": "READY",
       "contentError": null,
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z",
       "assets": [
         {
           "format": "EPUB",
@@ -592,11 +590,13 @@
               "indexKey": "items/item_e9a3c599/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:49:03.861Z"
             }
           ]
         }
-      ]
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-09-16T11:49:04.159Z"
     },
     {
       "_seedWhy": "Real EPUB, ingested from Humanitarianism and Challenges of Cooperation_26_08_26_14_48_25.epub. Added alongside the six kept dev fixtures. SUBSCRIPTION, pub_rtlg, rides ent_imp2 (PUBLISHER scope, UNLIMITED). Its own upload originally failed on a ZipInputStream/data-descriptor bug in EpubArchive; kept as the id that proves the fix (see EpubArchive.unzip).",
@@ -631,8 +631,6 @@
       "status": "PUBLISHED",
       "contentState": "READY",
       "contentError": null,
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z",
       "assets": [
         {
           "format": "EPUB",
@@ -653,11 +651,13 @@
               "indexKey": "items/item_4062cdea/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:50:53.741Z"
             }
           ]
         }
-      ]
+      ],
+      "createdAt": "2026-08-10T09:00:00Z",
+      "updatedAt": "2026-09-16T11:50:54.070Z"
     },
     {
       "_id": "item_4a28c08a",
@@ -712,13 +712,13 @@
               "indexKey": "items/item_4a28c08a/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:50:24.632Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:50:25.057Z"
     },
     {
       "_id": "item_de2271f3",
@@ -765,7 +765,7 @@
               "partNumber": 1,
               "title": null,
               "sizeBytes": 2159752,
-              "cipherLength": 2159752,
+              "cipherLength": null,
               "hasSearchIndex": true,
               "indexTerms": 4829,
               "indexSkipReason": null,
@@ -773,74 +773,13 @@
               "indexKey": "items/item_de2271f3/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:51:48.010Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
-    },
-    {
-      "_id": "item_d00f1ec0",
-      "publisherId": "pub_rtlg",
-      "collectionIds": [
-        "col_law2024"
-      ],
-      "workType": "BOOK",
-      "parentId": null,
-      "sequence": null,
-      "title": "The Laboratory Guinea Pig",
-      "subtitle": null,
-      "authors": [
-        "Donna J. Clemons",
-        "Jennifer L. Seeman"
-      ],
-      "editors": [],
-      "narrators": [],
-      "isbn": "9780429105739",
-      "language": "English",
-      "description": "A full-color reference guide to housing, husbandry, veterinary care, and experimental procedures for guinea pigs used in biomedical research, aimed at investigators, technicians, and animal care staff.",
-      "subjects": [
-        "Bioscience",
-        "Medicine, Dentistry, Nursing & Allied Health"
-      ],
-      "publishedAt": "2016-04-19",
-      "coverUrl": null,
-      "coverKey": "items/item_d00f1ec0/cover",
-      "coverMimeType": "image/webp",
-      "contentType": "PDF",
-      "accessTier": "SUBSCRIPTION",
-      "status": "PUBLISHED",
-      "contentState": "READY",
-      "contentError": null,
-      "assets": [
-        {
-          "format": "PDF",
-          "mimeType": "application/pdf",
-          "encrypted": true,
-          "keyId": "master-v1",
-          "masterWrappedBek": "1Cj21hrVAL0uuz17OQgFZDAX+RbfTgMg87qG21S5bRlCZ9SIeLeuXg==",
-          "parts": [
-            {
-              "partNumber": 1,
-              "title": null,
-              "sizeBytes": 24313517,
-              "cipherLength": 24313545,
-              "hasSearchIndex": true,
-              "indexTerms": 6725,
-              "indexSkipReason": null,
-              "storageKey": "items/item_d00f1ec0/content",
-              "indexKey": "items/item_d00f1ec0/index",
-              "contentState": "READY",
-              "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
-            }
-          ]
-        }
-      ],
-      "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:51:48.433Z"
     },
     {
       "_id": "item_88200446",
@@ -882,7 +821,7 @@
       "contentError": null,
       "assets": [],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:54:25.149Z"
     },
     {
       "_id": "item_460061f8",
@@ -981,7 +920,7 @@
               "partNumber": 1,
               "title": null,
               "sizeBytes": 222130,
-              "cipherLength": 222130,
+              "cipherLength": null,
               "hasSearchIndex": true,
               "indexTerms": 947,
               "indexSkipReason": null,
@@ -989,13 +928,13 @@
               "indexKey": "items/item_c80ad620/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:54:31.912Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:54:32.275Z"
     },
     {
       "_id": "item_e44977d2",
@@ -1044,13 +983,13 @@
               "indexKey": "items/item_e44977d2/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:54:39.412Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:54:39.681Z"
     },
     {
       "_id": "item_9f2be79f",
@@ -1099,13 +1038,13 @@
               "indexKey": "items/item_9f2be79f/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:54:48.428Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:54:48.762Z"
     },
     {
       "_id": "item_06d7fc88",
@@ -1183,13 +1122,13 @@
               "indexKey": "items/item_035d84e7/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:54:55.846Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:54:56.158Z"
     },
     {
       "_id": "item_46b59d00",
@@ -1238,13 +1177,13 @@
               "indexKey": "items/item_46b59d00/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:55:03.851Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:55:04.222Z"
     },
     {
       "_id": "item_e7ff7647",
@@ -1293,13 +1232,13 @@
               "indexKey": "items/item_e7ff7647/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:55:12.024Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:55:12.315Z"
     },
     {
       "_id": "item_086b44b2",
@@ -1348,13 +1287,13 @@
               "indexKey": "items/item_086b44b2/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:55:20.002Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:55:20.354Z"
     },
     {
       "_id": "item_767ea661",
@@ -1461,13 +1400,13 @@
               "indexKey": "items/item_c810c012/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:55:27.885Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:55:28.287Z"
     },
     {
       "_id": "item_672d600b",
@@ -1508,7 +1447,7 @@
               "partNumber": 1,
               "title": null,
               "sizeBytes": 309752,
-              "cipherLength": 309752,
+              "cipherLength": null,
               "hasSearchIndex": true,
               "indexTerms": 1333,
               "indexSkipReason": null,
@@ -1516,13 +1455,13 @@
               "indexKey": "items/item_672d600b/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:55:35.920Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:55:36.231Z"
     },
     {
       "_id": "item_989950b7",
@@ -1571,13 +1510,13 @@
               "indexKey": "items/item_989950b7/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:55:43.906Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:55:44.263Z"
     },
     {
       "_id": "item_2a529fd3",
@@ -1626,13 +1565,13 @@
               "indexKey": "items/item_2a529fd3/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:55:54.269Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:55:54.552Z"
     },
     {
       "_id": "item_61f9d168",
@@ -1673,7 +1612,7 @@
               "partNumber": 1,
               "title": null,
               "sizeBytes": 538830,
-              "cipherLength": 538830,
+              "cipherLength": null,
               "hasSearchIndex": true,
               "indexTerms": 2613,
               "indexSkipReason": null,
@@ -1681,13 +1620,13 @@
               "indexKey": "items/item_61f9d168/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:56:03.688Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:56:04.032Z"
     },
     {
       "_id": "item_7535c67f",
@@ -1728,7 +1667,7 @@
               "partNumber": 1,
               "title": null,
               "sizeBytes": 676849,
-              "cipherLength": 676849,
+              "cipherLength": null,
               "hasSearchIndex": true,
               "indexTerms": 2648,
               "indexSkipReason": null,
@@ -1736,13 +1675,13 @@
               "indexKey": "items/item_7535c67f/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:56:13.851Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:56:14.159Z"
     },
     {
       "_id": "item_7bf60ff7",
@@ -1812,7 +1751,7 @@
               "partNumber": 1,
               "title": null,
               "sizeBytes": 314264,
-              "cipherLength": 314264,
+              "cipherLength": null,
               "hasSearchIndex": true,
               "indexTerms": 919,
               "indexSkipReason": null,
@@ -1820,13 +1759,13 @@
               "indexKey": "items/item_fad881e6/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:56:21.552Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:56:21.844Z"
     },
     {
       "_id": "item_401bda89",
@@ -1875,13 +1814,13 @@
               "indexKey": "items/item_401bda89/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:56:29.483Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:56:29.781Z"
     },
     {
       "_id": "item_f18e1d8d",
@@ -1922,7 +1861,7 @@
               "partNumber": 1,
               "title": null,
               "sizeBytes": 499438,
-              "cipherLength": 499438,
+              "cipherLength": null,
               "hasSearchIndex": true,
               "indexTerms": 1593,
               "indexSkipReason": null,
@@ -1930,13 +1869,13 @@
               "indexKey": "items/item_f18e1d8d/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:56:38.358Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:56:38.732Z"
     },
     {
       "_id": "item_28cd997f",
@@ -1985,13 +1924,13 @@
               "indexKey": "items/item_28cd997f/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:56:49.759Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:56:50.046Z"
     },
     {
       "_id": "item_960c6e1c",
@@ -2032,7 +1971,7 @@
               "partNumber": 1,
               "title": null,
               "sizeBytes": 873114,
-              "cipherLength": 873114,
+              "cipherLength": null,
               "hasSearchIndex": true,
               "indexTerms": 3977,
               "indexSkipReason": null,
@@ -2040,13 +1979,13 @@
               "indexKey": "items/item_960c6e1c/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:57:05.947Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:57:06.284Z"
     },
     {
       "_id": "item_bd58a755",
@@ -2095,13 +2034,13 @@
               "indexKey": "items/item_bd58a755/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:57:16.642Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:57:16.995Z"
     },
     {
       "_id": "item_24860f8b",
@@ -2142,7 +2081,7 @@
               "partNumber": 1,
               "title": null,
               "sizeBytes": 622181,
-              "cipherLength": 622181,
+              "cipherLength": null,
               "hasSearchIndex": true,
               "indexTerms": 1914,
               "indexSkipReason": null,
@@ -2150,13 +2089,13 @@
               "indexKey": "items/item_24860f8b/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:57:32.251Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:57:32.547Z"
     },
     {
       "_id": "item_87f84fbf",
@@ -2205,13 +2144,13 @@
               "indexKey": "items/item_87f84fbf/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:57:39.568Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:57:39.842Z"
     },
     {
       "_id": "item_6a07466b",
@@ -2252,7 +2191,7 @@
               "partNumber": 1,
               "title": null,
               "sizeBytes": 232945,
-              "cipherLength": 232945,
+              "cipherLength": null,
               "hasSearchIndex": true,
               "indexTerms": 513,
               "indexSkipReason": null,
@@ -2260,13 +2199,13 @@
               "indexKey": "items/item_6a07466b/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:57:46.821Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:57:47.245Z"
     },
     {
       "_id": "item_1fc8ea6d",
@@ -2306,7 +2245,7 @@
       "contentError": null,
       "assets": [],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:57:50.116Z"
     },
     {
       "_id": "item_7efba8d2",
@@ -2413,13 +2352,13 @@
               "indexKey": "items/item_4f53812d/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:57:57.186Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:57:57.488Z"
     },
     {
       "_id": "item_479fbb4f",
@@ -2468,13 +2407,13 @@
               "indexKey": "items/item_479fbb4f/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:58:12.396Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:58:12.697Z"
     },
     {
       "_id": "item_c53eab93",
@@ -2523,13 +2462,13 @@
               "indexKey": "items/item_c53eab93/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:58:24.358Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:58:24.665Z"
     },
     {
       "_id": "item_fbed0ba2",
@@ -2578,13 +2517,13 @@
               "indexKey": "items/item_fbed0ba2/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:58:43.085Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:58:43.421Z"
     },
     {
       "_id": "item_b70fc112",
@@ -2683,7 +2622,7 @@
               "partNumber": 1,
               "title": null,
               "sizeBytes": 3377742,
-              "cipherLength": 3377742,
+              "cipherLength": null,
               "hasSearchIndex": true,
               "indexTerms": 1865,
               "indexSkipReason": null,
@@ -2691,13 +2630,13 @@
               "indexKey": "items/item_3f2cadf1/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:59:02.162Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:59:02.432Z"
     },
     {
       "_id": "item_8da90f2c",
@@ -2746,13 +2685,13 @@
               "indexKey": "items/item_8da90f2c/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T11:59:17.166Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T11:59:17.561Z"
     },
     {
       "_id": "item_8efc34b5",
@@ -2793,7 +2732,7 @@
               "partNumber": 1,
               "title": null,
               "sizeBytes": 7210319,
-              "cipherLength": 7210319,
+              "cipherLength": null,
               "hasSearchIndex": true,
               "indexTerms": 1439,
               "indexSkipReason": null,
@@ -2801,13 +2740,13 @@
               "indexKey": "items/item_8efc34b5/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:00:02.375Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:00:02.648Z"
     },
     {
       "_id": "item_38ab9791",
@@ -2906,7 +2845,7 @@
               "partNumber": 1,
               "title": null,
               "sizeBytes": 1477661,
-              "cipherLength": 1477661,
+              "cipherLength": null,
               "hasSearchIndex": true,
               "indexTerms": 2166,
               "indexSkipReason": null,
@@ -2914,13 +2853,13 @@
               "indexKey": "items/item_aeb6aa44/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:00:26.339Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:00:26.634Z"
     },
     {
       "_id": "item_5f10416f",
@@ -2961,7 +2900,7 @@
               "partNumber": 1,
               "title": null,
               "sizeBytes": 3991576,
-              "cipherLength": 3991576,
+              "cipherLength": null,
               "hasSearchIndex": true,
               "indexTerms": 1770,
               "indexSkipReason": null,
@@ -2969,13 +2908,13 @@
               "indexKey": "items/item_5f10416f/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:00:50.054Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:00:50.429Z"
     },
     {
       "_id": "item_dbdf6be9",
@@ -3016,7 +2955,7 @@
               "partNumber": 1,
               "title": null,
               "sizeBytes": 1827726,
-              "cipherLength": 1827726,
+              "cipherLength": null,
               "hasSearchIndex": true,
               "indexTerms": 1568,
               "indexSkipReason": null,
@@ -3024,13 +2963,13 @@
               "indexKey": "items/item_dbdf6be9/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:01:13.195Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:01:13.596Z"
     },
     {
       "_id": "item_bf288881",
@@ -3137,13 +3076,13 @@
               "indexKey": "items/item_08f7f6a3/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:01:28.183Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:01:28.495Z"
     },
     {
       "_id": "item_0142e8fb",
@@ -3192,13 +3131,13 @@
               "indexKey": "items/item_0142e8fb/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:01:50.941Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:01:51.323Z"
     },
     {
       "_id": "item_fe481547",
@@ -3247,13 +3186,13 @@
               "indexKey": "items/item_fe481547/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:02:02.135Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:02:02.413Z"
     },
     {
       "_id": "item_5d96a0a6",
@@ -3302,13 +3241,13 @@
               "indexKey": "items/item_5d96a0a6/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:02:12.584Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:02:12.858Z"
     },
     {
       "_id": "item_282abbc1",
@@ -3343,7 +3282,7 @@
       "contentError": null,
       "assets": [],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:02:13.937Z"
     },
     {
       "_id": "item_468135bf",
@@ -3450,13 +3389,13 @@
               "indexKey": "items/item_3300a090/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:02:20.479Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:02:20.764Z"
     },
     {
       "_id": "item_47e6402a",
@@ -3505,13 +3444,13 @@
               "indexKey": "items/item_47e6402a/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:02:33.939Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:02:34.268Z"
     },
     {
       "_id": "item_b43dfca0",
@@ -3560,13 +3499,13 @@
               "indexKey": "items/item_b43dfca0/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:03:11.739Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:03:12.029Z"
     },
     {
       "_id": "item_345b0069",
@@ -3615,13 +3554,13 @@
               "indexKey": "items/item_345b0069/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:03:44.649Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:03:44.945Z"
     },
     {
       "_id": "item_4cf1c548",
@@ -3670,13 +3609,13 @@
               "indexKey": "items/item_4cf1c548/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:03:58.053Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:03:58.359Z"
     },
     {
       "_id": "item_4e548dda",
@@ -3725,13 +3664,13 @@
               "indexKey": "items/item_4e548dda/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:04:21.951Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:04:22.253Z"
     },
     {
       "_id": "item_82398348",
@@ -3838,13 +3777,13 @@
               "indexKey": "items/item_9741c993/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:04:34.270Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:04:34.707Z"
     },
     {
       "_id": "item_47ffc1b0",
@@ -3893,13 +3832,13 @@
               "indexKey": "items/item_47ffc1b0/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:05:05.280Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:05:05.641Z"
     },
     {
       "_id": "item_f0472e22",
@@ -3948,13 +3887,13 @@
               "indexKey": "items/item_f0472e22/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:05:16.504Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:05:16.788Z"
     },
     {
       "_id": "item_9034c472",
@@ -4032,13 +3971,13 @@
               "indexKey": "items/item_803e0019/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:05:34.226Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:05:34.516Z"
     },
     {
       "_id": "item_ce5cb85b",
@@ -4087,13 +4026,13 @@
               "indexKey": "items/item_ce5cb85b/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:05:44.354Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:05:44.652Z"
     },
     {
       "_id": "item_e7e503d7",
@@ -4142,13 +4081,13 @@
               "indexKey": "items/item_e7e503d7/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:05:57.431Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:05:57.710Z"
     },
     {
       "_id": "item_3c1320ba",
@@ -4197,13 +4136,13 @@
               "indexKey": "items/item_3c1320ba/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:06:08.939Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:06:09.235Z"
     },
     {
       "_id": "item_2d0bafd2",
@@ -4252,13 +4191,13 @@
               "indexKey": "items/item_2d0bafd2/index",
               "contentState": "READY",
               "contentError": null,
-              "updatedAt": "2026-08-10T09:00:00Z"
+              "updatedAt": "2026-09-16T12:06:19.814Z"
             }
           ]
         }
       ],
       "createdAt": "2026-08-10T09:00:00Z",
-      "updatedAt": "2026-08-10T09:00:00Z"
+      "updatedAt": "2026-09-16T12:06:20.105Z"
     }
   ],
   "entitlements": [
