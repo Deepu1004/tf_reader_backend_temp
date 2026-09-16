@@ -349,6 +349,26 @@ class OpdsFeedServiceIT extends ContainerisedInfrastructure {
 		assertThat(next).contains("page=1", "size=1", "sort=title.asc", "contentType=EPUB", "accessTier=OPEN_ACCESS");
 	}
 
+	@Test
+	void allGroupExcludesArticlesThatBelongToAnIssue() {
+		Institution institution = newInstitution("OPDS-ALL-ARTICLE");
+		Publisher publisher = newPublisher("OPDS-ALL-ARTICLE-PUB");
+		newItem(publisher.getId(), "Standalone Book", AccessTier.OPEN_ACCESS);
+		CatalogueItem issue = newContainer(publisher.getId(), com.tf.reader.catalogue.entity.WorkType.ISSUE, null,
+				"Issue With An Article");
+		CatalogueItem article = newItem(publisher.getId(), "Child Article", AccessTier.OPEN_ACCESS);
+		article.setWorkType(com.tf.reader.catalogue.entity.WorkType.ARTICLE);
+		article.setParentId(issue.getId());
+		catalogueItemRepository.save(article);
+
+		OpdsPublicationFeed feed = feedService.groupFeed(institution, "all", subjectFor(institution),
+				new PageQuery(0, 100), null, null, null);
+
+		assertThat(feed.publications()).extracting(p -> p.metadata().title())
+				.contains("Standalone Book")
+				.doesNotContain("Child Article");
+	}
+
 	// ----------------------------------------------------------------------------------- search
 
 	@Test
