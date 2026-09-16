@@ -2,6 +2,7 @@ package com.tf.reader.ingest.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -54,9 +55,9 @@ class AssetLockerTest {
 			return Optional.of(new BuiltSearchIndex("index-json".getBytes(), 42));
 		});
 		when(cipher.encrypt(BEK, "index-json".getBytes())).thenReturn("cipher-index".getBytes());
-		when(keys.wrapWithMasterKey(BEK)).thenReturn("wrapped");
+		when(keys.wrapWithMasterKey(any(), eq(BEK))).thenReturn("wrapped");
 
-		AssetLocker.Result result = locker.lock(asset(ContentType.PDF), 1, "item_1", "plain".getBytes(), null);
+		AssetLocker.Result result = locker.lock(asset(ContentType.PDF), 1, "item_1", "pub_1", "plain".getBytes(), null);
 
 		assertThat(result.cipherContent()).isEqualTo("cipher".getBytes());
 		assertThat(result.cipherIndex()).isEqualTo("cipher-index".getBytes());
@@ -70,10 +71,10 @@ class AssetLockerTest {
 		when(keys.generate()).thenReturn(BEK);
 		when(cipher.encrypt(any(), any())).thenReturn("cipher".getBytes());
 		when(searchIndexBuilder.build(any(), any(), any(), any())).thenReturn(Optional.empty());
-		when(keys.wrapWithMasterKey(BEK)).thenReturn("wrapped");
+		when(keys.wrapWithMasterKey(any(), eq(BEK))).thenReturn("wrapped");
 		CatalogueItem.Asset asset = asset(ContentType.PDF);
 
-		locker.lock(asset, 1, "item_1", "plain".getBytes(), null);
+		locker.lock(asset, 1, "item_1", "pub_1", "plain".getBytes(), null);
 
 		assertThat(asset.isEncrypted()).isTrue();
 		assertThat(asset.getKeyId()).isEqualTo("master-v1");
@@ -84,25 +85,25 @@ class AssetLockerTest {
 	void aSecondPartOfTheSameAssetReusesTheAlreadyWrappedBekInsteadOfGeneratingANewOne() {
 		CatalogueItem.Asset asset = asset(ContentType.PDF);
 		asset.setMasterWrappedBek("already-wrapped");
-		when(keys.unwrapWithMasterKey("already-wrapped")).thenReturn(BEK);
+		when(keys.unwrapWithMasterKey(any(), eq("already-wrapped"))).thenReturn(BEK);
 		when(cipher.encrypt(any(), any())).thenReturn("cipher-part-2".getBytes());
 		when(searchIndexBuilder.build(any(), any(), any(), any())).thenReturn(Optional.empty());
 
-		AssetLocker.Result result = locker.lock(asset, 2, "item_1", "plain-2".getBytes(), null);
+		AssetLocker.Result result = locker.lock(asset, 2, "item_1", "pub_1", "plain-2".getBytes(), null);
 
 		assertThat(result.masterWrappedBek()).isEqualTo("already-wrapped");
 		verify(keys, never()).generate();
-		verify(keys, never()).wrapWithMasterKey(any());
+		verify(keys, never()).wrapWithMasterKey(any(), any());
 	}
 
 	@Test
 	void aCorruptIncomingWrappedBekPropagatesTheUnwrapErrorUncaught() {
 		CatalogueItem.Asset asset = asset(ContentType.PDF);
 		asset.setMasterWrappedBek("corrupt");
-		when(keys.unwrapWithMasterKey("corrupt")).thenThrow(new IllegalStateException("bad wrap"));
+		when(keys.unwrapWithMasterKey(any(), eq("corrupt"))).thenThrow(new IllegalStateException("bad wrap"));
 
 		org.assertj.core.api.Assertions.assertThatThrownBy(
-				() -> locker.lock(asset, 2, "item_1", "plain".getBytes(), null))
+				() -> locker.lock(asset, 2, "item_1", "pub_1", "plain".getBytes(), null))
 				.isInstanceOf(IllegalStateException.class)
 				.hasMessage("bad wrap");
 	}
@@ -112,9 +113,9 @@ class AssetLockerTest {
 		when(keys.generate()).thenReturn(BEK);
 		when(cipher.encrypt(any(), any())).thenReturn("cipher".getBytes());
 		when(searchIndexBuilder.build(any(), any(), any(), any())).thenReturn(Optional.empty());
-		when(keys.wrapWithMasterKey(BEK)).thenReturn("wrapped");
+		when(keys.wrapWithMasterKey(any(), eq(BEK))).thenReturn("wrapped");
 
-		AssetLocker.Result result = locker.lock(asset(ContentType.AUDIO), 1, "item_1", "plain".getBytes(), "audio/mp4");
+		AssetLocker.Result result = locker.lock(asset(ContentType.AUDIO), 1, "item_1", "pub_1", "plain".getBytes(), "audio/mp4");
 
 		assertThat(result.cipherIndex()).isNull();
 	}
@@ -124,10 +125,10 @@ class AssetLockerTest {
 		when(keys.generate()).thenReturn(BEK);
 		when(cipher.encrypt(any(), any())).thenReturn("cipher".getBytes());
 		when(searchIndexBuilder.build(any(), any(), any(), any())).thenReturn(Optional.empty());
-		when(keys.wrapWithMasterKey(BEK)).thenReturn("wrapped");
+		when(keys.wrapWithMasterKey(any(), eq(BEK))).thenReturn("wrapped");
 		CatalogueItem.Asset asset = asset(ContentType.AUDIO);
 
-		locker.lock(asset, 1, "item_1", "plain".getBytes(), "audio/x-m4b");
+		locker.lock(asset, 1, "item_1", "pub_1", "plain".getBytes(), "audio/x-m4b");
 
 		assertThat(asset.getMimeType()).isEqualTo("audio/x-m4b");
 	}
@@ -137,10 +138,10 @@ class AssetLockerTest {
 		when(keys.generate()).thenReturn(BEK);
 		when(cipher.encrypt(any(), any())).thenReturn("cipher".getBytes());
 		when(searchIndexBuilder.build(any(), any(), any(), any())).thenReturn(Optional.empty());
-		when(keys.wrapWithMasterKey(BEK)).thenReturn("wrapped");
+		when(keys.wrapWithMasterKey(any(), eq(BEK))).thenReturn("wrapped");
 		CatalogueItem.Asset asset = asset(ContentType.AUDIO);
 
-		locker.lock(asset, 1, "item_1", "plain".getBytes(), null);
+		locker.lock(asset, 1, "item_1", "pub_1", "plain".getBytes(), null);
 
 		assertThat(asset.getMimeType()).isEqualTo("audio/mpeg");
 	}

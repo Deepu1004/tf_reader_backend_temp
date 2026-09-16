@@ -43,15 +43,18 @@ class AssetLocker {
 	 * @param asset            the asset this part belongs to. If {@code asset.getMasterWrappedBek()}
 	 *                         is already set, it is reused (unwrapped) rather than a new BEK being
 	 *                         generated - every part of one asset shares exactly one key.
+	 * @param publisherId      whose effective key (their own, once configured, or T&F's shared
+	 *                         master key) this asset's BEK is wrapped under.
 	 * @param uploadedMimeType the content type declared at upload time, if any - preferred over
 	 *                         {@link #mimeTypeFor} since a real client-declared type (especially
 	 *                         for audio, where "mpeg" is far from the only real format) beats a
 	 *                         guess keyed only on {@link ContentType}
 	 */
-	Result lock(CatalogueItem.Asset asset, int partNumber, String itemId, byte[] plaintext, String uploadedMimeType) {
+	Result lock(CatalogueItem.Asset asset, int partNumber, String itemId, String publisherId, byte[] plaintext,
+			String uploadedMimeType) {
 		String existingWrappedBek = asset.getMasterWrappedBek();
 		SecretKey bek = existingWrappedBek == null ? bookEncryptionKeys.generate()
-				: bookEncryptionKeys.unwrapWithMasterKey(existingWrappedBek);
+				: bookEncryptionKeys.unwrapWithMasterKey(publisherId, existingWrappedBek);
 		try {
 			byte[] cipherContent = fileCipher.encrypt(bek, plaintext);
 
@@ -72,7 +75,7 @@ class AssetLocker {
 			asset.setKeyId(cryptoProperties.masterKeyId());
 
 			String masterWrappedBek = existingWrappedBek != null ? existingWrappedBek
-					: bookEncryptionKeys.wrapWithMasterKey(bek);
+					: bookEncryptionKeys.wrapWithMasterKey(publisherId, bek);
 			return new Result(part, cipherContent, cipherIndex, masterWrappedBek);
 		}
 		finally {

@@ -3,7 +3,7 @@ package com.tf.reader.admin;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyIterable;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -32,8 +32,8 @@ import com.tf.reader.admin.service.CollectionAdminService;
 import com.tf.reader.catalogue.entity.BookCollection;
 import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.Publisher;
-import com.tf.reader.catalogue.repository.BookCollectionRepository;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
+import com.tf.reader.catalogue.service.BookCollectionStore;
+import com.tf.reader.catalogue.service.CatalogueItemStore;
 import com.tf.reader.catalogue.repository.PublisherRepository;
 import com.tf.reader.catalogue.service.CatalogueVersionBumper;
 import com.tf.reader.common.audit.AdminAuditWriter;
@@ -45,14 +45,14 @@ import com.tf.reader.common.security.TokenClaims;
 /** Business rules for collections, tested without a servlet or a database. */
 class CollectionAdminServiceTest {
 
-	private final BookCollectionRepository bookCollectionRepository = mock(BookCollectionRepository.class);
-	private final CatalogueItemRepository catalogueItemRepository = mock(CatalogueItemRepository.class);
+	private final BookCollectionStore bookCollectionStore = mock(BookCollectionStore.class);
+	private final CatalogueItemStore catalogueItemStore = mock(CatalogueItemStore.class);
 	private final PublisherRepository publisherRepository = mock(PublisherRepository.class);
 	private final CatalogueVersionBumper versionBumper = mock(CatalogueVersionBumper.class);
 	private final AdminAuditWriter auditWriter = mock(AdminAuditWriter.class);
 
-	private final CollectionAdminService service = new CollectionAdminService(bookCollectionRepository,
-			catalogueItemRepository, publisherRepository, versionBumper, auditWriter, new AdminScopeAuthorizer());
+	private final CollectionAdminService service = new CollectionAdminService(bookCollectionStore,
+			catalogueItemStore, publisherRepository, versionBumper, auditWriter, new AdminScopeAuthorizer());
 
 	@BeforeEach
 	void actAsSuperAdmin() {
@@ -70,15 +70,15 @@ class CollectionAdminServiceTest {
 	@Test
 	void movesBooksInAndOutOfCollection() {
 		BookCollection collection = collection("col_law2024", "pub_rtlg");
-		when(bookCollectionRepository.findById("col_law2024")).thenReturn(Optional.of(collection));
+		when(bookCollectionStore.findById("col_law2024")).thenReturn(Optional.of(collection));
 
 		CatalogueItem keep = item("item_1", "pub_rtlg", List.of("col_law2024"));
 		CatalogueItem toAdd = item("item_2", "pub_rtlg", List.of());
 		CatalogueItem toRemove = item("item_3", "pub_rtlg", List.of("col_law2024"));
 
-		when(catalogueItemRepository.findAllById(anyIterable())).thenReturn(List.of(keep, toAdd));
-		when(catalogueItemRepository.findByCollectionIds("col_law2024")).thenReturn(List.of(keep, toRemove));
-		when(catalogueItemRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+		when(catalogueItemStore.findAllById(anyCollection())).thenReturn(List.of(keep, toAdd));
+		when(catalogueItemStore.findByCollectionIds("col_law2024")).thenReturn(List.of(keep, toRemove));
+		when(catalogueItemStore.save(any())).thenAnswer(inv -> inv.getArgument(0));
 		when(versionBumper.bump(CatalogueVersionBumper.Scope.COLLECTION, "col_law2024"))
 				.thenReturn(List.of("inst_7f3"));
 
@@ -93,8 +93,8 @@ class CollectionAdminServiceTest {
 
 	@Test
 	void rejectsAnUnknownItemId() {
-		when(bookCollectionRepository.findById("col_law2024")).thenReturn(Optional.of(collection("col_law2024", "pub_rtlg")));
-		when(catalogueItemRepository.findAllById(anyIterable())).thenReturn(List.of());
+		when(bookCollectionStore.findById("col_law2024")).thenReturn(Optional.of(collection("col_law2024", "pub_rtlg")));
+		when(catalogueItemStore.findAllById(anyCollection())).thenReturn(List.of());
 
 		assertThatThrownBy(() -> service.setItems("col_law2024", new CollectionItemsWrite(List.of("item_missing"))))
 				.isInstanceOf(ApiException.class)
@@ -103,20 +103,20 @@ class CollectionAdminServiceTest {
 
 	@Test
 	void rejectsAnItemFromAnotherPublisher() {
-		when(bookCollectionRepository.findById("col_law2024"))
+		when(bookCollectionStore.findById("col_law2024"))
 				.thenReturn(Optional.of(collection("col_law2024", "pub_rtlg")));
 		CatalogueItem wrongPublisher = item("item_1", "pub_other", List.of());
-		when(catalogueItemRepository.findAllById(anyIterable())).thenReturn(List.of(wrongPublisher));
+		when(catalogueItemStore.findAllById(anyCollection())).thenReturn(List.of(wrongPublisher));
 
 		assertThatThrownBy(() -> service.setItems("col_law2024", new CollectionItemsWrite(List.of("item_1"))))
 				.isInstanceOf(ApiException.class)
 				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
-		verify(catalogueItemRepository, never()).save(any());
+		verify(catalogueItemStore, never()).save(any());
 	}
 
 	@Test
 	void unknownCollectionThrowsNotFound() {
-		when(bookCollectionRepository.findById("col_nope")).thenReturn(Optional.empty());
+		when(bookCollectionStore.findById("col_nope")).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> service.setItems("col_nope", new CollectionItemsWrite(List.of())))
 				.isInstanceOf(ApiException.class)
@@ -126,9 +126,9 @@ class CollectionAdminServiceTest {
 	@Test
 	void createsACollectionWithADerivedItemCount() {
 		when(publisherRepository.findById("pub_rtlg")).thenReturn(Optional.of(new Publisher()));
-		when(bookCollectionRepository.findByPublisherIdAndCode("pub_rtlg", "law-2024")).thenReturn(Optional.empty());
-		when(bookCollectionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-		when(catalogueItemRepository.countByCollectionIds(any())).thenReturn(3L);
+		when(bookCollectionStore.findByPublisherIdAndCode("pub_rtlg", "law-2024")).thenReturn(Optional.empty());
+		when(bookCollectionStore.save(any())).thenAnswer(inv -> inv.getArgument(0));
+		when(catalogueItemStore.countByCollectionIds(any())).thenReturn(3L);
 
 		CollectionView created = service.create("pub_rtlg", new CollectionWrite("law-2024", "Law 2024", "84 titles"));
 
@@ -140,7 +140,7 @@ class CollectionAdminServiceTest {
 	@Test
 	void rejectsADuplicateCodeUnderTheSamePublisher() {
 		when(publisherRepository.findById("pub_rtlg")).thenReturn(Optional.of(new Publisher()));
-		when(bookCollectionRepository.findByPublisherIdAndCode("pub_rtlg", "law-2024"))
+		when(bookCollectionStore.findByPublisherIdAndCode("pub_rtlg", "law-2024"))
 				.thenReturn(Optional.of(collection("col_existing", "pub_rtlg")));
 
 		assertThatThrownBy(
@@ -153,9 +153,9 @@ class CollectionAdminServiceTest {
 	void listReturnsAPageOfAPublishersCollections() {
 		when(publisherRepository.findById("pub_rtlg")).thenReturn(Optional.of(new Publisher()));
 		BookCollection collection = collection("col_law2024", "pub_rtlg");
-		when(bookCollectionRepository.findByPublisherId(eq("pub_rtlg"), any()))
+		when(bookCollectionStore.findByPublisherId(eq("pub_rtlg"), any()))
 				.thenReturn(new PageImpl<>(List.of(collection)));
-		when(catalogueItemRepository.countByCollectionIds("col_law2024")).thenReturn(5L);
+		when(catalogueItemStore.countByCollectionIds("col_law2024")).thenReturn(5L);
 
 		var result = service.list("pub_rtlg", new PageQuery(0, 20));
 

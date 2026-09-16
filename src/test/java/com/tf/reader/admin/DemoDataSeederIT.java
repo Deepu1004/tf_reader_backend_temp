@@ -63,7 +63,12 @@ class DemoDataSeederIT {
         // Testcontainers publishes on 127.0.0.1, which is in the seeder's default allowlist. That is
         // not an accident: if the allowlist were tightened to reject it, these tests would fail loudly
         // rather than the rail being quietly weakened.
-        registry.add("spring.data.mongodb.uri", MONGO::getReplicaSetUrl);
+        //
+        // spring.mongodb.uri, not spring.data.mongodb.uri: Spring Boot 4 split the driver's
+        // connection settings out of Spring Data's, and spring.data.mongodb.uri now binds to
+        // nothing at all - silently, leaving this test pointed at whatever spring.mongodb.uri
+        // resolves to elsewhere instead of this class's own container.
+        registry.add("spring.mongodb.uri", MONGO::getReplicaSetUrl);
         registry.add("tnf.seed.enabled", () -> "true");
     }
 

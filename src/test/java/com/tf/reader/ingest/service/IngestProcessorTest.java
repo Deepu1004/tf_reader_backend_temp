@@ -24,7 +24,7 @@ import com.tf.reader.catalogue.entity.AccessTier;
 import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.ContentType;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
+import com.tf.reader.catalogue.service.CatalogueItemStore;
 import com.tf.reader.catalogue.service.CatalogueVersionBumper;
 import com.tf.reader.ingest.api.BookStorage;
 import com.tf.reader.ingest.index.BuiltSearchIndex;
@@ -35,7 +35,7 @@ class IngestProcessorTest {
 	private static final Instant NOW = Instant.parse("2026-08-26T10:00:00Z");
 	private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
 
-	private final CatalogueItemRepository items = mock(CatalogueItemRepository.class);
+	private final CatalogueItemStore items = mock(CatalogueItemStore.class);
 	private final BookStorage bookStorage = mock(BookStorage.class);
 	private final AssetLocker assetLocker = mock(AssetLocker.class);
 	private final SearchIndexBuilder searchIndexBuilder = mock(SearchIndexBuilder.class);
@@ -94,7 +94,7 @@ class IngestProcessorTest {
 		assertThat(assetOf(item).isEncrypted()).isFalse();
 		assertThat(partOf(item, 1).getIndexKey()).isEqualTo("items/item_1/index");
 		verify(bookStorage).store("items/item_1/index", "index-json".getBytes(), "application/json");
-		verify(assetLocker, never()).lock(any(), anyInt(), any(), any(), any());
+		verify(assetLocker, never()).lock(any(), anyInt(), any(), any(), any(), any());
 		verify(bumper).bump(CatalogueVersionBumper.Scope.ITEM, "item_1");
 	}
 
@@ -120,7 +120,7 @@ class IngestProcessorTest {
 		lockedPart.setPartNumber(1);
 		when(items.findByContentState(ContentState.QUEUED)).thenReturn(List.of(item));
 		when(bookStorage.load("items/item_2/upload")).thenReturn("plain".getBytes());
-		when(assetLocker.lock(any(), eq(1), eq("item_2"), any(), any()))
+		when(assetLocker.lock(any(), eq(1), eq("item_2"), any(), any(), any()))
 				.thenReturn(new AssetLocker.Result(lockedPart, "cipher".getBytes(), null, "wrapped-bek"));
 		when(items.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -143,7 +143,7 @@ class IngestProcessorTest {
 
 		processor.processQueued();
 
-		verify(assetLocker, never()).lock(any(), anyInt(), any(), any(), any());
+		verify(assetLocker, never()).lock(any(), anyInt(), any(), any(), any(), any());
 		assertThat(assetOf(item).isEncrypted()).isFalse();
 		assertThat(partOf(item, 1).getIndexKey()).isNull();
 		assertThat(item.getContentState()).isEqualTo(ContentState.READY);
@@ -156,7 +156,7 @@ class IngestProcessorTest {
 		lockedPart.setPartNumber(1);
 		when(items.findByContentState(ContentState.QUEUED)).thenReturn(List.of(item));
 		when(bookStorage.load("items/item_3b/upload")).thenReturn("plain".getBytes());
-		when(assetLocker.lock(any(), eq(1), eq("item_3b"), any(), any())).thenAnswer(invocation -> {
+		when(assetLocker.lock(any(), eq(1), eq("item_3b"), any(), any(), any())).thenAnswer(invocation -> {
 			// The real AssetLocker mutates the asset it's handed (encrypted/keyId/mimeType) as a
 			// side effect - mimicked here since this call is mocked, not the real method body.
 			CatalogueItem.Asset asset = invocation.getArgument(0);
@@ -277,12 +277,12 @@ class IngestProcessorTest {
 		when(bookStorage.load("items/item_multi/part2/upload")).thenReturn("chapter-2".getBytes());
 		when(items.save(any())).thenAnswer(i -> i.getArgument(0));
 
-		when(assetLocker.lock(any(), eq(1), eq("item_multi"), any(), any())).thenAnswer(invocation -> {
+		when(assetLocker.lock(any(), eq(1), eq("item_multi"), any(), any(), any())).thenAnswer(invocation -> {
 			CatalogueItem.Part part = new CatalogueItem.Part();
 			part.setPartNumber(1);
 			return new AssetLocker.Result(part, "cipher-1".getBytes(), null, "shared-wrapped-bek");
 		});
-		when(assetLocker.lock(any(), eq(2), eq("item_multi"), any(), any())).thenAnswer(invocation -> {
+		when(assetLocker.lock(any(), eq(2), eq("item_multi"), any(), any(), any())).thenAnswer(invocation -> {
 			CatalogueItem.Part part = new CatalogueItem.Part();
 			part.setPartNumber(2);
 			return new AssetLocker.Result(part, "cipher-2".getBytes(), null, "shared-wrapped-bek");

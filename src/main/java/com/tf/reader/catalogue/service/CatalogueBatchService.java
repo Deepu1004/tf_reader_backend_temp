@@ -16,7 +16,6 @@ import com.tf.reader.catalogue.dto.BatchItemsRequest;
 import com.tf.reader.catalogue.dto.BatchItemsResponse;
 import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.ItemStatus;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.ingest.service.CoverUrlResolver;
@@ -35,7 +34,7 @@ public class CatalogueBatchService {
 	/** The contract caps a call at 100 ids; more is 400 TOO_MANY_IDS, checked before any query. */
 	private static final int MAX_IDS = 100;
 
-	private final CatalogueItemRepository catalogueItemRepository;
+	private final CatalogueItemStore catalogueItemStore;
 	private final EntitlementQuery entitlementQuery;
 	private final CoverUrlResolver coverUrlResolver;
 
@@ -46,7 +45,7 @@ public class CatalogueBatchService {
 					"At most " + MAX_IDS + " ids per call; got " + ids.size());
 		}
 
-		Map<String, CatalogueItem> found = catalogueItemRepository.findAllById(ids).stream()
+		Map<String, CatalogueItem> found = catalogueItemStore.findAllById(ids).stream()
 				.collect(Collectors.toMap(CatalogueItem::getId, Function.identity()));
 
 		List<BatchItem> items = new ArrayList<>();

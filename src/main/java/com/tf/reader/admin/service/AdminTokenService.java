@@ -53,6 +53,10 @@ public class AdminTokenService {
 
 		if (hasText(adminUser.getPublisherId())) {
 			claims.claim(TokenClaims.SCOPE_PUBLISHER_ID, adminUser.getPublisherId());
+			// Filled in from the same publisher for now: there is no separate tenant registry yet,
+			// so which publisher an admin is scoped to and which database their data lives in are
+			// the same value until that changes.
+			claims.claim(TokenClaims.TENANT_ID, adminUser.getPublisherId());
 		}
 		if (hasText(adminUser.getInstitutionId())) {
 			claims.claim(TokenClaims.SCOPE_INSTITUTION_ID, adminUser.getInstitutionId());

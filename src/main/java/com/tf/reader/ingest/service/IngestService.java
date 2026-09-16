@@ -16,7 +16,7 @@ import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.ContentType;
 import com.tf.reader.catalogue.entity.WorkType;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
+import com.tf.reader.catalogue.service.CatalogueItemStore;
 import com.tf.reader.common.audit.AdminAuditWriter;
 import com.tf.reader.common.audit.AuditLog;
 import com.tf.reader.common.error.ApiException;
@@ -43,7 +43,7 @@ public class IngestService {
 	private static final long LOCKED_MAX_BYTES = 25L * 1024 * 1024;
 	private static final int DEFAULT_PART_NUMBER = 1;
 
-	private final CatalogueItemRepository catalogueItemRepository;
+	private final CatalogueItemStore catalogueItemStore;
 	private final AdminScopeAuthorizer adminScope;
 	private final AdminAuditWriter auditWriter;
 	private final BookStorage bookStorage;
@@ -94,7 +94,7 @@ public class IngestService {
 		item.setContentState(ContentState.QUEUED);
 		item.setContentError(null);
 		item.setUpdatedAt(now);
-		catalogueItemRepository.save(item);
+		catalogueItemStore.save(item);
 
 		auditWriter.record(adminScope.currentAdminId(), AuditLog.Action.INGEST, "CATALOGUE_ITEM", itemId, null,
 				Map.of("format", format.name(), "partNumber", resolvedPartNumber, "sizeBytes", bytes.length));
@@ -176,7 +176,7 @@ public class IngestService {
 	}
 
 	private CatalogueItem findOrThrow(String itemId) {
-		return catalogueItemRepository.findById(itemId)
+		return catalogueItemStore.findById(itemId)
 				.orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "No such catalogue item"));
 	}
 

@@ -25,7 +25,7 @@ import com.tf.reader.catalogue.entity.AccessTier;
 import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.ContentType;
 import com.tf.reader.catalogue.entity.ItemStatus;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
+
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.ingest.api.BookStorage;
@@ -34,11 +34,11 @@ import com.tf.reader.ingest.service.CoverUrlResolver;
 /** Business rules for turning a list of ids into details, tested without a servlet or a database. */
 class CatalogueBatchServiceTest {
 
-	private final CatalogueItemRepository catalogueItemRepository = mock(CatalogueItemRepository.class);
+	private final CatalogueItemStore catalogueItemStore = mock(CatalogueItemStore.class);
 	private final EntitlementQuery entitlementQuery = mock(EntitlementQuery.class);
 	private final CoverUrlResolver coverUrlResolver = new CoverUrlResolver(mock(BookStorage.class));
 
-	private final CatalogueBatchService service = new CatalogueBatchService(catalogueItemRepository, entitlementQuery,
+	private final CatalogueBatchService service = new CatalogueBatchService(catalogueItemStore, entitlementQuery,
 			coverUrlResolver);
 
 	private static final SubjectRef SUBJECT = new SubjectRef("usr_1", "inst_7f3");
@@ -49,7 +49,7 @@ class CatalogueBatchServiceTest {
 		CatalogueItem deniedItem = item("item_denied", "Locked Book", ItemStatus.PUBLISHED);
 		CatalogueItem archived = item("item_archived", "Withdrawn Title", ItemStatus.ARCHIVED);
 
-		when(catalogueItemRepository.findAllById(any()))
+		when(catalogueItemStore.findAllById(any()))
 				.thenReturn(List.of(allowed, deniedItem, archived));
 		when(entitlementQuery.checkAll(SUBJECT, List.of("item_allowed", "item_denied"))).thenReturn(Map.of(
 				"item_allowed", entitled(2),
@@ -73,7 +73,7 @@ class CatalogueBatchServiceTest {
 				.isInstanceOf(ApiException.class)
 				.satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo(ErrorCode.TOO_MANY_IDS));
 
-		verify(catalogueItemRepository, never()).findAllById(any());
+		verify(catalogueItemStore, never()).findAllById(any());
 		verify(entitlementQuery, never()).checkAll(any(), any());
 	}
 
@@ -91,7 +91,7 @@ class CatalogueBatchServiceTest {
 		withIndex.setParts(List.of(indexedPart));
 		source.setAssets(List.of(withIndex));
 
-		when(catalogueItemRepository.findAllById(any())).thenReturn(List.of(source));
+		when(catalogueItemStore.findAllById(any())).thenReturn(List.of(source));
 		when(entitlementQuery.checkAll(SUBJECT, List.of("item_1"))).thenReturn(Map.of("item_1", entitled(2)));
 
 		BatchItem result = service.batch(SUBJECT, new BatchItemsRequest(List.of("item_1"))).items().get(0);

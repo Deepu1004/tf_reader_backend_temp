@@ -9,7 +9,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.tf.reader.admin.security.AdminScopeAuthorizer;
 import com.tf.reader.catalogue.entity.CatalogueItem;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
+import com.tf.reader.catalogue.service.CatalogueItemStore;
 import com.tf.reader.common.audit.AdminAuditWriter;
 import com.tf.reader.common.audit.AuditLog;
 import com.tf.reader.common.error.ApiException;
@@ -32,7 +32,7 @@ public class CoverImageService {
 
 	private static final long MAX_BYTES = 5L * 1024 * 1024;
 
-	private final CatalogueItemRepository catalogueItemRepository;
+	private final CatalogueItemStore catalogueItemStore;
 	private final AdminScopeAuthorizer adminScope;
 	private final AdminAuditWriter auditWriter;
 	private final BookStorage bookStorage;
@@ -59,7 +59,7 @@ public class CoverImageService {
 		item.setCoverKey(key);
 		item.setCoverMimeType(contentType);
 		item.setUpdatedAt(clock.instant());
-		CatalogueItem saved = catalogueItemRepository.save(item);
+		CatalogueItem saved = catalogueItemStore.save(item);
 
 		auditWriter.record(adminScope.currentAdminId(), AuditLog.Action.UPDATE, "CATALOGUE_ITEM", itemId, null,
 				Map.of("coverUploaded", true));
@@ -68,7 +68,7 @@ public class CoverImageService {
 	}
 
 	private CatalogueItem findOrThrow(String itemId) {
-		return catalogueItemRepository.findById(itemId)
+		return catalogueItemStore.findById(itemId)
 				.orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "No such catalogue item"));
 	}
 

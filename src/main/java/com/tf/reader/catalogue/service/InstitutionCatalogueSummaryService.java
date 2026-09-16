@@ -6,7 +6,6 @@ import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.Entitlement;
 import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.ItemStatus;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
 
 import org.springframework.stereotype.Service;
@@ -23,11 +22,11 @@ import java.util.Set;
 @Service
 public class InstitutionCatalogueSummaryService {
 
-    private final CatalogueItemRepository catalogueItems;
+    private final CatalogueItemStore catalogueItems;
     private final EntitlementRepository entitlements;
 
     public InstitutionCatalogueSummaryService(
-            CatalogueItemRepository catalogueItems, EntitlementRepository entitlements) {
+            CatalogueItemStore catalogueItems, EntitlementRepository entitlements) {
         this.catalogueItems = catalogueItems;
         this.entitlements = entitlements;
     }

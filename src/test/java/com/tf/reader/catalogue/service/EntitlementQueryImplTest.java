@@ -23,7 +23,6 @@ import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.catalogue.entity.Publisher;
 import com.tf.reader.catalogue.entity.ScopeType;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
 import com.tf.reader.catalogue.repository.PublisherRepository;
 import com.tf.reader.common.model.RecordStatus;
@@ -42,7 +41,7 @@ class EntitlementQueryImplTest {
 
     private static final SubjectRef SUBJECT = new SubjectRef("u_88", "inst_7f3");
 
-    private CatalogueItemRepository catalogueItemRepository;
+    private CatalogueItemStore catalogueItemStore;
     private EntitlementRepository entitlementRepository;
     private PublisherRepository publisherRepository;
     private InstitutionLookup institutionLookup;
@@ -50,11 +49,11 @@ class EntitlementQueryImplTest {
 
     @BeforeEach
     void setUp() {
-        catalogueItemRepository = mock(CatalogueItemRepository.class);
+        catalogueItemStore = mock(CatalogueItemStore.class);
         entitlementRepository = mock(EntitlementRepository.class);
         publisherRepository = mock(PublisherRepository.class);
         institutionLookup = mock(InstitutionLookup.class);
-        query = new EntitlementQueryImpl(catalogueItemRepository, entitlementRepository, publisherRepository,
+        query = new EntitlementQueryImpl(catalogueItemStore, entitlementRepository, publisherRepository,
                 institutionLookup);
 
         when(entitlementRepository.findByInstitutionIdAndScopeTypeAndScopeId(any(), any(), any()))
@@ -69,7 +68,7 @@ class EntitlementQueryImplTest {
         // copy-limited grant, and only ELITE is copy limited by nature.
         CatalogueItem item = readyItem("item_c25", List.of("col_1"));
         item.setAccessTier(AccessTier.ELITE);
-        when(catalogueItemRepository.findById("item_c25")).thenReturn(Optional.of(item));
+        when(catalogueItemStore.findById("item_c25")).thenReturn(Optional.of(item));
 
         Entitlement grant = entitlement("ent_1", ScopeType.COLLECTION, "col_1", 3, 21,
                 LocalDate.now().plusDays(30));
@@ -93,7 +92,7 @@ class EntitlementQueryImplTest {
         // SUBSCRIPTION book must not inherit a concurrency limit meant for the ELITE titles
         // sharing that grant - the tier decides, not the number on the row.
         CatalogueItem item = readyItem("item_c25", List.of("col_1"));
-        when(catalogueItemRepository.findById("item_c25")).thenReturn(Optional.of(item));
+        when(catalogueItemStore.findById("item_c25")).thenReturn(Optional.of(item));
 
         Entitlement grant = entitlement("ent_1", ScopeType.COLLECTION, "col_1", 3, 21,
                 LocalDate.now().plusDays(30));
@@ -111,7 +110,7 @@ class EntitlementQueryImplTest {
     @Test
     void deniesWithNoEntitlementWhenNothingCoversTheItem() {
         CatalogueItem item = readyItem("item_c25", List.of());
-        when(catalogueItemRepository.findById("item_c25")).thenReturn(Optional.of(item));
+        when(catalogueItemStore.findById("item_c25")).thenReturn(Optional.of(item));
 
         EntitlementDecision decision = query.check(SUBJECT, "item_c25");
 
@@ -122,7 +121,7 @@ class EntitlementQueryImplTest {
     @Test
     void deniesWithNoEntitlementWhenTheOnlyGrantHasExpired() {
         CatalogueItem item = readyItem("item_c25", List.of("col_1"));
-        when(catalogueItemRepository.findById("item_c25")).thenReturn(Optional.of(item));
+        when(catalogueItemStore.findById("item_c25")).thenReturn(Optional.of(item));
 
         Entitlement expired = entitlement("ent_1", ScopeType.COLLECTION, "col_1", 3, 21,
                 LocalDate.now().minusDays(1));
@@ -140,7 +139,7 @@ class EntitlementQueryImplTest {
     void deniesWithContentNotReadyWhenTheItemIsNotPublished() {
         CatalogueItem item = readyItem("item_c25", List.of());
         item.setStatus(ItemStatus.DRAFT);
-        when(catalogueItemRepository.findById("item_c25")).thenReturn(Optional.of(item));
+        when(catalogueItemStore.findById("item_c25")).thenReturn(Optional.of(item));
 
         EntitlementDecision decision = query.check(SUBJECT, "item_c25");
 
@@ -153,7 +152,7 @@ class EntitlementQueryImplTest {
         // A suspended publisher's whole catalogue disappears, not just books an institution
         // would otherwise need a grant for.
         CatalogueItem item = readyItem("item_c25", List.of("col_1"));
-        when(catalogueItemRepository.findById("item_c25")).thenReturn(Optional.of(item));
+        when(catalogueItemStore.findById("item_c25")).thenReturn(Optional.of(item));
         when(publisherRepository.findById("pub_1")).thenReturn(Optional.of(suspendedPublisher("pub_1")));
 
         Entitlement grant = entitlement("ent_1", ScopeType.COLLECTION, "col_1", 3, 21,
@@ -174,7 +173,7 @@ class EntitlementQueryImplTest {
         // publisher's open access book keeps granting itself regardless of status.
         CatalogueItem item = readyItem("item_c25", List.of());
         item.setAccessTier(AccessTier.OPEN_ACCESS);
-        when(catalogueItemRepository.findById("item_c25")).thenReturn(Optional.of(item));
+        when(catalogueItemStore.findById("item_c25")).thenReturn(Optional.of(item));
         when(publisherRepository.findById("pub_1")).thenReturn(Optional.of(suspendedPublisher("pub_1")));
 
         EntitlementDecision decision = query.check(SUBJECT, "item_c25");
@@ -186,7 +185,7 @@ class EntitlementQueryImplTest {
     @Test
     void deniesWithNoEntitlementWhenThePublisherNoLongerExists() {
         CatalogueItem item = readyItem("item_c25", List.of());
-        when(catalogueItemRepository.findById("item_c25")).thenReturn(Optional.of(item));
+        when(catalogueItemStore.findById("item_c25")).thenReturn(Optional.of(item));
         when(publisherRepository.findById("pub_1")).thenReturn(Optional.empty());
 
         EntitlementDecision decision = query.check(SUBJECT, "item_c25");
@@ -211,7 +210,7 @@ class EntitlementQueryImplTest {
 
         assertThat(decision.entitled()).isFalse();
         assertThat(decision.reason()).isEqualTo(DenyReason.NOT_FOUND);
-        verify(catalogueItemRepository, never()).findById(any());
+        verify(catalogueItemStore, never()).findById(any());
     }
 
     @Test
@@ -222,14 +221,15 @@ class EntitlementQueryImplTest {
 
         assertThat(decision.entitled()).isFalse();
         assertThat(decision.reason()).isEqualTo(DenyReason.NOT_FOUND);
-        verify(catalogueItemRepository, never()).findById(any());
+        verify(catalogueItemStore, never()).findById(any());
     }
 
     @Test
     void checkAllLooksUpTheInstitutionAndEachPublisherOnceForTheWholeBatch() {
         CatalogueItem itemA = readyItem("item_a", List.of());
         CatalogueItem itemB = readyItem("item_b", List.of());
-        when(catalogueItemRepository.findAllById(List.of("item_a", "item_b"))).thenReturn(List.of(itemA, itemB));
+        when(catalogueItemStore.findById("item_a")).thenReturn(Optional.of(itemA));
+        when(catalogueItemStore.findById("item_b")).thenReturn(Optional.of(itemB));
         when(publisherRepository.findAllById(List.of("pub_1"))).thenReturn(List.of(activePublisher("pub_1")));
 
         Map<String, EntitlementDecision> decisions = query.checkAll(SUBJECT, List.of("item_a", "item_b"));
@@ -249,13 +249,13 @@ class EntitlementQueryImplTest {
 
         assertThat(decisions.get("item_a").reason()).isEqualTo(DenyReason.NOT_FOUND);
         assertThat(decisions.get("item_b").reason()).isEqualTo(DenyReason.NOT_FOUND);
-        verify(catalogueItemRepository, never()).findAllById(any());
+        verify(catalogueItemStore, never()).findById(any());
     }
 
     @Test
     void anItemGrantWinsOverAMorePermissiveCollectionGrant() {
         CatalogueItem item = readyItem("item_c25", List.of("col_1"));
-        when(catalogueItemRepository.findById("item_c25")).thenReturn(Optional.of(item));
+        when(catalogueItemStore.findById("item_c25")).thenReturn(Optional.of(item));
 
         Entitlement itemGrant = entitlement("ent_item", ScopeType.ITEM, "item_c25", 1, 14,
                 LocalDate.now().plusDays(30));
@@ -278,7 +278,7 @@ class EntitlementQueryImplTest {
     @Test
     void theMorePermissiveOfTwoCollectionGrantsWinsWhenAnItemBelongsToBoth() {
         CatalogueItem item = readyItem("item_c25", List.of("col_1", "col_2"));
-        when(catalogueItemRepository.findById("item_c25")).thenReturn(Optional.of(item));
+        when(catalogueItemStore.findById("item_c25")).thenReturn(Optional.of(item));
 
         Entitlement limited = entitlement("ent_limited", ScopeType.COLLECTION, "col_1", 2, 14,
                 LocalDate.now().plusDays(30));
