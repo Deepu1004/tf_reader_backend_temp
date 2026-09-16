@@ -206,7 +206,12 @@ public class IngestProcessor {
 			asset.setMimeType(mimeType);
 		}
 		part.setSizeBytes(plaintext.length);
-		part.setCipherLength(plaintext.length);
+		// cipherLength means ciphertext length and exists only where the content is actually
+		// encrypted (see canonical-items.json's cipherLengthFormula comment) - unlocked content
+		// has no ciphertext, so this is reset to 0 rather than echoing the plaintext length back.
+		// An explicit reset, not just "never set" - a part re-ingested after previously being
+		// locked (or after this exact bug) must not keep a stale nonzero value from before.
+		part.setCipherLength(0);
 
 		String indexKey = null;
 		Optional<BuiltSearchIndex> built = searchIndexBuilder.build(itemId, asset.getFormat(), plaintext, part);

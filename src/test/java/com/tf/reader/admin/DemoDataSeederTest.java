@@ -82,13 +82,15 @@ class DemoDataSeederTest {
         // DEV_CONTENT_FIXTURE_ITEM_IDS) plus two more added alongside them. Week 5 added 75 more,
         // real too, ingested the same way: 3 standalone books plus a Journal/Volume/Issue/Article
         // hierarchy three journals deep (3 journals, 8 volumes, 11 issues, 50 articles).
-        assertThat(dataset.catalogueItems()).hasSize(83);
+        // "The Laboratory Guinea Pig" (item_d00f1ec0) was removed afterward - too large to be
+        // worth re-ingesting on every seed-data refresh - leaving 2 standalone week-5 books.
+        assertThat(dataset.catalogueItems()).hasSize(82);
         assertThat(dataset.entitlements()).hasSize(4);
         assertThat(dataset.adminUsers()).hasSize(3);
         assertThat(dataset.feedSettings()).hasSize(3);
 
         // One number, so an extra row cannot be added without someone updating the plan too.
-        assertThat(dataset.documentCount()).isEqualTo(100);
+        assertThat(dataset.documentCount()).isEqualTo(99);
     }
 
     @Test
@@ -220,9 +222,10 @@ class DemoDataSeederTest {
                 default -> throw new AssertionError("unknown workType " + workType + " on " + i.id());
             }
         }
-        // 8 week-4 books (workType absent, defaults to BOOK) + 3 week-5 books = 11 standalone
-        // books; 3 journals, 8 volumes, 11 issues, 50 articles from week 5's real hierarchy.
-        assertThat(books).isEqualTo(11);
+        // 8 week-4 books (workType absent, defaults to BOOK) + 2 week-5 books (a third,
+        // "The Laboratory Guinea Pig", was removed afterward) = 10 standalone books; 3 journals,
+        // 8 volumes, 11 issues, 50 articles from week 5's real hierarchy.
+        assertThat(books).isEqualTo(10);
         assertThat(journals).isEqualTo(3);
         assertThat(volumes).isEqualTo(8);
         assertThat(issues).isEqualTo(11);
@@ -488,13 +491,15 @@ class DemoDataSeederTest {
     void compositionIsDeliberate() {
         // These assertions are the composition table in the approach document, made executable. They
         // exist so that "tidying" a row that another team's test depends on fails here first.
-        // 61 leaves are real, ingested books/articles, PUBLISHED and READY: the original 8 plus
-        // 3 standalone books and 50 articles from week 5's hierarchy. The QUEUED/FAILED, "must
-        // never appear in a feed" case (item_q7/item_f3 used to carry it) has no seed-data
-        // coverage right now - see the _readme note in demo-dataset.json. The 22 containers
-        // (JOURNAL/VOLUME/ISSUE) are PUBLISHED but never READY - they carry no content, so
-        // contentState stays NONE, and isFeedVisible is correctly false for every one of them.
-        assertThat(dataset.catalogueItems()).filteredOn(SeedDataset.SeedItem::isFeedVisible).hasSize(61);
+        // 60 leaves are real, ingested books/articles, PUBLISHED and READY: the original 8 plus
+        // 2 standalone books and 50 articles from week 5's hierarchy (a third week-5 book, "The
+        // Laboratory Guinea Pig", was removed afterward - too large to be worth re-ingesting on
+        // every seed-data refresh). The QUEUED/FAILED, "must never appear in a feed" case
+        // (item_q7/item_f3 used to carry it) has no seed-data coverage right now - see the
+        // _readme note in demo-dataset.json. The 22 containers (JOURNAL/VOLUME/ISSUE) are
+        // PUBLISHED but never READY - they carry no content, so contentState stays NONE, and
+        // isFeedVisible is correctly false for every one of them.
+        assertThat(dataset.catalogueItems()).filteredOn(SeedDataset.SeedItem::isFeedVisible).hasSize(60);
 
         assertThat(dataset.catalogueItems())
                 .extracting(SeedDataset.SeedItem::accessTier)
@@ -530,17 +535,17 @@ class DemoDataSeederTest {
                 .extracting(SeedDataset.SeedEntitlement::copies)
                 .containsExactlyInAnyOrder(2, null, 2, 2);
 
-        // 14 have a real uploaded cover (coverKey): the original 6 books, the two Doctor
-        // Dolittle audio chapters (dev-sample-audio/-encrypted, covered afterwards), 3 more
-        // week-5 books and 3 week-5 journals. Volumes, issues and articles carry no cover of
-        // their own - a reader sees a journal's or a book's cover, never a chapter's or an
-        // issue's. coverUrl itself is null on every item: the bucket is private, so there is
-        // never a durable literal to seed, only a coverKey CoverUrlResolver presigns fresh on
-        // every read. The multi-format-per-item case (item_dual used to carry it, one PDF asset
-        // plus one EPUB asset) has no seed-data coverage right now - see the _readme note in
-        // demo-dataset.json.
+        // 13 have a real uploaded cover (coverKey): the original 6 books, the two Doctor
+        // Dolittle audio chapters (dev-sample-audio/-encrypted, covered afterwards), 2 more
+        // week-5 books (a third, "The Laboratory Guinea Pig", was removed afterward) and 3
+        // week-5 journals. Volumes, issues and articles carry no cover of their own - a reader
+        // sees a journal's or a book's cover, never a chapter's or an issue's. coverUrl itself is
+        // null on every item: the bucket is private, so there is never a durable literal to
+        // seed, only a coverKey CoverUrlResolver presigns fresh on every read. The
+        // multi-format-per-item case (item_dual used to carry it, one PDF asset plus one EPUB
+        // asset) has no seed-data coverage right now - see the _readme note in demo-dataset.json.
         assertThat(dataset.catalogueItems()).allSatisfy(i -> assertThat(i.coverUrl()).isNull());
-        assertThat(dataset.catalogueItems()).filteredOn(i -> i.coverKey() != null).hasSize(14);
+        assertThat(dataset.catalogueItems()).filteredOn(i -> i.coverKey() != null).hasSize(13);
         assertThat(dataset.catalogueItems()).filteredOn(i -> i.coverKey() == null).hasSize(69);
 
         // One empty shelf, so the hidden-shelf case is real data, and one shelf with several books so
