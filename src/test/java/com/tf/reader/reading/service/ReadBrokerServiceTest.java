@@ -91,7 +91,7 @@ class ReadBrokerServiceTest {
 	}
 
 	private ReadingSessionRequest request(Intent intent) {
-		return new ReadingSessionRequest(ITEM, Format.PDF, intent, KEY, false);
+		return new ReadingSessionRequest(ITEM, Format.PDF, intent, KEY, false, null);
 	}
 
 	private EntitlementDecision entitled(AccessLevel level, Integer copies, int loanPeriodDays) {
@@ -111,7 +111,7 @@ class ReadBrokerServiceTest {
 
 	@Test
 	void anUndecodableDeviceKeyIsRejectedBeforeAnythingElseRuns() {
-		ReadingSessionRequest bad = new ReadingSessionRequest(ITEM, Format.PDF, Intent.STREAM, "!!! not base64 !!!", false);
+		ReadingSessionRequest bad = new ReadingSessionRequest(ITEM, Format.PDF, Intent.STREAM, "!!! not base64 !!!", false, null);
 
 		assertThatThrownBy(() -> broker.open(MEMBER, bad))
 				.isInstanceOf(ApiException.class)

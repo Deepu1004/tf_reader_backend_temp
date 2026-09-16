@@ -17,4 +17,11 @@ public interface LicenceCommand {
 	 * <p>Idempotent on {@code (userId, itemId)} while a licence is live.
 	 */
 	LicenceView create(SubjectRef subject, String itemId, AccessLevel accessLevel, int loanPeriodDays, String leaseId);
+
+	/**
+	 * True if a loan for this (userId, itemId) exists with status EXPIRED — meaning the system
+	 * reclaimed the seat rather than the user returning it. Used by the read broker to reject
+	 * silent re-mints: a STREAM re-check is not the same as a fresh borrow.
+	 */
+	boolean hasExpiredLoan(String userId, String itemId);
 }
