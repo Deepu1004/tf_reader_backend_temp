@@ -21,9 +21,9 @@ import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.FeedSettings;
 import com.tf.reader.catalogue.entity.Institution;
 import com.tf.reader.catalogue.entity.Shelf;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.FeedSettingsRepository;
 import com.tf.reader.catalogue.repository.InstitutionRepository;
+import com.tf.reader.catalogue.service.CatalogueItemStore;
 import com.tf.reader.catalogue.service.CatalogueVersionBumper;
 import com.tf.reader.common.audit.AdminAuditWriter;
 import com.tf.reader.common.audit.AuditLog;
@@ -50,7 +50,7 @@ public class FeedSettingsAdminService {
 
 	private final FeedSettingsRepository feedSettingsRepository;
 	private final InstitutionRepository institutionRepository;
-	private final CatalogueItemRepository catalogueItemRepository;
+	private final CatalogueItemStore catalogueItemStore;
 	private final EntitlementQuery entitlementQuery;
 	private final CatalogueVersionBumper catalogueVersionBumper;
 	private final AdminAuditWriter auditWriter;
@@ -153,7 +153,7 @@ public class FeedSettingsAdminService {
 			return;
 		}
 
-		List<CatalogueItem> found = catalogueItemRepository.findAllById(allItemIds);
+		List<CatalogueItem> found = catalogueItemStore.findAllById(allItemIds);
 		Map<String, CatalogueItem> byId = found.stream()
 				.collect(Collectors.toMap(CatalogueItem::getId, Function.identity()));
 

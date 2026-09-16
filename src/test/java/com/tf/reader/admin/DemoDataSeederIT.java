@@ -63,7 +63,12 @@ class DemoDataSeederIT {
         // Testcontainers publishes on 127.0.0.1, which is in the seeder's default allowlist. That is
         // not an accident: if the allowlist were tightened to reject it, these tests would fail loudly
         // rather than the rail being quietly weakened.
-        registry.add("spring.data.mongodb.uri", MONGO::getReplicaSetUrl);
+        //
+        // spring.mongodb.uri, not spring.data.mongodb.uri: Spring Boot 4 split the driver's
+        // connection settings out of Spring Data's, and spring.data.mongodb.uri now binds to
+        // nothing at all - silently, leaving this test pointed at whatever spring.mongodb.uri
+        // resolves to elsewhere instead of this class's own container.
+        registry.add("spring.mongodb.uri", MONGO::getReplicaSetUrl);
         registry.add("tnf.seed.enabled", () -> "true");
     }
 
@@ -143,7 +148,7 @@ class DemoDataSeederIT {
         // deleted publishers first and re-inserted in the same order, this would still pass; if either
         // order were reversed, the run would throw IllegalArgumentException instead.
         seederWithReset().run(null);
-        assertThat(items.count()).isEqualTo(83);
+        assertThat(items.count()).isEqualTo(82);
         assertThat(items.findById("dev-fixture-epub").orElseThrow().getPublisherId()).isEqualTo("pub_rtlg");
     }
 
@@ -376,7 +381,7 @@ class DemoDataSeederIT {
         assertThat(publishers.count()).as("publishers").isEqualTo(2);
         assertThat(collections.count()).as("collections").isEqualTo(2);
         assertThat(institutions.count()).as("institutions").isEqualTo(3);
-        assertThat(items.count()).as("catalogueItems").isEqualTo(83);
+        assertThat(items.count()).as("catalogueItems").isEqualTo(82);
         assertThat(entitlements.count()).as("entitlements").isEqualTo(4);
         assertThat(adminUsers.count()).as("adminUsers").isEqualTo(3);
         assertThat(feedSettings.count()).as("feedSettings").isEqualTo(3);

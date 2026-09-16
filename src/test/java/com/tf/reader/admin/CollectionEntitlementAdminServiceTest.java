@@ -29,7 +29,7 @@ import com.tf.reader.catalogue.entity.BookCollection;
 import com.tf.reader.catalogue.entity.Entitlement;
 import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.ScopeType;
-import com.tf.reader.catalogue.repository.BookCollectionRepository;
+import com.tf.reader.catalogue.service.BookCollectionStore;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
@@ -38,17 +38,17 @@ import com.tf.reader.common.security.TokenClaims;
 /** Business rules for GET /api/admin/v1/collections, tested without a servlet or a database. */
 class CollectionEntitlementAdminServiceTest {
 
-	private BookCollectionRepository bookCollectionRepository;
+	private BookCollectionStore bookCollectionStore;
 	private EntitlementRepository entitlementRepository;
 
 	private CollectionEntitlementAdminService service;
 
 	@org.junit.jupiter.api.BeforeEach
 	void setUp() {
-		bookCollectionRepository = mock(BookCollectionRepository.class);
+		bookCollectionStore = mock(BookCollectionStore.class);
 		entitlementRepository = mock(EntitlementRepository.class);
 
-		service = new CollectionEntitlementAdminService(bookCollectionRepository, entitlementRepository,
+		service = new CollectionEntitlementAdminService(bookCollectionStore, entitlementRepository,
 				new AdminScopeAuthorizer());
 
 		actingAs(AdminRole.SUPER_ADMIN, null, null);
@@ -100,11 +100,11 @@ class CollectionEntitlementAdminServiceTest {
 	@DisplayName("a publisher admin's list is pinned to their own publisherId")
 	void publisherAdminListIsPinnedToOwnScope() {
 		actingAs(AdminRole.PUBLISHER_ADMIN, "pub_mine", null);
-		when(bookCollectionRepository.findByPublisherId(eq("pub_mine"), any())).thenReturn(pageOf());
+		when(bookCollectionStore.findByPublisherId(eq("pub_mine"), any())).thenReturn(pageOf());
 
 		service.list("pub_mine", null, null, null, null);
 
-		verify(bookCollectionRepository).findByPublisherId(eq("pub_mine"), any());
+		verify(bookCollectionStore).findByPublisherId(eq("pub_mine"), any());
 	}
 
 	@Test
@@ -120,7 +120,7 @@ class CollectionEntitlementAdminServiceTest {
 	@Test
 	@DisplayName("a super admin with no publisherId sees every publisher's collections")
 	void superAdminWithNoPublisherIdSeesEverything() {
-		when(bookCollectionRepository.findAll(any(Pageable.class)))
+		when(bookCollectionStore.findAll(any(Pageable.class)))
 				.thenReturn(pageOf(collection("col_law2024", "pub_rtlg")));
 
 		var result = service.list(null, null, null, null, null);
@@ -134,7 +134,7 @@ class CollectionEntitlementAdminServiceTest {
 		actingAs(AdminRole.INSTITUTION_ADMIN, null, "inst_7f3");
 		BookCollection entitledCollection = collection("col_law2024", "pub_rtlg");
 		BookCollection unrelatedCollection = collection("col_env2024", "pub_crc");
-		when(bookCollectionRepository.findAll(any(Pageable.class)))
+		when(bookCollectionStore.findAll(any(Pageable.class)))
 				.thenReturn(pageOf(entitledCollection, unrelatedCollection));
 		Entitlement activeGrant = new Entitlement("ent_1", "inst_7f3", ScopeType.COLLECTION, "col_law2024", null, 14,
 				null, null, EntitlementStatus.ACTIVE, 0, null, null);
@@ -150,7 +150,7 @@ class CollectionEntitlementAdminServiceTest {
 	@Test
 	@DisplayName("a super admin passing institutionId sees that institution's entitlementStatus view")
 	void superAdminWithInstitutionIdSeesThatInstitutionsView() {
-		when(bookCollectionRepository.findAll(any(Pageable.class)))
+		when(bookCollectionStore.findAll(any(Pageable.class)))
 				.thenReturn(pageOf(collection("col_law2024", "pub_rtlg")));
 		Entitlement activeGrant = new Entitlement("ent_1", "inst_7f3", ScopeType.PUBLISHER, "pub_rtlg", null, 14,
 				null, null, EntitlementStatus.ACTIVE, 0, null, null);
@@ -166,7 +166,7 @@ class CollectionEntitlementAdminServiceTest {
 	@DisplayName("a publisher admin's list has no entitlementStatus, not \"none\"")
 	void publisherAdminListOmitsEntitlementStatus() {
 		actingAs(AdminRole.PUBLISHER_ADMIN, "pub_rtlg", null);
-		when(bookCollectionRepository.findByPublisherId(eq("pub_rtlg"), any()))
+		when(bookCollectionStore.findByPublisherId(eq("pub_rtlg"), any()))
 				.thenReturn(pageOf(collection("col_law2024", "pub_rtlg")));
 
 		var result = service.list("pub_rtlg", null, null, null, null);
@@ -178,7 +178,7 @@ class CollectionEntitlementAdminServiceTest {
 	@DisplayName("a publisher admin passing institutionId still gets no entitlementStatus")
 	void publisherAdminInstitutionIdIsIgnored() {
 		actingAs(AdminRole.PUBLISHER_ADMIN, "pub_rtlg", null);
-		when(bookCollectionRepository.findByPublisherId(eq("pub_rtlg"), any()))
+		when(bookCollectionStore.findByPublisherId(eq("pub_rtlg"), any()))
 				.thenReturn(pageOf(collection("col_law2024", "pub_rtlg")));
 
 		var result = service.list("pub_rtlg", null, null, null, "inst_7f3");
@@ -191,7 +191,7 @@ class CollectionEntitlementAdminServiceTest {
 	@DisplayName("an institution admin cannot see another institution's entitlementStatus by passing its id")
 	void institutionAdminCannotSpoofAnotherInstitution() {
 		actingAs(AdminRole.INSTITUTION_ADMIN, null, "inst_7f3");
-		when(bookCollectionRepository.findAll(any(Pageable.class)))
+		when(bookCollectionStore.findAll(any(Pageable.class)))
 				.thenReturn(pageOf(collection("col_law2024", "pub_rtlg")));
 		when(entitlementRepository.findByInstitutionId(eq("inst_7f3"), any())).thenReturn(new PageImpl<>(List.of()));
 
@@ -206,7 +206,7 @@ class CollectionEntitlementAdminServiceTest {
 	void itemScopedEntitlementIsIgnored() {
 		actingAs(AdminRole.INSTITUTION_ADMIN, null, "inst_7f3");
 		BookCollection col = collection("col_law2024", "pub_rtlg");
-		when(bookCollectionRepository.findAll(any(Pageable.class))).thenReturn(pageOf(col));
+		when(bookCollectionStore.findAll(any(Pageable.class))).thenReturn(pageOf(col));
 		// Scoped to an item id that happens to equal the collection's id - must not match.
 		Entitlement itemGrant = new Entitlement("ent_1", "inst_7f3", ScopeType.ITEM, "col_law2024", null, 14, null,
 				null, EntitlementStatus.ACTIVE, 0, null, null);
@@ -223,7 +223,7 @@ class CollectionEntitlementAdminServiceTest {
 	void strongestEntitlementStatusWinsAcrossScopes() {
 		actingAs(AdminRole.INSTITUTION_ADMIN, null, "inst_7f3");
 		BookCollection col = collection("col_law2024", "pub_rtlg");
-		when(bookCollectionRepository.findAll(any(Pageable.class))).thenReturn(pageOf(col));
+		when(bookCollectionStore.findAll(any(Pageable.class))).thenReturn(pageOf(col));
 		Entitlement pendingCollectionGrant = new Entitlement("ent_1", "inst_7f3", ScopeType.COLLECTION, "col_law2024",
 				null, 14, null, null, EntitlementStatus.PENDING, 0, null, null);
 		Entitlement activePublisherGrant = new Entitlement("ent_2", "inst_7f3", ScopeType.PUBLISHER, "pub_rtlg", null,

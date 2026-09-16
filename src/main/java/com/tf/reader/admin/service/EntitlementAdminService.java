@@ -22,11 +22,11 @@ import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.catalogue.entity.Publisher;
 import com.tf.reader.catalogue.entity.ScopeType;
-import com.tf.reader.catalogue.repository.BookCollectionRepository;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
 import com.tf.reader.catalogue.repository.InstitutionRepository;
 import com.tf.reader.catalogue.repository.PublisherRepository;
+import com.tf.reader.catalogue.service.BookCollectionStore;
+import com.tf.reader.catalogue.service.CatalogueItemStore;
 import com.tf.reader.catalogue.service.CatalogueVersionBumper;
 import com.tf.reader.common.audit.AdminAuditWriter;
 import com.tf.reader.common.audit.AuditLog;
@@ -53,8 +53,8 @@ public class EntitlementAdminService {
 	private final EntitlementRepository entitlementRepository;
 	private final InstitutionRepository institutionRepository;
 	private final PublisherRepository publisherRepository;
-	private final BookCollectionRepository bookCollectionRepository;
-	private final CatalogueItemRepository catalogueItemRepository;
+	private final BookCollectionStore bookCollectionStore;
+	private final CatalogueItemStore catalogueItemStore;
 	private final CatalogueVersionBumper catalogueVersionBumper;
 	private final AdminAuditWriter auditWriter;
 	private final AdminScopeAuthorizer adminScope;
@@ -257,8 +257,8 @@ public class EntitlementAdminService {
 	private boolean scopeExists(ScopeType scopeType, String scopeId) {
 		return switch (scopeType) {
 			case PUBLISHER -> publisherRepository.existsById(scopeId);
-			case COLLECTION -> bookCollectionRepository.existsById(scopeId);
-			case ITEM -> catalogueItemRepository.existsById(scopeId);
+			case COLLECTION -> bookCollectionStore.existsById(scopeId);
+			case ITEM -> catalogueItemStore.existsById(scopeId);
 		};
 	}
 
@@ -285,8 +285,8 @@ public class EntitlementAdminService {
 	private String scopeLabel(ScopeType scopeType, String scopeId) {
 		String name = switch (scopeType) {
 			case PUBLISHER -> publisherRepository.findById(scopeId).map(Publisher::getName).orElse(null);
-			case COLLECTION -> bookCollectionRepository.findById(scopeId).map(BookCollection::getName).orElse(null);
-			case ITEM -> catalogueItemRepository.findById(scopeId).map(CatalogueItem::getTitle).orElse(null);
+			case COLLECTION -> bookCollectionStore.findById(scopeId).map(BookCollection::getName).orElse(null);
+			case ITEM -> catalogueItemStore.findById(scopeId).map(CatalogueItem::getTitle).orElse(null);
 		};
 		String prefix = scopeType.name().charAt(0) + scopeType.name().substring(1).toLowerCase();
 		return prefix + " - " + (name != null ? name : "unknown");
@@ -298,9 +298,9 @@ public class EntitlementAdminService {
 	 */
 	private long resolvedItemCount(ScopeType scopeType, String scopeId) {
 		return switch (scopeType) {
-			case PUBLISHER -> catalogueItemRepository.countByPublisherId(scopeId);
-			case COLLECTION -> catalogueItemRepository.countByCollectionIds(scopeId);
-			case ITEM -> catalogueItemRepository.findById(scopeId)
+			case PUBLISHER -> catalogueItemStore.countByPublisherId(scopeId);
+			case COLLECTION -> catalogueItemStore.countByCollectionIds(scopeId);
+			case ITEM -> catalogueItemStore.findById(scopeId)
 					.filter(item -> item.getStatus() == ItemStatus.PUBLISHED)
 					.isPresent() ? 1 : 0;
 		};

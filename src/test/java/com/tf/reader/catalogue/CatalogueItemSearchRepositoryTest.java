@@ -5,11 +5,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Instant;
 import java.util.List;
 
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.testcontainers.mongodb.MongoDBContainer;
+import org.testcontainers.utility.DockerImageName;
 
 import com.tf.reader.TestcontainersConfiguration;
 import com.tf.reader.catalogue.entity.AccessTier;
@@ -22,10 +27,25 @@ import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.CatalogueItemSearchRepository;
 import com.tf.reader.catalogue.repository.PublisherRepository;
 import com.tf.reader.common.model.RecordStatus;
+import com.tf.reader.common.mongo.PublisherMongoClients;
 
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 class CatalogueItemSearchRepositoryTest {
+
+	// Stands in for "a publisher's own MongoDB," independent of the shared container above.
+	@SuppressWarnings("resource")
+	private static final MongoDBContainer OWN_MONGO = new MongoDBContainer(DockerImageName.parse("mongo:latest"));
+
+	@BeforeAll
+	static void startOwnMongo() {
+		OWN_MONGO.start();
+	}
+
+	@AfterAll
+	static void stopOwnMongo() {
+		OWN_MONGO.stop();
+	}
 
 	@Autowired
 	private CatalogueItemSearchRepository searchRepository;
@@ -33,6 +53,8 @@ class CatalogueItemSearchRepositoryTest {
 	private CatalogueItemRepository catalogueItemRepository;
 	@Autowired
 	private PublisherRepository publisherRepository;
+	@Autowired
+	private PublisherMongoClients publisherMongoClients;
 
 	private String routledgeId;
 	private String crcId;
@@ -135,6 +157,65 @@ class CatalogueItemSearchRepositoryTest {
 		assertThat(results.items()).extracting(CatalogueItem::getId).containsExactlyInAnyOrder("item_ci_1",
 				"item_ci_2", "item_ci_3");
 		assertThat(results.total()).isEqualTo(3);
+	}
+
+	@Test
+	void unscopedSearchFansOutToAPublishersOwnDatabaseAndMergesTheTotal() {
+		String ownMongoUri = OWN_MONGO.getConnectionString() + "/pub_cisearch_owndb_test";
+		String ownDbPublisherId = publisherRepository
+				.save(new Publisher(null, "OWNDB-CISEARCH", "Own Database Press", null, null, RecordStatus.ACTIVE,
+						Instant.now(), Instant.now()))
+				.getId();
+		publisherRepository.findById(ownDbPublisherId).ifPresent(p -> {
+			p.setMongoUri(ownMongoUri);
+			publisherRepository.save(p);
+		});
+
+		CatalogueItem ownDbItem = item("item_ci_owndb", ownDbPublisherId, List.of(), "Aardvark Anatomy",
+				List.of("Z. Zoologist"), List.of("Biology"), null, ContentType.PDF, AccessTier.OPEN_ACCESS,
+				ContentState.READY);
+		new MongoTemplate(publisherMongoClients.factoryFor(ownDbPublisherId, ownMongoUri)).save(ownDbItem);
+
+		try {
+			var results = searchRepository.search(null, null, null, null, null, 0, 20);
+
+			// The three shared-database fixtures plus the one in the publisher's own database.
+			assertThat(results.items()).extracting(CatalogueItem::getId).containsExactlyInAnyOrder("item_ci_1",
+					"item_ci_2", "item_ci_3", "item_ci_owndb");
+			assertThat(results.total()).isEqualTo(4);
+			// Title-ascending: "Aardvark Anatomy" sorts before every shared-database fixture title.
+			assertThat(results.items().get(0).getId()).isEqualTo("item_ci_owndb");
+		} finally {
+			publisherMongoClients.invalidate(ownDbPublisherId);
+			publisherRepository.deleteById(ownDbPublisherId);
+		}
+	}
+
+	@Test
+	void publisherScopedSearchRoutesToThatPublishersOwnDatabaseOnly() {
+		String ownMongoUri = OWN_MONGO.getConnectionString() + "/pub_cisearch_owndb_test2";
+		String ownDbPublisherId = publisherRepository
+				.save(new Publisher(null, "OWNDB2-CISEARCH", "Own Database Press Two", null, null,
+						RecordStatus.ACTIVE, Instant.now(), Instant.now()))
+				.getId();
+		publisherRepository.findById(ownDbPublisherId).ifPresent(p -> {
+			p.setMongoUri(ownMongoUri);
+			publisherRepository.save(p);
+		});
+
+		CatalogueItem ownDbItem = item("item_ci_owndb2", ownDbPublisherId, List.of(), "Beekeeping Basics",
+				List.of(), List.of(), null, ContentType.PDF, AccessTier.OPEN_ACCESS, ContentState.READY);
+		new MongoTemplate(publisherMongoClients.factoryFor(ownDbPublisherId, ownMongoUri)).save(ownDbItem);
+
+		try {
+			var results = searchRepository.search(ownDbPublisherId, null, null, null, null, 0, 20);
+
+			assertThat(results.items()).extracting(CatalogueItem::getId).containsExactly("item_ci_owndb2");
+			assertThat(results.total()).isEqualTo(1);
+		} finally {
+			publisherMongoClients.invalidate(ownDbPublisherId);
+			publisherRepository.deleteById(ownDbPublisherId);
+		}
 	}
 
 }

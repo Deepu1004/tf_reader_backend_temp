@@ -29,7 +29,7 @@ import com.tf.reader.catalogue.entity.AccessTier;
 import com.tf.reader.catalogue.entity.CatalogueItem;
 import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.ContentType;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
+import com.tf.reader.catalogue.service.CatalogueItemStore;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
 import com.tf.reader.content.api.ContentAccessGrant;
@@ -53,7 +53,7 @@ class ContentAccessGrantImplTest {
 
 	private static final Instant EXPIRES = Instant.parse("2026-08-27T10:15:00Z");
 
-	private final CatalogueItemRepository items = mock(CatalogueItemRepository.class);
+	private final CatalogueItemStore items = mock(CatalogueItemStore.class);
 	private final BookStorage bookStorage = mock(BookStorage.class);
 	private final BookEncryptionKeys bookEncryptionKeys = mock(BookEncryptionKeys.class);
 	private final EntitlementQuery entitlementQuery = mock(EntitlementQuery.class);
@@ -157,7 +157,7 @@ class ContentAccessGrantImplTest {
 		when(items.findById("item_42")).thenReturn(Optional.of(item));
 		when(bookStorage.presign("items/item_42/part2/content", Duration.ofMinutes(15)))
 				.thenReturn(new PresignedObject("https://b2.example/part2?sig=1", EXPIRES));
-		when(bookEncryptionKeys.rewrapForDevice(eq("shared-wrapped-bek"), any())).thenReturn("wrapped-for-device");
+		when(bookEncryptionKeys.rewrapForDevice(any(), eq("shared-wrapped-bek"), any())).thenReturn("wrapped-for-device");
 
 		ContentGrant result = grant.grant(requestForPart(2));
 
@@ -219,7 +219,7 @@ class ContentAccessGrantImplTest {
 				.thenReturn(new PresignedObject("https://b2.example/content?sig=1", EXPIRES));
 		when(bookStorage.presign("items/item_42/index", Duration.ofMinutes(15)))
 				.thenReturn(new PresignedObject("https://b2.example/index?sig=2", EXPIRES));
-		when(bookEncryptionKeys.rewrapForDevice(eq(item.getAssets().get(0).getMasterWrappedBek()), eq(devicePublicKey)))
+		when(bookEncryptionKeys.rewrapForDevice(any(), eq(item.getAssets().get(0).getMasterWrappedBek()), eq(devicePublicKey)))
 				.thenReturn("wrapped-bek-for-device");
 
 		ContentGrant result = grant.grant(request(Format.PDF, true, devicePublicKey));
@@ -242,7 +242,7 @@ class ContentAccessGrantImplTest {
 		CatalogueItem item = readyItem(ContentType.PDF, AccessTier.ELITE, lockedAsset(), "items/item_42/index");
 		when(items.findById("item_42")).thenReturn(Optional.of(item));
 		when(bookStorage.presign(any(), any())).thenReturn(new PresignedObject("https://b2.example/x", EXPIRES));
-		when(bookEncryptionKeys.rewrapForDevice(any(), any())).thenReturn("wrapped");
+		when(bookEncryptionKeys.rewrapForDevice(any(), any(), any())).thenReturn("wrapped");
 
 		ContentGrant result = grant.grant(request(Format.PDF, false, "device-key".getBytes()));
 
@@ -287,7 +287,7 @@ class ContentAccessGrantImplTest {
 
 		assertThatExceptionOfType(ApiException.class).isThrownBy(() -> grant.grant(request(Format.PDF, false, null)))
 				.satisfies(e -> assertThat(e.getCode()).isEqualTo(ErrorCode.INVALID_DEVICE_PUBLIC_KEY));
-		verify(bookEncryptionKeys, never()).rewrapForDevice(any(), any());
+		verify(bookEncryptionKeys, never()).rewrapForDevice(any(), any(), any());
 	}
 
 	@Test
@@ -295,7 +295,7 @@ class ContentAccessGrantImplTest {
 		CatalogueItem item = readyItem(ContentType.PDF, AccessTier.ELITE, lockedAsset(), null);
 		when(items.findById("item_42")).thenReturn(Optional.of(item));
 		when(bookStorage.presign(any(), any())).thenReturn(new PresignedObject("https://b2.example/x", EXPIRES));
-		when(bookEncryptionKeys.rewrapForDevice(any(), any()))
+		when(bookEncryptionKeys.rewrapForDevice(any(), any(), any()))
 				.thenThrow(new ApiException(ErrorCode.INVALID_DEVICE_PUBLIC_KEY, "too small"));
 
 		assertThatExceptionOfType(ApiException.class)

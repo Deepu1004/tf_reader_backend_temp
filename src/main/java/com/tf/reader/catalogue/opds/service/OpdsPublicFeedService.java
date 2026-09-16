@@ -24,8 +24,8 @@ import com.tf.reader.catalogue.opds.dto.OpdsPublication;
 import com.tf.reader.catalogue.opds.dto.OpdsPublicationDocument;
 import com.tf.reader.catalogue.opds.dto.OpdsPublicationFeed;
 import com.tf.reader.catalogue.repository.CatalogueItemPublicSearchRepository;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.PublisherRepository;
+import com.tf.reader.catalogue.service.CatalogueItemStore;
 import com.tf.reader.catalogue.service.CatalogueUrlBuilder;
 import com.tf.reader.common.error.ApiException;
 import com.tf.reader.common.error.ErrorCode;
@@ -43,14 +43,14 @@ public class OpdsPublicFeedService {
     private static final EntitlementDecision OPEN_ACCESS_DECISION =
             new EntitlementDecision(true, AccessLevel.OPEN_ACCESS, null, null, 0, null, null);
 
-    private final CatalogueItemRepository catalogueItemRepository;
+    private final CatalogueItemStore catalogueItemStore;
     private final CatalogueItemPublicSearchRepository publicSearchRepository;
     private final PublisherRepository publisherRepository;
     private final OpdsPublicationMapper publicationMapper;
     private final CatalogueUrlBuilder catalogueUrlBuilder;
 
     public OpdsPublicationFeed catalogueFeed(PageQuery page) {
-        List<CatalogueItem> items = catalogueItemRepository.findByAccessTierAndStatusAndContentState(
+        List<CatalogueItem> items = catalogueItemStore.findByAccessTierAndStatusAndContentState(
                 AccessTier.OPEN_ACCESS, ItemStatus.PUBLISHED, ContentState.READY,
                 Sort.by(Sort.Direction.DESC, "publishedAt"));
 
@@ -148,7 +148,7 @@ public class OpdsPublicFeedService {
 
 
     public OpdsPublicationDocument publicationDocument(String itemId) {
-        CatalogueItem item = catalogueItemRepository.findById(itemId)
+        CatalogueItem item = catalogueItemStore.findById(itemId)
                 .filter(candidate -> candidate.getStatus() == ItemStatus.PUBLISHED)
                 .filter(candidate -> candidate.getContentState() == ContentState.READY)
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "No such item"));

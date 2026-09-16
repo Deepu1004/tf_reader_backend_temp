@@ -7,8 +7,8 @@ import com.tf.reader.catalogue.entity.Entitlement;
 import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.catalogue.entity.ScopeType;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
+import com.tf.reader.catalogue.service.CatalogueItemStore;
 import com.tf.reader.catalogue.service.InstitutionCatalogueSummaryService;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -25,13 +25,13 @@ import static org.mockito.Mockito.when;
 /** Checks the accessible-item count against the cases most likely to get it wrong. */
 class InstitutionCatalogueSummaryServiceTest {
 
-    private CatalogueItemRepository items;
+    private CatalogueItemStore items;
     private EntitlementRepository entitlements;
     private InstitutionCatalogueSummaryService summary;
 
     @BeforeEach
     void setUp() {
-        items = mock(CatalogueItemRepository.class);
+        items = mock(CatalogueItemStore.class);
         entitlements = mock(EntitlementRepository.class);
         summary = new InstitutionCatalogueSummaryService(items, entitlements);
 

@@ -22,10 +22,10 @@ import com.tf.reader.admin.security.AdminScopeAuthorizer;
 import com.tf.reader.catalogue.entity.Entitlement;
 import com.tf.reader.catalogue.entity.EntitlementStatus;
 import com.tf.reader.catalogue.entity.Publisher;
-import com.tf.reader.catalogue.repository.BookCollectionRepository;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
 import com.tf.reader.catalogue.repository.EntitlementRepository;
 import com.tf.reader.catalogue.repository.PublisherRepository;
+import com.tf.reader.catalogue.service.BookCollectionStore;
+import com.tf.reader.catalogue.service.CatalogueItemStore;
 import com.tf.reader.catalogue.service.CatalogueVersionBumper;
 import com.tf.reader.common.audit.AdminAuditWriter;
 import com.tf.reader.common.audit.AuditLog;
@@ -63,8 +63,8 @@ public class PublisherAdminService {
 			EntitlementStatus.SUSPENDED, EntitlementStatus.PENDING, EntitlementStatus.ACTIVE);
 
 	private final PublisherRepository publisherRepository;
-	private final CatalogueItemRepository catalogueItemRepository;
-	private final BookCollectionRepository bookCollectionRepository;
+	private final CatalogueItemStore catalogueItemStore;
+	private final BookCollectionStore bookCollectionStore;
 	private final EntitlementRepository entitlementRepository;
 	private final CatalogueVersionBumper catalogueVersionBumper;
 	private final AdminAuditWriter auditWriter;
@@ -277,8 +277,8 @@ public class PublisherAdminService {
 	}
 
 	private PublisherView toView(Publisher p, boolean institutionView, EntitlementStatus status) {
-		long itemCount = catalogueItemRepository.countByPublisherId(p.getId());
-		long collectionCount = bookCollectionRepository.countByPublisherId(p.getId());
+		long itemCount = catalogueItemStore.countByPublisherId(p.getId());
+		long collectionCount = bookCollectionStore.countByPublisherId(p.getId());
 		String entitlementStatusLabel = !institutionView ? null : (status == null ? "NONE" : status.name());
 		return new PublisherView(p.getId(), p.getCode(), p.getName(), p.getDescription(), p.getLogoUrl(), p.getStatus(),
 				itemCount, collectionCount, p.getCreatedAt(), entitlementStatusLabel);

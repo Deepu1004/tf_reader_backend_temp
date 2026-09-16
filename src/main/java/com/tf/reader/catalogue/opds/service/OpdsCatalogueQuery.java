@@ -20,7 +20,7 @@ import com.tf.reader.catalogue.opds.dto.OpdsFeedMetadata;
 import com.tf.reader.catalogue.opds.dto.OpdsLink;
 import com.tf.reader.catalogue.opds.dto.OpdsPublication;
 import com.tf.reader.catalogue.opds.dto.OpdsPublicationFeed;
-import com.tf.reader.catalogue.repository.CatalogueItemRepository;
+import com.tf.reader.catalogue.service.CatalogueItemStore;
 import com.tf.reader.catalogue.repository.FeedSettingsRepository;
 import com.tf.reader.catalogue.service.CatalogueUrlBuilder;
 import com.tf.reader.common.error.ApiException;
@@ -38,7 +38,7 @@ class OpdsCatalogueQuery {
     static final String ALL_GROUP_ID = "all";
     private static final String OPDS_MEDIA_TYPE = "application/opds+json";
 
-    private final CatalogueItemRepository catalogueItemRepository;
+    private final CatalogueItemStore catalogueItemStore;
     private final FeedSettingsRepository feedSettingsRepository;
     private final OpdsEntitlementFilter entitlementFilter;
     private final CatalogueUrlBuilder catalogueUrlBuilder;
@@ -47,7 +47,7 @@ class OpdsCatalogueQuery {
             ContentType contentTypeFilter, AccessTier accessTierFilter) {
         String institutionId = institution.getId();
         Sort sort = resolveSort(sortParam, institutionId);
-        List<CatalogueItem> candidates = catalogueItemRepository
+        List<CatalogueItem> candidates = catalogueItemStore
                 .findByStatusAndContentState(ItemStatus.PUBLISHED, ContentState.READY, sort).stream()
                 .filter(item -> contentTypeFilter == null || item.getContentType() == contentTypeFilter)
                 .filter(item -> accessTierFilter == null || item.getAccessTier() == accessTierFilter)
