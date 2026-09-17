@@ -45,6 +45,7 @@ class OpdsPublicationMapper {
     // type lives in properties.indirectAcquisition[0].type instead (wokay-api.yaml).
     private static final String ACQUISITION_LINK_TYPE = "application/json";
     private static final String PUBLICATION_LINK_TYPE = "application/opds-publication+json";
+    private static final String NAVIGATION_LINK_TYPE = "application/opds+json";
     private static final String ENCRYPTION_ALGORITHM = "http://www.w3.org/2009/xmlenc11#aes256-gcm";
     private static final String SUBSCRIBE_LINK_TITLE = "Available through your institution";
 
@@ -61,6 +62,19 @@ class OpdsPublicationMapper {
             Map<String, Publisher> publishersById) {
         return toPublicationWithSelfHref(item, decision,
                 catalogueUrlBuilder.publicationUrlFor(institutionId, item.getId()), publishersById);
+    }
+
+    /**
+     * A journal (or any other container) has no content of its own to acquire - only a cover and
+     * a way to browse into it - so this skips {@link #acquisitionLink}, which assumes every item
+     * has an {@link EntitlementDecision} and a downloadable asset. Follows OPDS 2.0's rule that
+     * images belong on a Publication, never on a plain navigation link - the frontend gets a
+     * journal's cover the same way it already gets a book's, just from this container shape.
+     */
+    OpdsPublication toContainerPublication(CatalogueItem item, String subsectionHref,
+            Map<String, Publisher> publishersById) {
+        List<OpdsLink> links = List.of(new OpdsLink("subsection", subsectionHref, NAVIGATION_LINK_TYPE, item.getTitle()));
+        return new OpdsPublication(metadata(item, publishersById), links, coverImages(item));
     }
 
 

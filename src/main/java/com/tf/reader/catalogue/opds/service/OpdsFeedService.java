@@ -19,6 +19,7 @@ import com.tf.reader.catalogue.entity.ContentType;
 import com.tf.reader.catalogue.entity.FeedSettings;
 import com.tf.reader.catalogue.entity.Institution;
 import com.tf.reader.catalogue.entity.ItemStatus;
+import com.tf.reader.catalogue.entity.Publisher;
 import com.tf.reader.catalogue.entity.Shelf;
 import com.tf.reader.catalogue.entity.WorkType;
 import com.tf.reader.catalogue.opds.dto.OpdsFeedMetadata;
@@ -31,6 +32,7 @@ import com.tf.reader.catalogue.opds.dto.OpdsPublicationDocument;
 import com.tf.reader.catalogue.opds.dto.OpdsPublicationFeed;
 import com.tf.reader.catalogue.repository.FeedSettingsRepository;
 import com.tf.reader.catalogue.repository.InstitutionSearchRepository;
+import com.tf.reader.catalogue.repository.PublisherRepository;
 import com.tf.reader.catalogue.service.CatalogueItemStore;
 import com.tf.reader.catalogue.service.CatalogueUrlBuilder;
 import com.tf.reader.common.error.ApiException;
@@ -59,6 +61,8 @@ public class OpdsFeedService {
     private final OpdsCatalogueQuery catalogueQuery;
     private final OpdsSearchQuery searchQuery;
     private final CatalogueUrlBuilder catalogueUrlBuilder;
+    private final PublisherRepository publisherRepository;
+    private final OpdsPublicationMapper publicationMapper;
 
     /**
      * ACTIVE only, and NOT_FOUND rather than a 403 when it is not - a suspended institution has to
@@ -81,12 +85,12 @@ public class OpdsFeedService {
         Optional<FeedSettings> settings = feedSettingsRepository.findByInstitutionId(institutionId);
         List<Shelf> shelves = settings.map(FeedSettings::getShelves).orElse(List.of());
 
-        List<OpdsGroup> groups = shelves.stream()
+        List<OpdsGroup> groups = new ArrayList<>(shelves.stream()
         .sorted(Comparator.comparingInt(Shelf::getOrder))
         .limit(3)
         .map(shelf -> buildGroup(shelf, institutionId, subject))
         .filter(Objects::nonNull)
-        .toList();
+        .toList());
 
         List<OpdsLink> links = List.of(
                 new OpdsLink("self", catalogueUrlBuilder.catalogueUrlFor(institutionId), OPDS_MEDIA_TYPE),
@@ -98,11 +102,21 @@ public class OpdsFeedService {
                 "All titles"));
         // Additive signpost: a top-level Journal alongside the curated shelves. No schema
         // change - one more OpdsLink in the same navigation array a client already iterates.
-        catalogueItemStore.findByWorkTypeAndStatus(WorkType.JOURNAL, ItemStatus.PUBLISHED).stream()
+        List<CatalogueItem> journals = catalogueItemStore
+                .findByWorkTypeAndStatus(WorkType.JOURNAL, ItemStatus.PUBLISHED).stream()
                 .sorted(Comparator.comparing(CatalogueItem::getSequence, Comparator.nullsLast(Integer::compareTo)))
-                .forEach(journal -> navigation.add(new OpdsLink("subsection",
-                        catalogueUrlBuilder.workUrlFor(institutionId, journal.getId()), OPDS_MEDIA_TYPE,
-                        journal.getTitle())));
+                .toList();
+        journals.forEach(journal -> navigation.add(new OpdsLink("subsection",
+                catalogueUrlBuilder.workUrlFor(institutionId, journal.getId()), OPDS_MEDIA_TYPE,
+                journal.getTitle())));
+        // A plain OpdsLink has no room for a cover (OPDS 2.0 only attaches images to a
+        // Publication), so this adds a second, additive way to reach the same journals - a
+        // group of lightweight Publications, cover included - without changing the navigation
+        // shape a client already reads.
+        OpdsGroup journalsGroup = buildJournalsGroup(journals, institutionId);
+        if (journalsGroup != null) {
+            groups.add(journalsGroup);
+        }
 
         String title = settings.map(FeedSettings::getFeedTitle).filter(t -> !t.isBlank())
                 .orElse(institution.getName());
@@ -126,6 +140,28 @@ public class OpdsFeedService {
                 OPDS_MEDIA_TYPE, "Open this shelf");
         List<OpdsPublication> preview = entitled.stream().limit(GROUP_PREVIEW_SIZE).toList();
         return new OpdsGroup(metadata, List.of(self), preview);
+    }
+
+    /**
+     * A journal carries no acquisition/entitlement of its own - only its articles do - so this
+     * builds each one as a lightweight container {@link OpdsPublication} directly, rather than
+     * going through {@link OpdsEntitlementFilter}, which assumes a real entitlement decision.
+     * {@code links} on the group itself is omitted rather than pointing at a
+     * {@code /groups/{groupId}} endpoint that doesn't exist for journals - each journal's own
+     * {@code subsection} link is already the way to browse into it.
+     */
+    private OpdsGroup buildJournalsGroup(List<CatalogueItem> journals, String institutionId) {
+        if (journals.isEmpty()) {
+            return null;
+        }
+        Map<String, Publisher> publishersById = publisherRepository
+                .findAllById(journals.stream().map(CatalogueItem::getPublisherId).distinct().toList()).stream()
+                .collect(Collectors.toMap(Publisher::getId, p -> p));
+        List<OpdsPublication> publications = journals.stream()
+                .map(journal -> publicationMapper.toContainerPublication(journal,
+                        catalogueUrlBuilder.workUrlFor(institutionId, journal.getId()), publishersById))
+                .toList();
+        return new OpdsGroup(new OpdsGroupMetadata("Journals", publications.size()), null, publications);
     }
 
     public OpdsPublicationFeed groupFeed(Institution institution, String groupId, SubjectRef subject,

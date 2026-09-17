@@ -221,12 +221,18 @@ class OpdsFeedServiceIT extends ContainerisedInfrastructure {
 	}
 
 	@Test
-	void rootFeedOmitsGroupsEntirelyWhenNoShelfHasBeenCurated() {
+	void rootFeedGroupsCarryOnlyJournalsWhenNoShelfHasBeenCurated() {
 		Institution institution = newInstitution("OPDS-ROOT-NOSHELF");
 
 		OpdsNavigationFeed feed = feedService.rootFeed(institution, subjectFor(institution));
 
-		assertThat(feed.groups()).isNull();
+		// Journals are global, not scoped to one institution, so this shared, never-reset
+		// container may already have some from other tests - a "Journals" group (see
+		// buildJournalsGroup) is allowed to appear even with zero curated shelves, but nothing
+		// shelf-derived should.
+		if (feed.groups() != null) {
+			assertThat(feed.groups()).extracting(g -> g.metadata().title()).containsOnly("Journals");
+		}
 		// "All titles" plus whatever JOURNAL signposts already exist in this shared, never-reset
 		// container from other tests - journals are global, not scoped to one institution, so
 		// this cannot assert an exactly-closed list the way it could before journals existed.
@@ -341,6 +347,26 @@ class OpdsFeedServiceIT extends ContainerisedInfrastructure {
 				.orElseThrow(() -> new AssertionError("expected a next link since more than one page exists"))
 				.href();
 		assertThat(next).contains("page=1", "size=1", "sort=title.asc", "contentType=EPUB", "accessTier=OPEN_ACCESS");
+	}
+
+	@Test
+	void allGroupExcludesArticlesThatBelongToAnIssue() {
+		Institution institution = newInstitution("OPDS-ALL-ARTICLE");
+		Publisher publisher = newPublisher("OPDS-ALL-ARTICLE-PUB");
+		newItem(publisher.getId(), "Standalone Book", AccessTier.OPEN_ACCESS);
+		CatalogueItem issue = newContainer(publisher.getId(), com.tf.reader.catalogue.entity.WorkType.ISSUE, null,
+				"Issue With An Article");
+		CatalogueItem article = newItem(publisher.getId(), "Child Article", AccessTier.OPEN_ACCESS);
+		article.setWorkType(com.tf.reader.catalogue.entity.WorkType.ARTICLE);
+		article.setParentId(issue.getId());
+		catalogueItemRepository.save(article);
+
+		OpdsPublicationFeed feed = feedService.groupFeed(institution, "all", subjectFor(institution),
+				new PageQuery(0, 100), null, null, null);
+
+		assertThat(feed.publications()).extracting(p -> p.metadata().title())
+				.contains("Standalone Book")
+				.doesNotContain("Child Article");
 	}
 
 	// ----------------------------------------------------------------------------------- search
@@ -541,6 +567,56 @@ class OpdsFeedServiceIT extends ContainerisedInfrastructure {
 		item.setStatus(ItemStatus.PUBLISHED);
 		item.setUpdatedAt(Instant.parse("2026-08-10T09:00:00Z"));
 		return catalogueItemRepository.save(item);
+	}
+
+	@Test
+	void rootFeedGivesEachJournalACoverImageAlongsideItsUnchangedNavigationEntry() {
+		Institution institution = newInstitution("OPDS-ROOT-JOURNAL-COVER");
+		Publisher publisher = newPublisher("OPDS-ROOT-JOURNAL-COVER-PUB");
+		CatalogueItem journal = newContainer(publisher.getId(), com.tf.reader.catalogue.entity.WorkType.JOURNAL, null,
+				"Journal With A Cover");
+		journal.setCoverKey("items/" + journal.getId() + "/cover");
+		journal.setCoverMimeType("image/jpeg");
+		catalogueItemRepository.save(journal);
+
+		OpdsNavigationFeed feed = feedService.rootFeed(institution, subjectFor(institution));
+
+		// The navigation entry stays exactly as before this change - a plain signpost. OpdsLink
+		// has no images field at all (see OpdsNavigationLink's schema), so there is nothing more
+		// to assert here beyond the shape being unchanged - proving this is additive, not a
+		// replacement of the existing navigation entry.
+		assertThat(feed.navigation()).filteredOn(l -> l.title().equals("Journal With A Cover")).singleElement()
+				.satisfies(link -> assertThat(link.rel()).isEqualTo("subsection"));
+
+		// The same journal also appears in a new "Journals" group, this time as a lightweight
+		// Publication carrying its cover - the only place OPDS 2.0 allows an image to live.
+		var journalsGroup = feed.groups().stream().filter(g -> g.metadata().title().equals("Journals")).findFirst()
+				.orElseThrow(() -> new AssertionError("no Journals group in " + feed.groups()));
+		var publication = journalsGroup.publications().stream()
+				.filter(p -> p.metadata().title().equals("Journal With A Cover")).findFirst()
+				.orElseThrow(() -> new AssertionError("journal missing from Journals group"));
+		assertThat(publication.images()).isNotNull().hasSize(1);
+		assertThat(publication.images().get(0).href()).contains(journal.getCoverKey());
+		assertThat(publication.images().get(0).type()).isEqualTo("image/jpeg");
+		assertThat(publication.links()).singleElement().satisfies(link -> {
+			assertThat(link.rel()).isEqualTo("subsection");
+			assertThat(link.href()).contains(journal.getId());
+		});
+	}
+
+	@Test
+	void rootFeedJournalWithNoCoverStillAppearsWithoutImages() {
+		Institution institution = newInstitution("OPDS-ROOT-JOURNAL-NOCOVER");
+		Publisher publisher = newPublisher("OPDS-ROOT-JOURNAL-NOCOVER-PUB");
+		newContainer(publisher.getId(), com.tf.reader.catalogue.entity.WorkType.JOURNAL, null,
+				"Journal With No Cover");
+
+		OpdsNavigationFeed feed = feedService.rootFeed(institution, subjectFor(institution));
+
+		var publication = feed.groups().stream().filter(g -> g.metadata().title().equals("Journals")).findFirst()
+				.orElseThrow().publications().stream().filter(p -> p.metadata().title().equals("Journal With No Cover"))
+				.findFirst().orElseThrow();
+		assertThat(publication.images()).isNull();
 	}
 
 	@Test

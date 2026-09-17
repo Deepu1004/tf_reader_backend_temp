@@ -49,6 +49,7 @@ class OpdsCatalogueQuery {
         Sort sort = resolveSort(sortParam, institutionId);
         List<CatalogueItem> candidates = catalogueItemStore
                 .findByStatusAndContentState(ItemStatus.PUBLISHED, ContentState.READY, sort).stream()
+                .filter(item -> item.getParentId() == null)
                 .filter(item -> contentTypeFilter == null || item.getContentType() == contentTypeFilter)
                 .filter(item -> accessTierFilter == null || item.getAccessTier() == accessTierFilter)
                 .toList();
