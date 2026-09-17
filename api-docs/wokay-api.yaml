@@ -927,6 +927,50 @@ paths:
                 path: /opds/v1/public/publications/item_999
                 traceId: b7c1f2a9
 
+  /opds/v1/public/works/{workId}:
+    get:
+      tags: [Catalogue feed]
+      operationId: getPublicWorkFeed
+      summary: A Journal/Volume's children, or an Issue's open-access Articles
+      description: |
+        The no-institution mirror of `GET /opds/v1/institutions/{institutionId}/works/{workId}`.
+        Additive, new endpoint.
+
+        `workId` is a `CatalogueItem` whose `workType` is `JOURNAL`, `VOLUME` or `ISSUE`.
+
+        | `workType` | Returns |
+        |---|---|
+        | `JOURNAL`, `VOLUME` | `OpdsNavigationFeed` - one link per child, ordered by `sequence` |
+        | `ISSUE` | `OpdsPublicationFeed` - its `OPEN_ACCESS` `ARTICLE` children only |
+
+        There is no signed-in reader here, so unlike the authenticated route, an `ISSUE`'s
+        `SUBSCRIPTION`/`ELITE` articles are excluded outright rather than carrying a
+        `subscribe` link - the same open-access-only rule `GET /opds/v1/public/catalogue`
+        already applies.
+
+        `404` if `workId` doesn't resolve, resolves to a `BOOK`/`ARTICLE` (leaves, not valid
+        here), or resolves to something not `PUBLISHED` - same indistinguishable-404 rule
+        every other OPDS route follows.
+      x-stability: DRAFT
+      x-called-by: [team1]
+      security: []
+      parameters:
+        - name: workId
+          in: path
+          required: true
+          schema: { type: string }
+          example: journal_1
+      responses:
+        '200':
+          description: Navigation (Journal/Volume) or a publication feed (Issue)
+          content:
+            application/opds+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/OpdsNavigationFeed'
+                  - $ref: '#/components/schemas/OpdsPublicationFeed'
+        '404': { $ref: '#/components/responses/NotFound' }
+
   # ────────────────────────────────────────────────────────────────
   # CATALOGUE FETCH
   # ────────────────────────────────────────────────────────────────
