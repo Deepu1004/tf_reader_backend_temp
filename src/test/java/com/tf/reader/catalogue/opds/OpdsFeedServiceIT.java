@@ -177,11 +177,15 @@ class OpdsFeedServiceIT extends ContainerisedInfrastructure {
 
 		OpdsNavigationFeed feed = feedService.rootFeed(institution, subjectFor(institution));
 
-		assertThat(feed.navigation()).extracting(l -> l.title()).containsExactly("All titles");
-		assertThat(feed.groups()).hasSize(1);
-		assertThat(feed.groups().get(0).metadata().title()).isEqualTo("New this term");
-		assertThat(feed.groups().get(0).publications()).hasSize(1);
-		assertThat(feed.groups().get(0).publications().get(0).metadata().title()).isEqualTo("Free Book");
+		// contains, not containsExactly - journals are global, not scoped to this institution, so
+		// this shared, never-reset container may already have some from other tests.
+		assertThat(feed.navigation()).extracting(l -> l.title()).contains("All titles");
+		// find, not get(0) - a "Journals" group may also be present, same shared-container
+		// reason as the navigation assertion above.
+		var shelfGroup = feed.groups().stream().filter(g -> g.metadata().title().equals("New this term"))
+				.findFirst().orElseThrow();
+		assertThat(shelfGroup.publications()).hasSize(1);
+		assertThat(shelfGroup.publications().get(0).metadata().title()).isEqualTo("Free Book");
 	}
 
 	@Test

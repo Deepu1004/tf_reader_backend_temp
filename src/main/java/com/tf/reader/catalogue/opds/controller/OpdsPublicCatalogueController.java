@@ -74,6 +74,14 @@ public class OpdsPublicCatalogueController {
         return ok(publicFeedService.publicationDocument(itemId));
     }
 
+    // DRAFT, additive: a Journal/Volume's children (navigation) or an Issue's open-access
+    // Article children (a publication feed) - the no-institution mirror of the authenticated
+    // works/{workId} endpoint.
+    @GetMapping(value = "/works/{workId}", produces = OPDS_MEDIA_TYPE)
+    public ResponseEntity<Object> work(@PathVariable String workId) {
+        return ok(publicFeedService.workFeed(workId));
+    }
+
     private <T> ResponseEntity<T> ok(T body) {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.maxAge(Duration.ofMinutes(5)).cachePublic())

@@ -89,7 +89,10 @@ class AuthorizationCoverageTest {
 			"GET /api/v1/institutions/{institutionId}",
 			"GET /opds/v1/public/catalogue",
 			"GET /opds/v1/public/search",
-			"GET /opds/v1/public/publications/{itemId}");
+			"GET /opds/v1/public/publications/{itemId}",
+			// The no-institution mirror of the same public discovery feed above - browsing into
+			// a Journal/Volume/Issue with no sign-in, same reasoning as the public catalogue.
+			"GET /opds/v1/public/works/{workId}");
 
 	/** Only our own controllers. Spring's {@code /error} forward target is not ours to protect. */
 	private static final String OUR_PACKAGE = "com.tf.reader";

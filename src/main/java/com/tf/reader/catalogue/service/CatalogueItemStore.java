@@ -71,6 +71,9 @@ public class CatalogueItemStore {
 	private final MongoConverter mongoConverter;
 	private final Clock clock;
 
+	private static final List<WorkType> NON_TOP_LEVEL_WORK_TYPES = List.of(WorkType.ARTICLE, WorkType.VOLUME,
+			WorkType.ISSUE);
+
 	/**
 	 * @throws IllegalArgumentException if {@code item.getPublisherId()} does not reference an
 	 *         existing publisher - the same check {@code CatalogueItemPersistenceGuard} makes for
@@ -244,6 +247,26 @@ public class CatalogueItemStore {
 		for (Publisher publisher : publisherRepository.findByMongoUriIsNotNull()) {
 			items.addAll(templateFor(publisher)
 					.find(Query.query(Criteria.where("accessTier").is(accessTier).and("status").is(status)
+							.and("contentState").is(contentState)), CatalogueItem.class));
+		}
+		return sortInMemory(items, sort);
+	}
+
+	/**
+	 * Same fan-out, for the anonymous public catalogue's top-level view: everything
+	 * {@link #findByAccessTierAndStatusAndContentState} already filters, minus a container's own
+	 * children - a JOURNAL stays (it's the top-level signpost), its ARTICLE/VOLUME/ISSUE
+	 * descendants don't surface here directly.
+	 */
+	public List<CatalogueItem> findTopLevelByAccessTierAndStatusAndContentState(AccessTier accessTier,
+			ItemStatus status, ContentState contentState, Sort sort) {
+		List<CatalogueItem> items = new ArrayList<>(catalogueItemRepository
+				.findByWorkTypeNotInAndAccessTierAndStatusAndContentState(NON_TOP_LEVEL_WORK_TYPES, accessTier,
+						status, contentState, Sort.unsorted()));
+		for (Publisher publisher : publisherRepository.findByMongoUriIsNotNull()) {
+			items.addAll(templateFor(publisher)
+					.find(Query.query(Criteria.where("workType").nin(NON_TOP_LEVEL_WORK_TYPES)
+							.and("accessTier").is(accessTier).and("status").is(status)
 							.and("contentState").is(contentState)), CatalogueItem.class));
 		}
 		return sortInMemory(items, sort);
