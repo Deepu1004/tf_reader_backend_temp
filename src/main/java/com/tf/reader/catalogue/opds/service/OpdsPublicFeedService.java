@@ -3,6 +3,7 @@ package com.tf.reader.catalogue.opds.service;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -18,6 +19,7 @@ import com.tf.reader.catalogue.entity.ContentState;
 import com.tf.reader.catalogue.entity.ContentType;
 import com.tf.reader.catalogue.entity.ItemStatus;
 import com.tf.reader.catalogue.entity.Publisher;
+import com.tf.reader.catalogue.entity.WorkType;
 import com.tf.reader.catalogue.opds.dto.OpdsFeedMetadata;
 import com.tf.reader.catalogue.opds.dto.OpdsLink;
 import com.tf.reader.catalogue.opds.dto.OpdsPublication;
@@ -40,6 +42,7 @@ public class OpdsPublicFeedService {
 
     private static final String OPDS_MEDIA_TYPE = "application/opds+json";
     private static final String FEED_TITLE = "Open access catalogue";
+    private static final String JOURNALS_FEED_TITLE = "Journals";
     private static final EntitlementDecision OPEN_ACCESS_DECISION =
             new EntitlementDecision(true, AccessLevel.OPEN_ACCESS, null, null, 0, null, null);
 
@@ -50,9 +53,17 @@ public class OpdsPublicFeedService {
     private final CatalogueUrlBuilder catalogueUrlBuilder;
 
     public OpdsPublicationFeed catalogueFeed(PageQuery page) {
+        // ARTICLE excluded: a journal article is never covered (only the JOURNAL container it
+        // belongs to has a cover - see journalsFeed()), so mixing bare articles into this feed
+        // produced a grid that was mostly cover-less. Not filtered to `== BOOK`, deliberately: two
+        // legacy dev fixtures predate the workType field and carry `null`, and still have real
+        // covers - excluding only the one type that is actually never covered is what keeps them.
         List<CatalogueItem> items = catalogueItemStore.findByAccessTierAndStatusAndContentState(
                 AccessTier.OPEN_ACCESS, ItemStatus.PUBLISHED, ContentState.READY,
-                Sort.by(Sort.Direction.DESC, "publishedAt"));
+                Sort.by(Sort.Direction.DESC, "publishedAt"))
+                .stream()
+                .filter(item -> item.getWorkType() != WorkType.ARTICLE)
+                .toList();
 
         int from = Math.min(page.page() * page.size(), items.size());
         int to = Math.min(from + page.size(), items.size());
@@ -75,6 +86,38 @@ public class OpdsPublicFeedService {
             return new OpdsPublicationFeed(metadata, links, null, List.of(back));
         }
         return new OpdsPublicationFeed(metadata, links, publications, null);
+    }
+
+    /**
+     * Every published journal, as a flat list of container publications - the anonymous
+     * counterpart to {@code OpdsFeedService.rootFeed()}'s "Journals" group, minus the institution
+     * it doesn't have. A journal carries no acquisition/entitlement of its own (same reasoning as
+     * {@code buildJournalsGroup}'s own doc), so unlike {@link #catalogueFeed}, there is no
+     * entitlement decision to attach and no reason to page a handful of journals.
+     */
+    public OpdsPublicationFeed journalsFeed() {
+        List<CatalogueItem> journals = catalogueItemStore
+                .findByWorkTypeAndStatus(WorkType.JOURNAL, ItemStatus.PUBLISHED).stream()
+                .sorted(Comparator.comparing(CatalogueItem::getSequence, Comparator.nullsLast(Integer::compareTo)))
+                .toList();
+
+        Map<String, Publisher> publishersById = publisherRepository
+                .findAllById(journals.stream().map(CatalogueItem::getPublisherId).distinct().toList()).stream()
+                .collect(Collectors.toMap(Publisher::getId, p -> p));
+        List<OpdsPublication> publications = journals.stream()
+                .map(journal -> publicationMapper.toContainerPublication(journal,
+                        catalogueUrlBuilder.publicWorkUrlFor(journal.getId()), publishersById))
+                .toList();
+
+        OpdsFeedMetadata metadata = new OpdsFeedMetadata(JOURNALS_FEED_TITLE, publications.size(), null, null, null);
+        OpdsLink self = new OpdsLink("self", catalogueUrlBuilder.publicJournalsUrlFor(), OPDS_MEDIA_TYPE);
+
+        if (publications.isEmpty()) {
+            OpdsLink back = new OpdsLink("subsection", catalogueUrlBuilder.publicCatalogueUrlFor(), OPDS_MEDIA_TYPE,
+                    "Back to catalogue");
+            return new OpdsPublicationFeed(metadata, List.of(self), null, List.of(back));
+        }
+        return new OpdsPublicationFeed(metadata, List.of(self), publications, null);
     }
 
     private List<OpdsLink> pageLinks(PageQuery page, boolean hasNext) {
