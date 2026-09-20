@@ -22,6 +22,7 @@ import com.tf.reader.catalogue.entity.Publisher;
 import com.tf.reader.catalogue.entity.WorkType;
 import com.tf.reader.catalogue.opds.dto.OpdsFeedMetadata;
 import com.tf.reader.catalogue.opds.dto.OpdsLink;
+import com.tf.reader.catalogue.opds.dto.OpdsNavigationFeed;
 import com.tf.reader.catalogue.opds.dto.OpdsPublication;
 import com.tf.reader.catalogue.opds.dto.OpdsPublicationDocument;
 import com.tf.reader.catalogue.opds.dto.OpdsPublicationFeed;
@@ -53,11 +54,13 @@ public class OpdsPublicFeedService {
     private final CatalogueUrlBuilder catalogueUrlBuilder;
 
     public OpdsPublicationFeed catalogueFeed(PageQuery page) {
-        // ARTICLE excluded: a journal article is never covered (only the JOURNAL container it
-        // belongs to has a cover - see journalsFeed()), so mixing bare articles into this feed
-        // produced a grid that was mostly cover-less. Not filtered to `== BOOK`, deliberately: two
-        // legacy dev fixtures predate the workType field and carry `null`, and still have real
-        // covers - excluding only the one type that is actually never covered is what keeps them.
+        // ARTICLE excluded: articles belong to their JOURNAL's own drill-down (journalsFeed() ->
+        // workFeed() -> Volumes -> Issues -> Articles), not to a flat "every open access thing"
+        // list mixed in with books - see this class's own header note for the reasoning (a bare
+        // article has no cover of its own besides, only its ancestor journal does). Not filtered
+        // to `== BOOK`, deliberately: two legacy dev fixtures predate the workType field and
+        // carry `null`, and still have real covers - excluding only the one type that is
+        // actually a journal article is what keeps them.
         List<CatalogueItem> items = catalogueItemStore.findByAccessTierAndStatusAndContentState(
                 AccessTier.OPEN_ACCESS, ItemStatus.PUBLISHED, ContentState.READY,
                 Sort.by(Sort.Direction.DESC, "publishedAt"))
@@ -202,5 +205,66 @@ public class OpdsPublicFeedService {
         OpdsPublication publication = publicationMapper.toDiscoveryPublication(item,
                 catalogueUrlBuilder.publicPublicationUrlFor(item.getId()), publishersById);
         return new OpdsPublicationDocument(publication);
+    }
+
+    /**
+     * The anonymous counterpart to {@code OpdsFeedService.workFeed} — a JOURNAL/VOLUME returns
+     * navigation (one link per child, at its own {@code public/works/{id}}); an ISSUE returns a
+     * publication feed of its ARTICLE children. Unlike the institution-scoped version, there is
+     * no {@code EntitlementQuery} call at all: every article is mapped through
+     * {@link OpdsPublicationMapper#toDiscoveryPublication}, the same discovery-search mapper that
+     * already gives an OPEN_ACCESS item a real acquisition link and anything else a subscribe
+     * link — exactly what an anonymous caller needs, since there is no subject to check against.
+     * 404 for anything not a JOURNAL/VOLUME/ISSUE, or not PUBLISHED — same indistinguishable-404
+     * rule the rest of OPDS already uses.
+     */
+    public Object workFeed(String workId) {
+        CatalogueItem work = catalogueItemStore.findById(workId)
+                .filter(item -> item.getStatus() == ItemStatus.PUBLISHED)
+                .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "No such work"));
+        WorkType workType = work.getWorkType();
+
+        if (workType == WorkType.JOURNAL || workType == WorkType.VOLUME) {
+            List<CatalogueItem> children = catalogueItemStore.findByParentId(workId).stream()
+                    .filter(child -> child.getStatus() == ItemStatus.PUBLISHED)
+                    .sorted(Comparator.comparing(CatalogueItem::getSequence, Comparator.nullsLast(Integer::compareTo)))
+                    .toList();
+            List<OpdsLink> navigation = children.stream()
+                    .map(child -> new OpdsLink("subsection", catalogueUrlBuilder.publicWorkUrlFor(child.getId()),
+                            OPDS_MEDIA_TYPE, child.getTitle()))
+                    .toList();
+            OpdsLink self = new OpdsLink("self", catalogueUrlBuilder.publicWorkUrlFor(workId), OPDS_MEDIA_TYPE);
+            OpdsFeedMetadata metadata = new OpdsFeedMetadata(work.getTitle(), navigation.size(), null, null,
+                    work.getUpdatedAt());
+            return new OpdsNavigationFeed(metadata, List.of(self), navigation, null);
+        }
+
+        if (workType == WorkType.ISSUE) {
+            List<CatalogueItem> articles = catalogueItemStore.findByParentId(workId).stream()
+                    .filter(child -> child.getStatus() == ItemStatus.PUBLISHED
+                            && child.getContentState() == ContentState.READY)
+                    .sorted(Comparator.comparing(CatalogueItem::getSequence, Comparator.nullsLast(Integer::compareTo)))
+                    .toList();
+            Map<String, Publisher> publishersById = publisherRepository
+                    .findAllById(articles.stream().map(CatalogueItem::getPublisherId).distinct().toList()).stream()
+                    .collect(Collectors.toMap(Publisher::getId, p -> p));
+            List<OpdsPublication> publications = articles.stream()
+                    .map(article -> publicationMapper.toDiscoveryPublication(article,
+                            catalogueUrlBuilder.publicPublicationUrlFor(article.getId()), publishersById))
+                    .toList();
+            OpdsLink self = new OpdsLink("self", catalogueUrlBuilder.publicWorkUrlFor(workId), OPDS_MEDIA_TYPE);
+            OpdsFeedMetadata metadata = new OpdsFeedMetadata(work.getTitle(), publications.size(), null, null,
+                    work.getUpdatedAt());
+            if (publications.isEmpty()) {
+                // The OPDS schema forbids an empty publications array - a link back, same rule
+                // catalogueFeed()/journalsFeed() already follow.
+                List<OpdsLink> navigation = List.of(new OpdsLink("subsection",
+                        catalogueUrlBuilder.publicCatalogueUrlFor(), OPDS_MEDIA_TYPE, "Back to catalogue"));
+                return new OpdsPublicationFeed(metadata, List.of(self), null, navigation);
+            }
+            return new OpdsPublicationFeed(metadata, List.of(self), publications, null);
+        }
+
+        throw new ApiException(ErrorCode.NOT_FOUND, "No such work");
     }
 }

@@ -91,6 +91,7 @@ class AuthorizationCoverageTest {
 			"GET /opds/v1/public/journals",
 			"GET /opds/v1/public/search",
 			"GET /opds/v1/public/publications/{itemId}",
+			"GET /opds/v1/public/works/{workId}",
 			// OPEN_ACCESS content needs no institution and no sign-in at all (shared.md's "Three
 			// kinds of book, one set of words") - EntitlementQueryImpl still runs on every call and
 			// still denies a signed-out caller for anything that is not open access, so this is not
