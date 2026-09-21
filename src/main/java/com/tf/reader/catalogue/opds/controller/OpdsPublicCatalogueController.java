@@ -82,11 +82,9 @@ public class OpdsPublicCatalogueController {
         return ok(publicFeedService.publicationDocument(itemId));
     }
 
-    // The anonymous counterpart to OpdsCatalogueController's institution-scoped works/{workId} -
-    // browsing a journal's own volumes/issues/articles needs no institution and no sign-in, same
-    // reasoning as every other endpoint on this controller. Response body is one of two shapes
-    // (OpdsNavigationFeed or OpdsPublicationFeed) depending on the work's own type, so this
-    // returns Object the same way OpdsCatalogueController's workFeed already does.
+    // DRAFT, additive: a Journal/Volume's children (navigation) or an Issue's open-access
+    // Article children (a publication feed) - the no-institution mirror of the authenticated
+    // works/{workId} endpoint.
     @GetMapping(value = "/works/{workId}", produces = OPDS_MEDIA_TYPE)
     public ResponseEntity<Object> work(@PathVariable String workId) {
         return ok(publicFeedService.workFeed(workId));

@@ -33,6 +33,14 @@ public interface CatalogueItemRepository extends MongoRepository<CatalogueItem, 
 	List<CatalogueItem> findByAccessTierAndStatusAndContentState(AccessTier accessTier, ItemStatus status,
 			ContentState contentState, Sort sort);
 
+	// Backs the anonymous public catalogue's top-level view: everything findByAccessTier...
+	// already filters, minus a container's own children - a JOURNAL stays (it's the top-level
+	// signpost), its ARTICLE/VOLUME/ISSUE descendants don't surface here directly. NotIn rather
+	// than an explicit BOOK/JOURNAL allow-list because workType is null for every pre-hierarchy
+	// book, not literally "BOOK" - see CatalogueItem.workType.
+	List<CatalogueItem> findByWorkTypeNotInAndAccessTierAndStatusAndContentState(List<WorkType> excludedWorkTypes,
+			AccessTier accessTier, ItemStatus status, ContentState contentState, Sort sort);
+
 	Optional<CatalogueItem> findByIsbn(String isbn);
 
 	List<CatalogueItem> findAllBy(TextCriteria criteria);

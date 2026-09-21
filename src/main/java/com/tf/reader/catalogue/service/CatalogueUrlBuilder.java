@@ -66,6 +66,10 @@ public class CatalogueUrlBuilder {
         return baseUrl + "/opds/v1/public/search";
     }
 
+    public String publicWorkUrlFor(String workId) {
+        return baseUrl + "/opds/v1/public/works/" + workId;
+    }
+
     /** Where a book this caller cannot obtain sends them, per the {@code subscribe} link. */
     public String institutionsUrl() {
         return baseUrl + "/api/v1/institutions";

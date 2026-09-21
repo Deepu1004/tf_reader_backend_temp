@@ -91,12 +91,9 @@ class AuthorizationCoverageTest {
 			"GET /opds/v1/public/journals",
 			"GET /opds/v1/public/search",
 			"GET /opds/v1/public/publications/{itemId}",
-			"GET /opds/v1/public/works/{workId}",
-			// OPEN_ACCESS content needs no institution and no sign-in at all (shared.md's "Three
-			// kinds of book, one set of words") - EntitlementQueryImpl still runs on every call and
-			// still denies a signed-out caller for anything that is not open access, so this is not
-			// "anyone gets any book", only "an absent token reaches the controller at all".
-			"POST /api/v1/reading-sessions");
+			// The no-institution mirror of the same public discovery feed above - browsing into
+			// a Journal/Volume/Issue with no sign-in, same reasoning as the public catalogue.
+			"GET /opds/v1/public/works/{workId}");
 
 	/** Only our own controllers. Spring's {@code /error} forward target is not ours to protect. */
 	private static final String OUR_PACKAGE = "com.tf.reader";
