@@ -43,6 +43,14 @@ public class OpdsPublicCatalogueController {
         return ok(publicFeedService.catalogueFeed(page));
     }
 
+    // Same "no institution, no entitlement, same result for every caller" reasoning as search
+    // below - a journal carries no acquisition of its own, so there is nothing here that could
+    // differ per caller.
+    @GetMapping(value = "/journals", produces = OPDS_MEDIA_TYPE)
+    public ResponseEntity<OpdsPublicationFeed> journals() {
+        return ok(publicFeedService.journalsFeed());
+    }
+
     // Same result for every caller (no institution, no entitlement), so a shared, global cache
     // is correct here - not keyed on anything, unlike an institution feed's per-institution ETag.
     @GetMapping(value = "/search", produces = OPDS_MEDIA_TYPE)
@@ -72,6 +80,16 @@ public class OpdsPublicCatalogueController {
     @GetMapping(value = "/publications/{itemId}", produces = OPDS_PUBLICATION_MEDIA_TYPE)
     public ResponseEntity<OpdsPublicationDocument> publication(@PathVariable String itemId) {
         return ok(publicFeedService.publicationDocument(itemId));
+    }
+
+    // The anonymous counterpart to OpdsCatalogueController's institution-scoped works/{workId} -
+    // browsing a journal's own volumes/issues/articles needs no institution and no sign-in, same
+    // reasoning as every other endpoint on this controller. Response body is one of two shapes
+    // (OpdsNavigationFeed or OpdsPublicationFeed) depending on the work's own type, so this
+    // returns Object the same way OpdsCatalogueController's workFeed already does.
+    @GetMapping(value = "/works/{workId}", produces = OPDS_MEDIA_TYPE)
+    public ResponseEntity<Object> work(@PathVariable String workId) {
+        return ok(publicFeedService.workFeed(workId));
     }
 
     private <T> ResponseEntity<T> ok(T body) {
